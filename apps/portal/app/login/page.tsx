@@ -1,11 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@tds/ui';
 
-export default function LoginPage() {
+function LoginForm() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,5 +76,19 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="animate-pulse text-neutral-500">Loading...</div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

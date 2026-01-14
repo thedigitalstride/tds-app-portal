@@ -3,9 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectDB, User } from '@tds/database';
 
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteContext
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,8 +22,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const { id } = await params;
+
     // Prevent admin from changing their own role
-    if (params.id === session.user.id) {
+    if (id === session.user.id) {
       return NextResponse.json(
         { error: 'Cannot change your own role' },
         { status: 400 }
@@ -30,7 +36,7 @@ export async function PATCH(
     await connectDB();
 
     const user = await User.findByIdAndUpdate(
-      params.id,
+      id,
       { $set: { role: body.role } },
       { new: true }
     );

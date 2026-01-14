@@ -15,11 +15,12 @@ A secure portal for The Digital Stride team to access digital marketing tools.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15 (App Router) with React 19
+- **Dev Server**: Turbopack (enabled by default)
 - **UI**: Tailwind CSS + Custom Components
 - **Auth**: NextAuth.js with Google OAuth
 - **Database**: MongoDB with Mongoose
-- **Monorepo**: Turborepo
+- **Monorepo**: Turborepo 2.3
 - **Deployment**: Vercel
 
 ## Project Structure
@@ -42,7 +43,7 @@ tds-app-portal/
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - MongoDB database (MongoDB Atlas recommended)
 - Google Cloud Console project for OAuth
 

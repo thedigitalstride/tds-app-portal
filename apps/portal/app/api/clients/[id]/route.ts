@@ -3,9 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectDB, Client } from '@tds/database';
 
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteContext
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -13,8 +17,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     await connectDB();
-    const client = await Client.findById(params.id);
+    const client = await Client.findById(id);
 
     if (!client) {
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
@@ -32,7 +37,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteContext
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -40,11 +45,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     await connectDB();
 
     const client = await Client.findByIdAndUpdate(
-      params.id,
+      id,
       { $set: body },
       { new: true }
     );
@@ -65,7 +71,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteContext
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -73,11 +79,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     await connectDB();
 
     // Soft delete - set isActive to false
     const client = await Client.findByIdAndUpdate(
-      params.id,
+      id,
       { $set: { isActive: false } },
       { new: true }
     );
