@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Search,
   AlertCircle,
@@ -10,6 +10,11 @@ import {
   Copy,
   RefreshCw,
   Save,
+  Download,
+  FileText,
+  List,
+  Trash2,
+  MapPin,
 } from 'lucide-react';
 import {
   Button,
@@ -22,6 +27,17 @@ import {
   Badge,
   Textarea,
   Skeleton,
+  Select,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
 } from '@tds/ui';
 
 interface MetaTagResult {
@@ -45,7 +61,7 @@ interface MetaTagResult {
     image?: string;
     site?: string;
   };
-  other: Array<{ name: string; content: string }>;
+  other?: Array<{ name: string; content: string }>;
 }
 
 interface AnalysisIssue {
@@ -54,17 +70,113 @@ interface AnalysisIssue {
   field: string;
 }
 
+interface Client {
+  _id: string;
+  name: string;
+  website: string;
+}
+
+interface SavedAnalysis {
+  _id: string;
+  url: string;
+  title: string;
+  description: string;
+  score: number;
+  issues: AnalysisIssue[];
+  plannedTitle?: string;
+  plannedDescription?: string;
+  analyzedAt: string;
+}
+
+interface BulkResult {
+  url: string;
+  result?: MetaTagResult;
+  issues?: AnalysisIssue[];
+  error?: string;
+  score: number;
+}
+
 export default function MetaTagAnalyserPage() {
+  const [activeTab, setActiveTab] = useState('single');
+
+  // Client state
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [loadingClients, setLoadingClients] = useState(true);
+
+  // Single analysis state
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<MetaTagResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<AnalysisIssue[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Planner state
   const [plannerMode, setPlannerMode] = useState(false);
   const [plannedTitle, setPlannedTitle] = useState('');
   const [plannedDescription, setPlannedDescription] = useState('');
+
+  // Bulk scan state
+  const [bulkMode, setBulkMode] = useState<'sitemap' | 'urls'>('sitemap');
+  const [sitemapUrl, setSitemapUrl] = useState('');
+  const [urlList, setUrlList] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [bulkStats, setBulkStats] = useState<{
+    totalUrls: number;
+    analyzed: number;
+    failed: number;
+    averageScore: number;
+  } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // Saved analyses state
+  const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+
+  // Fetch clients on mount
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  // Fetch saved analyses when client changes
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchSavedAnalyses();
+    }
+  }, [selectedClientId]);
+
+  const fetchClients = async () => {
+    try {
+      const res = await fetch('/api/clients');
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch clients:', error);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  const fetchSavedAnalyses = async () => {
+    if (!selectedClientId) return;
+    setLoadingSaved(true);
+    try {
+      const res = await fetch(`/api/tools/meta-tag-analyser/saved?clientId=${selectedClientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSavedAnalyses(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch saved analyses:', error);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
 
   const analyzeUrl = async () => {
     if (!url) return;
@@ -73,6 +185,7 @@ export default function MetaTagAnalyserPage() {
     setError(null);
     setResult(null);
     setIssues([]);
+    setSaveSuccess(false);
 
     try {
       const res = await fetch('/api/tools/meta-tag-analyser', {
@@ -98,6 +211,91 @@ export default function MetaTagAnalyserPage() {
     }
   };
 
+  const saveAnalysis = async () => {
+    if (!selectedClientId || !result) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          result,
+          issues,
+          plannedTitle,
+          plannedDescription,
+        }),
+      });
+
+      if (res.ok) {
+        setSaveSuccess(true);
+        fetchSavedAnalyses();
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (error) {
+      console.error('Failed to save analysis:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const runBulkScan = async () => {
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkResults([]);
+    setBulkStats(null);
+
+    try {
+      const body = bulkMode === 'sitemap'
+        ? { mode: 'sitemap', sitemapUrl }
+        : { mode: 'urls', urls: urlList.split('\n').map(u => u.trim()).filter(Boolean) };
+
+      const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Bulk scan failed');
+      }
+
+      setBulkResults(data.results);
+      setBulkStats({
+        totalUrls: data.totalUrls,
+        analyzed: data.analyzed,
+        failed: data.failed,
+        averageScore: data.averageScore,
+      });
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const deleteAnalysis = async (id: string) => {
+    if (!confirm('Delete this analysis?')) return;
+    try {
+      const res = await fetch(`/api/tools/meta-tag-analyser/saved/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchSavedAnalyses();
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error);
+    }
+  };
+
+  const exportAnalyses = (format: 'csv' | 'json') => {
+    if (!selectedClientId) return;
+    window.open(`/api/tools/meta-tag-analyser/export?clientId=${selectedClientId}&format=${format}`, '_blank');
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
@@ -115,491 +313,610 @@ export default function MetaTagAnalyserPage() {
     }
   };
 
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return 'text-green-600 bg-green-50';
+    if (score >= 50) return 'text-amber-600 bg-amber-50';
+    return 'text-red-600 bg-red-50';
+  };
+
   const titleLength = plannedTitle.length;
   const descriptionLength = plannedDescription.length;
 
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Meta Tag Analyser
-        </h1>
-        <p className="mt-1 text-neutral-500">
-          Analyse and plan meta tags for any webpage
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            Meta Tag Analyser
+          </h1>
+          <p className="mt-1 text-neutral-500">
+            Analyse, plan, and track meta tags for client websites
+          </p>
+        </div>
+
+        {/* Client Selector */}
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-neutral-600">Client:</label>
+          {loadingClients ? (
+            <Skeleton className="h-10 w-48" />
+          ) : (
+            <Select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              options={clients.map(c => ({ value: c._id, label: c.name }))}
+              placeholder="Select a client..."
+              className="w-48"
+            />
+          )}
+        </div>
       </div>
 
-      {/* URL Input */}
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                type="url"
-                placeholder="Enter URL to analyse (e.g., https://example.com)"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && analyzeUrl()}
-              />
-            </div>
-            <Button onClick={analyzeUrl} disabled={loading || !url}>
-              {loading ? (
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="mr-2 h-4 w-4" />
-              )}
-              Analyse
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="single">
+            <Search className="mr-2 h-4 w-4" />
+            Single URL
+          </TabsTrigger>
+          <TabsTrigger value="bulk">
+            <List className="mr-2 h-4 w-4" />
+            Bulk Scan
+          </TabsTrigger>
+          <TabsTrigger value="saved">
+            <FileText className="mr-2 h-4 w-4" />
+            Saved ({savedAnalyses.length})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Error State */}
-      {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-red-700">{error}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Results */}
-      {result && !loading && (
-        <div className="space-y-6">
-          {/* Issues Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Analysis Summary</CardTitle>
-              <CardDescription>
-                Issues found while analysing {result.url}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {issues.length === 0 ? (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle className="h-5 w-5" />
-                    <span>No issues found! All meta tags look good.</span>
-                  </div>
-                ) : (
-                  issues.map((issue, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3"
-                    >
-                      {getIssueIcon(issue.type)}
-                      <div>
-                        <Badge
-                          variant={
-                            issue.type === 'error'
-                              ? 'destructive'
-                              : issue.type === 'warning'
-                              ? 'warning'
-                              : 'success'
-                          }
-                          className="mb-1"
-                        >
-                          {issue.field}
-                        </Badge>
-                        <p className="text-sm text-neutral-700">{issue.message}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
+        {/* Single URL Tab */}
+        <TabsContent value="single">
+          {/* URL Input */}
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Input
+                    type="url"
+                    placeholder="Enter URL to analyse (e.g., https://example.com)"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && analyzeUrl()}
+                  />
+                </div>
+                <Button onClick={analyzeUrl} disabled={loading || !url}>
+                  {loading ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Analyse
+                </Button>
               </div>
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Basic Meta Tags */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Meta Tags</CardTitle>
-                <CardDescription>Title and description tags</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-sm font-medium">Title</label>
-                    <span
-                      className={`text-xs ${
-                        result.title.length > 60 ? 'text-red-500' : 'text-neutral-500'
-                      }`}
-                    >
-                      {result.title.length}/60 characters
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input value={result.title} readOnly className="bg-neutral-50" />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => copyToClipboard(result.title)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-sm font-medium">Description</label>
-                    <span
-                      className={`text-xs ${
-                        result.description.length > 160
-                          ? 'text-red-500'
-                          : 'text-neutral-500'
-                      }`}
-                    >
-                      {result.description.length}/160 characters
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Textarea
-                      value={result.description}
-                      readOnly
-                      className="bg-neutral-50"
-                      rows={3}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => copyToClipboard(result.description)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                {result.canonical && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Canonical URL
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={result.canonical}
-                        readOnly
-                        className="bg-neutral-50"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          window.open(result.canonical, '_blank')
-                        }
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {result.robots && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Robots</label>
-                    <Input
-                      value={result.robots}
-                      readOnly
-                      className="bg-neutral-50"
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Open Graph */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Open Graph Tags</CardTitle>
-                <CardDescription>Social sharing preview (Facebook, LinkedIn)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {result.openGraph.image && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">OG Image</label>
-                    <div className="overflow-hidden rounded-lg border">
-                      <img
-                        src={result.openGraph.image}
-                        alt="OG Preview"
-                        className="h-40 w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <label className="mb-1 block text-sm font-medium">OG Title</label>
-                  <Input
-                    value={result.openGraph.title || 'Not set'}
-                    readOnly
-                    className="bg-neutral-50"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    OG Description
-                  </label>
-                  <Textarea
-                    value={result.openGraph.description || 'Not set'}
-                    readOnly
-                    className="bg-neutral-50"
-                    rows={2}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">OG Type</label>
-                    <Input
-                      value={result.openGraph.type || 'Not set'}
-                      readOnly
-                      className="bg-neutral-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Site Name
-                    </label>
-                    <Input
-                      value={result.openGraph.siteName || 'Not set'}
-                      readOnly
-                      className="bg-neutral-50"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Twitter Cards */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Twitter Card Tags</CardTitle>
-                <CardDescription>Twitter/X sharing preview</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Card Type</label>
-                    <Input
-                      value={result.twitter.card || 'Not set'}
-                      readOnly
-                      className="bg-neutral-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Twitter Site
-                    </label>
-                    <Input
-                      value={result.twitter.site || 'Not set'}
-                      readOnly
-                      className="bg-neutral-50"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Twitter Title
-                  </label>
-                  <Input
-                    value={result.twitter.title || 'Not set'}
-                    readOnly
-                    className="bg-neutral-50"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Twitter Description
-                  </label>
-                  <Textarea
-                    value={result.twitter.description || 'Not set'}
-                    readOnly
-                    className="bg-neutral-50"
-                    rows={2}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Meta Tag Planner */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Meta Tag Planner</CardTitle>
-                    <CardDescription>
-                      Plan optimised meta tags for this page
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant={plannerMode ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPlannerMode(!plannerMode)}
-                  >
-                    {plannerMode ? 'View Mode' : 'Edit Mode'}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-sm font-medium">Planned Title</label>
-                    <span
-                      className={`text-xs ${
-                        titleLength > 60
-                          ? 'text-red-500'
-                          : titleLength > 50
-                          ? 'text-amber-500'
-                          : 'text-green-500'
-                      }`}
-                    >
-                      {titleLength}/60 characters
-                    </span>
-                  </div>
-                  <Input
-                    value={plannedTitle}
-                    onChange={(e) => setPlannedTitle(e.target.value)}
-                    readOnly={!plannerMode}
-                    className={!plannerMode ? 'bg-neutral-50' : ''}
-                    placeholder="Enter optimised title..."
-                  />
-                  {plannerMode && (
-                    <div className="mt-2 h-2 rounded-full bg-neutral-200">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          titleLength > 60
-                            ? 'bg-red-500'
-                            : titleLength > 50
-                            ? 'bg-amber-500'
-                            : 'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min((titleLength / 60) * 100, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      Planned Description
-                    </label>
-                    <span
-                      className={`text-xs ${
-                        descriptionLength > 160
-                          ? 'text-red-500'
-                          : descriptionLength > 140
-                          ? 'text-amber-500'
-                          : 'text-green-500'
-                      }`}
-                    >
-                      {descriptionLength}/160 characters
-                    </span>
-                  </div>
-                  <Textarea
-                    value={plannedDescription}
-                    onChange={(e) => setPlannedDescription(e.target.value)}
-                    readOnly={!plannerMode}
-                    className={!plannerMode ? 'bg-neutral-50' : ''}
-                    rows={4}
-                    placeholder="Enter optimised description..."
-                  />
-                  {plannerMode && (
-                    <div className="mt-2 h-2 rounded-full bg-neutral-200">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          descriptionLength > 160
-                            ? 'bg-red-500'
-                            : descriptionLength > 140
-                            ? 'bg-amber-500'
-                            : 'bg-green-500'
-                        }`}
-                        style={{
-                          width: `${Math.min((descriptionLength / 160) * 100, 100)}%`,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                {plannerMode && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => {
-                        copyToClipboard(
-                          `Title: ${plannedTitle}\nDescription: ${plannedDescription}`
-                        );
-                      }}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy All
-                    </Button>
-                    <Button className="flex-1">
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Plan
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Other Meta Tags */}
-          {result.other.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Other Meta Tags</CardTitle>
-                <CardDescription>
-                  Additional meta tags found on the page
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                  {result.other.map((tag, index) => (
-                    <div
-                      key={index}
-                      className="rounded-lg border border-neutral-100 bg-neutral-50 p-3"
-                    >
-                      <p className="text-xs font-medium text-neutral-500">
-                        {tag.name}
-                      </p>
-                      <p className="mt-1 truncate text-sm text-neutral-700">
-                        {tag.content}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+          {/* Error State */}
+          {error && (
+            <Card className="mb-6 border-red-200 bg-red-50">
+              <CardContent className="flex items-center gap-3 pt-6">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <p className="text-red-700">{error}</p>
               </CardContent>
             </Card>
           )}
-        </div>
-      )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader><Skeleton className="h-6 w-32" /></CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><Skeleton className="h-6 w-32" /></CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Results */}
+          {result && !loading && (
+            <div className="space-y-6">
+              {/* Save Bar */}
+              {selectedClientId && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="flex items-center justify-between pt-6">
+                    <div className="flex items-center gap-2">
+                      {saveSuccess ? (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="text-green-700">Analysis saved to client!</span>
+                        </>
+                      ) : (
+                        <span className="text-blue-700">
+                          Save this analysis to {clients.find(c => c._id === selectedClientId)?.name}
+                        </span>
+                      )}
+                    </div>
+                    <Button onClick={saveAnalysis} disabled={saving || saveSuccess}>
+                      {saving ? (
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      {saveSuccess ? 'Saved!' : 'Save Analysis'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Issues Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Analysis Summary</CardTitle>
+                  <CardDescription>Issues found while analysing {result.url}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {issues.length === 0 ? (
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-5 w-5" />
+                        <span>No issues found! All meta tags look good.</span>
+                      </div>
+                    ) : (
+                      issues.map((issue, index) => (
+                        <div key={index} className="flex items-start gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+                          {getIssueIcon(issue.type)}
+                          <div>
+                            <Badge variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'} className="mb-1">
+                              {issue.field}
+                            </Badge>
+                            <p className="text-sm text-neutral-700">{issue.message}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Basic Meta Tags */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Basic Meta Tags</CardTitle>
+                    <CardDescription>Title and description tags</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-sm font-medium">Title</label>
+                        <span className={`text-xs ${result.title.length > 60 ? 'text-red-500' : 'text-neutral-500'}`}>
+                          {result.title.length}/60 characters
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input value={result.title} readOnly className="bg-neutral-50" />
+                        <Button variant="outline" size="icon" onClick={() => copyToClipboard(result.title)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-sm font-medium">Description</label>
+                        <span className={`text-xs ${result.description.length > 160 ? 'text-red-500' : 'text-neutral-500'}`}>
+                          {result.description.length}/160 characters
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Textarea value={result.description} readOnly className="bg-neutral-50" rows={3} />
+                        <Button variant="outline" size="icon" onClick={() => copyToClipboard(result.description)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {result.canonical && (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Canonical URL</label>
+                        <div className="flex items-center gap-2">
+                          <Input value={result.canonical} readOnly className="bg-neutral-50" />
+                          <Button variant="outline" size="icon" onClick={() => window.open(result.canonical, '_blank')}>
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Open Graph */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Open Graph Tags</CardTitle>
+                    <CardDescription>Social sharing preview</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {result.openGraph.image && (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">OG Image</label>
+                        <div className="overflow-hidden rounded-lg border">
+                          <img src={result.openGraph.image} alt="OG Preview" className="h-32 w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">OG Title</label>
+                      <Input value={result.openGraph.title || 'Not set'} readOnly className="bg-neutral-50" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">OG Description</label>
+                      <Textarea value={result.openGraph.description || 'Not set'} readOnly className="bg-neutral-50" rows={2} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Twitter Cards */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Twitter Card Tags</CardTitle>
+                    <CardDescription>Twitter/X sharing preview</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Card Type</label>
+                        <Input value={result.twitter.card || 'Not set'} readOnly className="bg-neutral-50" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Twitter Site</label>
+                        <Input value={result.twitter.site || 'Not set'} readOnly className="bg-neutral-50" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Twitter Title</label>
+                      <Input value={result.twitter.title || 'Not set'} readOnly className="bg-neutral-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Meta Tag Planner */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Meta Tag Planner</CardTitle>
+                        <CardDescription>Plan optimised meta tags</CardDescription>
+                      </div>
+                      <Button variant={plannerMode ? 'default' : 'outline'} size="sm" onClick={() => setPlannerMode(!plannerMode)}>
+                        {plannerMode ? 'View Mode' : 'Edit Mode'}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-sm font-medium">Planned Title</label>
+                        <span className={`text-xs ${titleLength > 60 ? 'text-red-500' : titleLength > 50 ? 'text-amber-500' : 'text-green-500'}`}>
+                          {titleLength}/60 characters
+                        </span>
+                      </div>
+                      <Input value={plannedTitle} onChange={(e) => setPlannedTitle(e.target.value)} readOnly={!plannerMode} className={!plannerMode ? 'bg-neutral-50' : ''} placeholder="Enter optimised title..." />
+                      {plannerMode && (
+                        <div className="mt-2 h-2 rounded-full bg-neutral-200">
+                          <div className={`h-2 rounded-full transition-all ${titleLength > 60 ? 'bg-red-500' : titleLength > 50 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${Math.min((titleLength / 60) * 100, 100)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-sm font-medium">Planned Description</label>
+                        <span className={`text-xs ${descriptionLength > 160 ? 'text-red-500' : descriptionLength > 140 ? 'text-amber-500' : 'text-green-500'}`}>
+                          {descriptionLength}/160 characters
+                        </span>
+                      </div>
+                      <Textarea value={plannedDescription} onChange={(e) => setPlannedDescription(e.target.value)} readOnly={!plannerMode} className={!plannerMode ? 'bg-neutral-50' : ''} rows={3} placeholder="Enter optimised description..." />
+                      {plannerMode && (
+                        <div className="mt-2 h-2 rounded-full bg-neutral-200">
+                          <div className={`h-2 rounded-full transition-all ${descriptionLength > 160 ? 'bg-red-500' : descriptionLength > 140 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${Math.min((descriptionLength / 160) * 100, 100)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                    {plannerMode && (
+                      <Button variant="outline" className="w-full" onClick={() => copyToClipboard(`Title: ${plannedTitle}\nDescription: ${plannedDescription}`)}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Planned Tags
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Bulk Scan Tab */}
+        <TabsContent value="bulk">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Bulk Meta Tag Scan</CardTitle>
+              <CardDescription>Scan multiple URLs at once via sitemap or URL list</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Mode Selection */}
+              <div className="flex gap-2">
+                <Button variant={bulkMode === 'sitemap' ? 'default' : 'outline'} onClick={() => setBulkMode('sitemap')}>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  From Sitemap
+                </Button>
+                <Button variant={bulkMode === 'urls' ? 'default' : 'outline'} onClick={() => setBulkMode('urls')}>
+                  <List className="mr-2 h-4 w-4" />
+                  URL List
+                </Button>
+              </div>
+
+              {bulkMode === 'sitemap' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Sitemap URL</label>
+                  <div className="flex gap-4">
+                    <Input
+                      type="url"
+                      placeholder="https://example.com/sitemap.xml"
+                      value={sitemapUrl}
+                      onChange={(e) => setSitemapUrl(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button onClick={runBulkScan} disabled={bulkLoading || !sitemapUrl}>
+                      {bulkLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                      Scan Sitemap
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Enter the URL to your XML sitemap. Maximum 50 URLs will be scanned.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-sm font-medium">URLs (one per line)</label>
+                  <Textarea
+                    placeholder={'https://example.com/page1\nhttps://example.com/page2\nhttps://example.com/page3'}
+                    value={urlList}
+                    onChange={(e) => setUrlList(e.target.value)}
+                    rows={6}
+                  />
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-neutral-500">
+                      {urlList.split('\n').filter(Boolean).length} URLs - Maximum 50
+                    </p>
+                    <Button onClick={runBulkScan} disabled={bulkLoading || !urlList.trim()}>
+                      {bulkLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                      Scan URLs
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bulk Error */}
+          {bulkError && (
+            <Card className="mb-6 border-red-200 bg-red-50">
+              <CardContent className="flex items-center gap-3 pt-6">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <p className="text-red-700">{bulkError}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bulk Loading */}
+          {bulkLoading && (
+            <Card>
+              <CardContent className="flex items-center justify-center gap-3 py-12">
+                <RefreshCw className="h-6 w-6 animate-spin text-neutral-400" />
+                <span className="text-neutral-500">Scanning URLs... This may take a minute.</span>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bulk Results */}
+          {bulkStats && !bulkLoading && (
+            <div className="space-y-6">
+              {/* Stats */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Total URLs</CardDescription>
+                    <CardTitle className="text-2xl">{bulkStats.totalUrls}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Analyzed</CardDescription>
+                    <CardTitle className="text-2xl text-green-600">{bulkStats.analyzed}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Failed</CardDescription>
+                    <CardTitle className="text-2xl text-red-600">{bulkStats.failed}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Avg Score</CardDescription>
+                    <CardTitle className={`text-2xl ${getScoreColor(bulkStats.averageScore).split(' ')[0]}`}>
+                      {bulkStats.averageScore}%
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+              </div>
+
+              {/* Results Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Scan Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>URL</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Score</TableHead>
+                        <TableHead>Issues</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bulkResults.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="max-w-xs truncate font-mono text-xs">
+                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {item.url.replace(/^https?:\/\//, '').slice(0, 40)}...
+                            </a>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {item.error ? (
+                              <span className="text-red-500">{item.error}</span>
+                            ) : (
+                              item.result?.title || 'No title'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {!item.error && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(item.score)}`}>
+                                {item.score}%
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.issues && (
+                              <div className="flex gap-1">
+                                {item.issues.filter(i => i.type === 'error').length > 0 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    {item.issues.filter(i => i.type === 'error').length} errors
+                                  </Badge>
+                                )}
+                                {item.issues.filter(i => i.type === 'warning').length > 0 && (
+                                  <Badge variant="warning" className="text-xs">
+                                    {item.issues.filter(i => i.type === 'warning').length} warnings
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Saved Tab */}
+        <TabsContent value="saved">
+          {!selectedClientId ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="h-12 w-12 text-neutral-300" />
+                <p className="mt-4 text-neutral-500">Select a client to view saved analyses</p>
+              </CardContent>
+            </Card>
+          ) : loadingSaved ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <RefreshCw className="h-6 w-6 animate-spin text-neutral-400" />
+              </CardContent>
+            </Card>
+          ) : savedAnalyses.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="h-12 w-12 text-neutral-300" />
+                <p className="mt-4 text-neutral-500">No saved analyses for this client yet</p>
+                <p className="text-sm text-neutral-400">Analyse a URL and save it to see it here</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Export Buttons */}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => exportAnalyses('csv')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+                <Button variant="outline" onClick={() => exportAnalyses('json')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export JSON
+                </Button>
+              </div>
+
+              {/* Saved Analyses Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Saved Analyses</CardTitle>
+                  <CardDescription>
+                    {savedAnalyses.length} analyses for {clients.find(c => c._id === selectedClientId)?.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>URL</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Score</TableHead>
+                        <TableHead>Analyzed</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {savedAnalyses.map((analysis) => (
+                        <TableRow key={analysis._id}>
+                          <TableCell className="max-w-xs truncate font-mono text-xs">
+                            <a href={analysis.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {analysis.url.replace(/^https?:\/\//, '').slice(0, 40)}
+                            </a>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {analysis.plannedTitle || analysis.title || 'No title'}
+                            {analysis.plannedTitle && analysis.plannedTitle !== analysis.title && (
+                              <Badge variant="secondary" className="ml-2 text-xs">Planned</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
+                              {analysis.score}%
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-neutral-500">
+                            {new Date(analysis.analyzedAt).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => deleteAnalysis(analysis._id)}>
+                              <Trash2 className="h-4 w-4 text-neutral-400 hover:text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
