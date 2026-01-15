@@ -494,6 +494,48 @@ export default function MetaTagAnalyserPage() {
     return 'text-red-600 bg-red-50';
   };
 
+  // Get field status from issues array
+  const getFieldStatus = (fieldName: string): 'error' | 'warning' | 'success' => {
+    const fieldIssue = issues.find(i => i.field.toLowerCase() === fieldName.toLowerCase());
+    if (!fieldIssue) return 'success';
+    return fieldIssue.type as 'error' | 'warning' | 'success';
+  };
+
+  // Get field issue message
+  const getFieldMessage = (fieldName: string): string | null => {
+    const fieldIssue = issues.find(i => i.field.toLowerCase() === fieldName.toLowerCase());
+    return fieldIssue?.message || null;
+  };
+
+  // Field styling based on status
+  const getFieldContainerStyles = (status: 'error' | 'warning' | 'success') => {
+    switch (status) {
+      case 'error':
+        return 'border-red-300 bg-red-50/50';
+      case 'warning':
+        return 'border-amber-300 bg-amber-50/50';
+      case 'success':
+        return 'border-green-300 bg-green-50/50';
+    }
+  };
+
+  // Status badge component
+  const FieldStatusBadge = ({ status, message }: { status: 'error' | 'warning' | 'success'; message?: string | null }) => {
+    const config = {
+      error: { icon: AlertCircle, bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+      warning: { icon: AlertTriangle, bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+      success: { icon: CheckCircle, bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+    };
+    const { icon: Icon, bg, text, border } = config[status];
+
+    return (
+      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${bg} ${text} ${border} border`} title={message || undefined}>
+        <Icon className="h-3 w-3" />
+        <span className="capitalize">{status === 'success' ? 'Good' : status}</span>
+      </div>
+    );
+  };
+
   const titleLength = plannedTitle.length;
   const descriptionLength = plannedDescription.length;
 
@@ -824,34 +866,22 @@ export default function MetaTagAnalyserPage() {
                 </Card>
               )}
 
-              {/* Issues Summary */}
+              {/* Analysis Score Summary */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Analysis Summary</CardTitle>
-                  <CardDescription>Issues found while analysing {result.url}</CardDescription>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Analysis Results</span>
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${getScoreColor(Math.max(0, 100 - (issues.filter(i => i.type === 'error').length * 20) - (issues.filter(i => i.type === 'warning').length * 10)))}`}>
+                      Score: {Math.max(0, 100 - (issues.filter(i => i.type === 'error').length * 20) - (issues.filter(i => i.type === 'warning').length * 10))}%
+                    </div>
+                  </CardTitle>
+                  <CardDescription>
+                    {issues.length === 0
+                      ? 'All meta tags look good!'
+                      : `Found ${issues.filter(i => i.type === 'error').length} errors and ${issues.filter(i => i.type === 'warning').length} warnings`
+                    }
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {issues.length === 0 ? (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>No issues found! All meta tags look good.</span>
-                      </div>
-                    ) : (
-                      issues.map((issue, index) => (
-                        <div key={index} className="flex items-start gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
-                          {getIssueIcon(issue.type)}
-                          <div>
-                            <Badge variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'} className="mb-1">
-                              {issue.field}
-                            </Badge>
-                            <p className="text-sm text-neutral-700">{issue.message}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
               </Card>
 
               <div className="grid gap-6 lg:grid-cols-2">
@@ -862,39 +892,59 @@ export default function MetaTagAnalyserPage() {
                     <CardDescription>Title and description tags</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
+                    {/* Title Field */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('title'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('title')} message={getFieldMessage('title')} />
+                      </div>
+                      <div className="mb-2 flex items-center justify-between">
                         <label className="text-sm font-medium">Title</label>
                         <span className={`text-xs ${result.title.length > 60 ? 'text-red-500' : 'text-neutral-500'}`}>
                           {result.title.length}/60 characters
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Input value={result.title} readOnly className="bg-neutral-50" />
+                        <Input value={result.title} readOnly className="bg-white/80" />
                         <Button variant="outline" size="icon" onClick={() => copyToClipboard(result.title)}>
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>
+                      {getFieldMessage('title') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('title')}</p>
+                      )}
                     </div>
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
+
+                    {/* Description Field */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('description'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('description')} message={getFieldMessage('description')} />
+                      </div>
+                      <div className="mb-2 flex items-center justify-between">
                         <label className="text-sm font-medium">Description</label>
                         <span className={`text-xs ${result.description.length > 160 ? 'text-red-500' : 'text-neutral-500'}`}>
                           {result.description.length}/160 characters
                         </span>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Textarea value={result.description} readOnly className="bg-neutral-50" rows={3} />
+                        <Textarea value={result.description} readOnly className="bg-white/80" rows={3} />
                         <Button variant="outline" size="icon" onClick={() => copyToClipboard(result.description)}>
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>
+                      {getFieldMessage('description') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('description')}</p>
+                      )}
                     </div>
+
+                    {/* Canonical URL Field */}
                     {result.canonical && (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Canonical URL</label>
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('canonical'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('canonical')} message={getFieldMessage('canonical')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Canonical URL</label>
                         <div className="flex items-center gap-2">
-                          <Input value={result.canonical} readOnly className="bg-neutral-50" />
+                          <Input value={result.canonical} readOnly className="bg-white/80" title={result.canonical} />
                           <Button variant="outline" size="icon" onClick={() => window.open(result.canonical, '_blank')}>
                             <ExternalLink className="h-4 w-4" />
                           </Button>
@@ -911,21 +961,46 @@ export default function MetaTagAnalyserPage() {
                     <CardDescription>Social sharing preview</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {result.openGraph.image && (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">OG Image</label>
-                        <div className="overflow-hidden rounded-lg border">
+                    {/* OG Image */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('og:image'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('og:image')} message={getFieldMessage('og:image')} />
+                      </div>
+                      <label className="mb-2 block text-sm font-medium">OG Image</label>
+                      {result.openGraph.image ? (
+                        <div className="overflow-hidden rounded-lg border bg-white">
                           <img src={result.openGraph.image} alt="OG Preview" className="h-32 w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         </div>
-                      </div>
-                    )}
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">OG Title</label>
-                      <Input value={result.openGraph.title || 'Not set'} readOnly className="bg-neutral-50" />
+                      ) : (
+                        <p className="text-sm text-neutral-500 italic">Not set</p>
+                      )}
+                      {getFieldMessage('og:image') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('og:image')}</p>
+                      )}
                     </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">OG Description</label>
-                      <Textarea value={result.openGraph.description || 'Not set'} readOnly className="bg-neutral-50" rows={2} />
+
+                    {/* OG Title */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('og:title'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('og:title')} message={getFieldMessage('og:title')} />
+                      </div>
+                      <label className="mb-2 block text-sm font-medium">OG Title</label>
+                      <Input value={result.openGraph.title || 'Not set'} readOnly className="bg-white/80" />
+                      {getFieldMessage('og:title') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('og:title')}</p>
+                      )}
+                    </div>
+
+                    {/* OG Description */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('og:description'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('og:description')} message={getFieldMessage('og:description')} />
+                      </div>
+                      <label className="mb-2 block text-sm font-medium">OG Description</label>
+                      <Textarea value={result.openGraph.description || 'Not set'} readOnly className="bg-white/80" rows={2} />
+                      {getFieldMessage('og:description') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('og:description')}</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -938,18 +1013,35 @@ export default function MetaTagAnalyserPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Card Type</label>
-                        <Input value={result.twitter.card || 'Not set'} readOnly className="bg-neutral-50" />
+                      {/* Twitter Card Type */}
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('twitter:card'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('twitter:card')} message={getFieldMessage('twitter:card')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Card Type</label>
+                        <Input value={result.twitter.card || 'Not set'} readOnly className="bg-white/80" />
                       </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">Twitter Site</label>
-                        <Input value={result.twitter.site || 'Not set'} readOnly className="bg-neutral-50" />
+
+                      {/* Twitter Site */}
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('twitter:site'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('twitter:site')} message={getFieldMessage('twitter:site')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Twitter Site</label>
+                        <Input value={result.twitter.site || 'Not set'} readOnly className="bg-white/80" />
                       </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">Twitter Title</label>
-                      <Input value={result.twitter.title || 'Not set'} readOnly className="bg-neutral-50" />
+
+                    {/* Twitter Title */}
+                    <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('twitter:title'))}`}>
+                      <div className="absolute -top-3 right-2">
+                        <FieldStatusBadge status={getFieldStatus('twitter:title')} message={getFieldMessage('twitter:title')} />
+                      </div>
+                      <label className="mb-2 block text-sm font-medium">Twitter Title</label>
+                      <Input value={result.twitter.title || 'Not set'} readOnly className="bg-white/80" />
+                      {getFieldMessage('twitter:title') && (
+                        <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('twitter:title')}</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
