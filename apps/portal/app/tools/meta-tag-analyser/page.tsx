@@ -495,15 +495,34 @@ export default function MetaTagAnalyserPage() {
   };
 
   // Get field status from issues array
+  // Maps UI field names to API field names
+  const fieldNameMap: Record<string, string[]> = {
+    'title': ['title'],
+    'description': ['description'],
+    'canonical': ['canonical'],
+    'og:image': ['og image'],
+    'og:title': ['open graph'],
+    'og:description': ['open graph'],
+    'twitter:card': ['twitter card'],
+    'twitter:site': ['twitter card'],
+    'twitter:title': ['twitter card'],
+  };
+
   const getFieldStatus = (fieldName: string): 'error' | 'warning' | 'success' => {
-    const fieldIssue = issues.find(i => i.field.toLowerCase() === fieldName.toLowerCase());
+    const possibleNames = fieldNameMap[fieldName.toLowerCase()] || [fieldName.toLowerCase()];
+    const fieldIssue = issues.find(i =>
+      possibleNames.some(name => i.field.toLowerCase() === name)
+    );
     if (!fieldIssue) return 'success';
     return fieldIssue.type as 'error' | 'warning' | 'success';
   };
 
   // Get field issue message
   const getFieldMessage = (fieldName: string): string | null => {
-    const fieldIssue = issues.find(i => i.field.toLowerCase() === fieldName.toLowerCase());
+    const possibleNames = fieldNameMap[fieldName.toLowerCase()] || [fieldName.toLowerCase()];
+    const fieldIssue = issues.find(i =>
+      possibleNames.some(name => i.field.toLowerCase() === name)
+    );
     return fieldIssue?.message || null;
   };
 
