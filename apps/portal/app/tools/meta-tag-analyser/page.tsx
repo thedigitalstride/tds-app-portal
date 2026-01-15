@@ -200,6 +200,7 @@ export default function MetaTagAnalyserPage() {
   const [rescanning, setRescanning] = useState<string | null>(null);
   const [expandedSavedRows, setExpandedSavedRows] = useState<Set<string>>(new Set());
   const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
+  const [expandedHistoryEntries, setExpandedHistoryEntries] = useState<Set<string>>(new Set());
 
   // Dashboard state
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -1825,70 +1826,103 @@ export default function MetaTagAnalyserPage() {
                                                 {(expandedHistories.has(analysis._id)
                                                   ? [...analysis.scanHistory].reverse()
                                                   : analysis.scanHistory.slice(-3).reverse()
-                                                ).map((scan, idx) => (
-                                                  <div key={idx} className="relative pl-6">
-                                                    {/* Timeline dot */}
-                                                    <div className={`absolute left-0.5 top-1.5 w-3 h-3 rounded-full border-2 border-white ${
-                                                      scan.changesDetected ? 'bg-amber-500' : 'bg-neutral-300'
-                                                    }`} />
+                                                ).map((scan, idx) => {
+                                                  const entryKey = `${analysis._id}-${idx}`;
+                                                  const isExpanded = expandedHistoryEntries.has(entryKey);
+                                                  return (
+                                                    <div key={idx} className="relative pl-6">
+                                                      {/* Timeline dot */}
+                                                      <div className={`absolute left-0.5 top-1.5 w-3 h-3 rounded-full border-2 border-white ${
+                                                        scan.changesDetected ? 'bg-amber-500' : 'bg-neutral-300'
+                                                      }`} />
 
-                                                    <div className="rounded border bg-white p-3 text-xs shadow-sm">
-                                                      <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2">
-                                                          <Clock className="h-3 w-3 text-neutral-400" />
-                                                          <span className="font-medium">
-                                                            {new Date(scan.scannedAt).toLocaleDateString('en-GB', {
-                                                              day: 'numeric',
-                                                              month: 'short',
-                                                              year: 'numeric',
-                                                            })}
-                                                            {' '}
-                                                            <span className="text-neutral-400">
-                                                              {new Date(scan.scannedAt).toLocaleTimeString('en-GB', {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit',
-                                                              })}
-                                                            </span>
-                                                          </span>
+                                                      <div
+                                                        className={`rounded border bg-white text-xs shadow-sm cursor-pointer transition-all hover:shadow-md ${isExpanded ? 'ring-2 ring-blue-200' : ''}`}
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setExpandedHistoryEntries(prev => {
+                                                            const next = new Set(prev);
+                                                            next.has(entryKey) ? next.delete(entryKey) : next.add(entryKey);
+                                                            return next;
+                                                          });
+                                                        }}
+                                                      >
+                                                        <div className="p-3">
+                                                          <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                              <Clock className="h-3 w-3 text-neutral-400" />
+                                                              <span className="font-medium">
+                                                                {new Date(scan.scannedAt).toLocaleDateString('en-GB', {
+                                                                  day: 'numeric',
+                                                                  month: 'short',
+                                                                  year: 'numeric',
+                                                                })}
+                                                                {' '}
+                                                                <span className="text-neutral-400">
+                                                                  {new Date(scan.scannedAt).toLocaleTimeString('en-GB', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit',
+                                                                  })}
+                                                                </span>
+                                                              </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                              <span className={`rounded px-1.5 py-0.5 font-medium ${getScoreColor(scan.score)}`}>
+                                                                {scan.score}%
+                                                              </span>
+                                                              {isExpanded ? (
+                                                                <ChevronUp className="h-4 w-4 text-neutral-400" />
+                                                              ) : (
+                                                                <ChevronDown className="h-4 w-4 text-neutral-400" />
+                                                              )}
+                                                            </div>
+                                                          </div>
+
+                                                          <div className="flex items-center gap-2 text-neutral-500">
+                                                            <User className="h-3 w-3" />
+                                                            <span>{scan.scannedBy?.name || 'Unknown'}</span>
+                                                            {scan.changesDetected && (
+                                                              <Badge variant="warning" className="text-xs ml-auto">Changes detected</Badge>
+                                                            )}
+                                                          </div>
                                                         </div>
-                                                        <span className={`rounded px-1.5 py-0.5 font-medium ${getScoreColor(scan.score)}`}>
-                                                          {scan.score}%
-                                                        </span>
-                                                      </div>
 
-                                                      <div className="flex items-center gap-2 text-neutral-500 mb-2">
-                                                        <User className="h-3 w-3" />
-                                                        <span>{scan.scannedBy?.name || 'Unknown'}</span>
-                                                        {scan.changesDetected && (
-                                                          <Badge variant="warning" className="text-xs ml-auto">Changes detected</Badge>
+                                                        {/* Expanded view with full data snapshot */}
+                                                        {isExpanded && (
+                                                          <div className="border-t border-neutral-100 bg-neutral-50 p-3 space-y-3">
+                                                            <p className="text-xs font-medium text-neutral-700">Data at this point in time:</p>
+
+                                                            {/* Title at that time */}
+                                                            <div className="rounded border bg-white p-2">
+                                                              <span className="text-neutral-500 text-xs">Title:</span>
+                                                              <p className="font-mono text-xs mt-1">
+                                                                {scan.previousTitle || <span className="text-neutral-400 italic">Not recorded</span>}
+                                                              </p>
+                                                            </div>
+
+                                                            {/* Description at that time */}
+                                                            <div className="rounded border bg-white p-2">
+                                                              <span className="text-neutral-500 text-xs">Description:</span>
+                                                              <p className="font-mono text-xs mt-1">
+                                                                {scan.previousDescription || <span className="text-neutral-400 italic">Not recorded</span>}
+                                                              </p>
+                                                            </div>
+
+                                                            {/* Show what changed if changes detected */}
+                                                            {scan.changesDetected && (
+                                                              <div className="rounded border border-amber-200 bg-amber-50 p-2">
+                                                                <span className="text-amber-700 text-xs font-medium flex items-center gap-1">
+                                                                  <AlertTriangle className="h-3 w-3" />
+                                                                  Changes were detected after this scan
+                                                                </span>
+                                                              </div>
+                                                            )}
+                                                          </div>
                                                         )}
                                                       </div>
-
-                                                      {/* Show previous values if changes were detected */}
-                                                      {scan.changesDetected && (scan.previousTitle || scan.previousDescription) && (
-                                                        <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
-                                                          <p className="text-neutral-400 text-xs font-medium">Previous values:</p>
-                                                          {scan.previousTitle && (
-                                                            <div className="flex gap-2">
-                                                              <span className="text-neutral-400 shrink-0">Title:</span>
-                                                              <span className="text-neutral-600 truncate" title={scan.previousTitle}>
-                                                                {scan.previousTitle || <em className="text-neutral-400">Empty</em>}
-                                                              </span>
-                                                            </div>
-                                                          )}
-                                                          {scan.previousDescription && (
-                                                            <div className="flex gap-2">
-                                                              <span className="text-neutral-400 shrink-0">Desc:</span>
-                                                              <span className="text-neutral-600 truncate" title={scan.previousDescription}>
-                                                                {scan.previousDescription || <em className="text-neutral-400">Empty</em>}
-                                                              </span>
-                                                            </div>
-                                                          )}
-                                                        </div>
-                                                      )}
                                                     </div>
-                                                  </div>
-                                                ))}
+                                                  );
+                                                })}
                                               </div>
                                             </div>
                                           </div>
