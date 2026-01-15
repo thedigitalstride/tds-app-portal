@@ -101,6 +101,8 @@ interface SavedAnalysis {
     scannedAt: string;
     scannedBy: { name: string; email: string };
     score: number;
+    previousTitle?: string;
+    previousDescription?: string;
     changesDetected: boolean;
   }>;
 }
@@ -197,6 +199,7 @@ export default function MetaTagAnalyserPage() {
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [rescanning, setRescanning] = useState<string | null>(null);
   const [expandedSavedRows, setExpandedSavedRows] = useState<Set<string>>(new Set());
+  const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
 
   // Dashboard state
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -1582,30 +1585,103 @@ export default function MetaTagAnalyserPage() {
                                           )}
                                         </div>
                                         {analysis.scanHistory && analysis.scanHistory.length > 0 && (
-                                          <div className="space-y-1">
-                                            <p className="text-xs text-neutral-500 font-medium">Previous Scans:</p>
-                                            {analysis.scanHistory.slice(-5).reverse().map((scan, idx) => (
-                                              <div key={idx} className="rounded border bg-white p-2 text-xs">
-                                                <div className="flex items-center justify-between">
-                                                  <span>
-                                                    {new Date(scan.scannedAt).toLocaleDateString('en-GB', {
-                                                      day: 'numeric',
-                                                      month: 'short',
-                                                      year: 'numeric',
-                                                    })}
-                                                  </span>
-                                                  <span className={`rounded px-1.5 py-0.5 ${getScoreColor(scan.score)}`}>
-                                                    {scan.score}%
-                                                  </span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-neutral-500 mt-1">
-                                                  <span>By: {scan.scannedBy?.name || '-'}</span>
-                                                  {scan.changesDetected && (
-                                                    <Badge variant="warning" className="text-xs">Changes detected</Badge>
-                                                  )}
-                                                </div>
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                              <p className="text-xs text-neutral-500 font-medium">
+                                                Scan History ({analysis.scanHistory.length} previous {analysis.scanHistory.length === 1 ? 'scan' : 'scans'})
+                                              </p>
+                                              {analysis.scanHistory.length > 3 && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-6 text-xs"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setExpandedHistories(prev => {
+                                                      const next = new Set(prev);
+                                                      next.has(analysis._id) ? next.delete(analysis._id) : next.add(analysis._id);
+                                                      return next;
+                                                    });
+                                                  }}
+                                                >
+                                                  {expandedHistories.has(analysis._id) ? 'Show less' : `Show all ${analysis.scanHistory.length}`}
+                                                </Button>
+                                              )}
+                                            </div>
+                                            <div className="relative">
+                                              {/* Timeline line */}
+                                              <div className="absolute left-2 top-3 bottom-3 w-0.5 bg-neutral-200" />
+
+                                              <div className="space-y-3">
+                                                {(expandedHistories.has(analysis._id)
+                                                  ? [...analysis.scanHistory].reverse()
+                                                  : analysis.scanHistory.slice(-3).reverse()
+                                                ).map((scan, idx) => (
+                                                  <div key={idx} className="relative pl-6">
+                                                    {/* Timeline dot */}
+                                                    <div className={`absolute left-0.5 top-1.5 w-3 h-3 rounded-full border-2 border-white ${
+                                                      scan.changesDetected ? 'bg-amber-500' : 'bg-neutral-300'
+                                                    }`} />
+
+                                                    <div className="rounded border bg-white p-3 text-xs shadow-sm">
+                                                      <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                          <Clock className="h-3 w-3 text-neutral-400" />
+                                                          <span className="font-medium">
+                                                            {new Date(scan.scannedAt).toLocaleDateString('en-GB', {
+                                                              day: 'numeric',
+                                                              month: 'short',
+                                                              year: 'numeric',
+                                                            })}
+                                                            {' '}
+                                                            <span className="text-neutral-400">
+                                                              {new Date(scan.scannedAt).toLocaleTimeString('en-GB', {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                              })}
+                                                            </span>
+                                                          </span>
+                                                        </div>
+                                                        <span className={`rounded px-1.5 py-0.5 font-medium ${getScoreColor(scan.score)}`}>
+                                                          {scan.score}%
+                                                        </span>
+                                                      </div>
+
+                                                      <div className="flex items-center gap-2 text-neutral-500 mb-2">
+                                                        <User className="h-3 w-3" />
+                                                        <span>{scan.scannedBy?.name || 'Unknown'}</span>
+                                                        {scan.changesDetected && (
+                                                          <Badge variant="warning" className="text-xs ml-auto">Changes detected</Badge>
+                                                        )}
+                                                      </div>
+
+                                                      {/* Show previous values if changes were detected */}
+                                                      {scan.changesDetected && (scan.previousTitle || scan.previousDescription) && (
+                                                        <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
+                                                          <p className="text-neutral-400 text-xs font-medium">Previous values:</p>
+                                                          {scan.previousTitle && (
+                                                            <div className="flex gap-2">
+                                                              <span className="text-neutral-400 shrink-0">Title:</span>
+                                                              <span className="text-neutral-600 truncate" title={scan.previousTitle}>
+                                                                {scan.previousTitle || <em className="text-neutral-400">Empty</em>}
+                                                              </span>
+                                                            </div>
+                                                          )}
+                                                          {scan.previousDescription && (
+                                                            <div className="flex gap-2">
+                                                              <span className="text-neutral-400 shrink-0">Desc:</span>
+                                                              <span className="text-neutral-600 truncate" title={scan.previousDescription}>
+                                                                {scan.previousDescription || <em className="text-neutral-400">Empty</em>}
+                                                              </span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
                                               </div>
-                                            ))}
+                                            </div>
                                           </div>
                                         )}
                                       </div>

@@ -152,6 +152,7 @@ export async function GET(request: NextRequest) {
       .limit(100)
       .populate('analyzedBy', 'name email')
       .populate('lastScannedBy', 'name email')
+      .populate('scanHistory.scannedBy', 'name email')
       .lean();
 
     return NextResponse.json(analyses);
