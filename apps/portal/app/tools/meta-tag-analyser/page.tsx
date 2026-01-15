@@ -1632,40 +1632,138 @@ export default function MetaTagAnalyserPage() {
                               <TableCell colSpan={8} className="bg-neutral-50 p-0">
                                 <div className="p-4 space-y-4">
                                   <div className="grid gap-4 md:grid-cols-2">
-                                    {/* Current Meta Data */}
+                                    {/* Current Meta Data with Status Highlighting */}
                                     <div>
-                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Current Meta Tags</h4>
-                                      <div className="space-y-2 text-sm">
-                                        <div>
-                                          <span className="text-neutral-500">Title:</span>
-                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
-                                            {analysis.title || <span className="text-neutral-400 italic">Not set</span>}
-                                          </p>
-                                          <span className={`text-xs ${(analysis.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
-                                            {analysis.title?.length || 0}/60 characters
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-neutral-500">Description:</span>
-                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
-                                            {analysis.description || <span className="text-neutral-400 italic">Not set</span>}
-                                          </p>
-                                          <span className={`text-xs ${(analysis.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
-                                            {analysis.description?.length || 0}/160 characters
-                                          </span>
-                                        </div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-3">Current Meta Tags</h4>
+                                      <div className="space-y-3 text-sm">
+                                        {/* Title Field */}
+                                        {(() => {
+                                          const titleIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'title');
+                                          const titleStatus = titleIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[titleStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[titleStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{titleStatus === 'success' ? 'Good' : titleStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center justify-between mb-1">
+                                                <span className="text-neutral-700 font-medium">Title</span>
+                                                <span className={`text-xs ${(analysis.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                  {analysis.title?.length || 0}/60
+                                                </span>
+                                              </div>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                                                {analysis.title || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                              {titleIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{titleIssue.message}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Description Field */}
+                                        {(() => {
+                                          const descIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'description');
+                                          const descStatus = descIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[descStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[descStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{descStatus === 'success' ? 'Good' : descStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center justify-between mb-1">
+                                                <span className="text-neutral-700 font-medium">Description</span>
+                                                <span className={`text-xs ${(analysis.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                  {analysis.description?.length || 0}/160
+                                                </span>
+                                              </div>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                                                {analysis.description || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                              {descIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{descIssue.message}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* OG Image Field */}
+                                        {(() => {
+                                          const ogIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
+                                          const ogStatus = ogIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[ogStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[ogStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{ogStatus === 'success' ? 'Good' : ogStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                </div>
+                                              </div>
+                                              <span className="text-neutral-700 font-medium">OG Image</span>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
+                                                {analysis.openGraph?.image || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                              {ogIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{ogIssue.message}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Planned Title */}
                                         {analysis.plannedTitle && (
-                                          <div>
-                                            <span className="text-neutral-500">Planned Title:</span>
-                                            <p className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-200 mt-1">
+                                          <div className="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-3">
+                                            <span className="text-neutral-700 font-medium">Planned Title</span>
+                                            <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
                                               {analysis.plannedTitle}
                                             </p>
                                           </div>
                                         )}
                                         {analysis.plannedDescription && (
-                                          <div>
-                                            <span className="text-neutral-500">Planned Description:</span>
-                                            <p className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-200 mt-1">
+                                          <div className="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-3">
+                                            <span className="text-neutral-700 font-medium">Planned Description</span>
+                                            <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
                                               {analysis.plannedDescription}
                                             </p>
                                           </div>
@@ -1798,32 +1896,6 @@ export default function MetaTagAnalyserPage() {
                                       </div>
                                     </div>
                                   </div>
-
-                                  {/* Issues */}
-                                  {analysis.issues && analysis.issues.length > 0 && (
-                                    <div>
-                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Current Issues</h4>
-                                      <div className="grid gap-2 md:grid-cols-2">
-                                        {analysis.issues.map((issue, idx) => (
-                                          <div
-                                            key={idx}
-                                            className="flex items-start gap-2 rounded border bg-white p-2 text-xs"
-                                          >
-                                            {getIssueIcon(issue.type)}
-                                            <div>
-                                              <Badge
-                                                variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'}
-                                                className="text-xs mb-1"
-                                              >
-                                                {issue.field}
-                                              </Badge>
-                                              <p className="text-neutral-600">{issue.message}</p>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
