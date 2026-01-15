@@ -57,9 +57,12 @@ MongoDB with Mongoose. Connection uses global singleton pattern for serverless c
 
 ### Adding New Tools
 
+**See [TOOL_STANDARDS.md](./TOOL_STANDARDS.md) for detailed patterns and code examples.**
+
 1. Create page: `apps/portal/app/tools/[tool-name]/page.tsx`
 2. Register in: `apps/portal/lib/tools.ts` (add to `tools` array)
 3. Add API routes: `apps/portal/app/api/tools/[tool-name]/route.ts`
+4. Add model: `packages/database/src/models/[model-name].ts` (with history tracking)
 
 Tool interface:
 ```typescript
