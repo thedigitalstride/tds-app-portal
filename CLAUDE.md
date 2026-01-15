@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## UX Philosophy
+
+**Sophisticated power, simple experience.** All tools must be:
+
+- **Smart by default**: Automatically detect duplicates, merge data, and maintain history without user intervention
+- **Seamless workflows**: Single scan and bulk scan should behave identically from a data perspective - URLs are URLs regardless of how they were scanned
+- **No duplicate data**: When scanning a URL that already exists for a client, update the existing record and add to scan history rather than creating duplicates
+- **Unified views**: Dashboards show all data regardless of how it was captured (single vs bulk)
+- **Minimal clicks**: Reduce friction at every step; smart defaults over configuration
+
 ## Commands
 
 ```bash

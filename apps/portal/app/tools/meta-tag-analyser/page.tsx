@@ -168,7 +168,7 @@ export default function MetaTagAnalyserPage() {
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<AnalysisIssue[]>([]);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   // Planner state
   const [plannerMode, setPlannerMode] = useState(false);
@@ -190,7 +190,7 @@ export default function MetaTagAnalyserPage() {
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
-  const [bulkSaveSuccess, setBulkSaveSuccess] = useState(false);
+  const [bulkSaveSuccess, setBulkSaveSuccess] = useState<string | null>(null);
 
   // Saved analyses state
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
@@ -353,9 +353,10 @@ export default function MetaTagAnalyserPage() {
       });
 
       if (res.ok) {
-        setSaveSuccess(true);
+        const data = await res.json();
+        setSaveSuccess(data.message || (data.isUpdate ? 'URL updated' : 'URL saved'));
         fetchSavedAnalyses();
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => setSaveSuccess(null), 4000);
       }
     } catch (error) {
       console.error('Failed to save analysis:', error);
@@ -380,7 +381,7 @@ export default function MetaTagAnalyserPage() {
     if (!selectedClientId || bulkResults.length === 0) return;
 
     setBulkSaving(true);
-    setBulkSaveSuccess(false);
+    setBulkSaveSuccess(null);
     try {
       const res = await fetch('/api/tools/meta-tag-analyser/saved', {
         method: 'POST',
@@ -394,9 +395,9 @@ export default function MetaTagAnalyserPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setBulkSaveSuccess(true);
+        setBulkSaveSuccess(data.message || `${data.saved} URLs saved`);
         fetchSavedAnalyses();
-        setTimeout(() => setBulkSaveSuccess(false), 3000);
+        setTimeout(() => setBulkSaveSuccess(null), 5000);
       } else {
         const data = await res.json();
         setBulkError(data.error || 'Failed to save results');
@@ -794,13 +795,13 @@ export default function MetaTagAnalyserPage() {
             <div className="space-y-6">
               {/* Save Bar */}
               {selectedClientId && (
-                <Card className="border-blue-200 bg-blue-50">
+                <Card className={saveSuccess ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}>
                   <CardContent className="flex items-center justify-between pt-6">
                     <div className="flex items-center gap-2">
                       {saveSuccess ? (
                         <>
                           <CheckCircle className="h-5 w-5 text-green-600" />
-                          <span className="text-green-700">Analysis saved to client!</span>
+                          <span className="text-green-700">{saveSuccess}</span>
                         </>
                       ) : (
                         <span className="text-blue-700">
@@ -808,7 +809,7 @@ export default function MetaTagAnalyserPage() {
                         </span>
                       )}
                     </div>
-                    <Button onClick={saveAnalysis} disabled={saving || saveSuccess}>
+                    <Button onClick={saveAnalysis} disabled={saving || !!saveSuccess}>
                       {saving ? (
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -1099,9 +1100,7 @@ export default function MetaTagAnalyserPage() {
                       {bulkSaveSuccess ? (
                         <>
                           <CheckCircle className="h-5 w-5 text-green-600" />
-                          <span className="text-green-700">
-                            {bulkStats.analyzed} analyses saved to {clients.find(c => c._id === selectedClientId)?.name}!
-                          </span>
+                          <span className="text-green-700">{bulkSaveSuccess}</span>
                         </>
                       ) : (
                         <span className="text-blue-700">
@@ -1109,7 +1108,7 @@ export default function MetaTagAnalyserPage() {
                         </span>
                       )}
                     </div>
-                    <Button onClick={saveBulkResults} disabled={bulkSaving || bulkSaveSuccess}>
+                    <Button onClick={saveBulkResults} disabled={bulkSaving || !!bulkSaveSuccess}>
                       {bulkSaving ? (
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
