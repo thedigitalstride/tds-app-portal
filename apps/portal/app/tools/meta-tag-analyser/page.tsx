@@ -17,6 +17,11 @@ import {
   MapPin,
   ChevronDown,
   ChevronUp,
+  BarChart3,
+  Clock,
+  User,
+  History,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Button,
@@ -88,6 +93,56 @@ interface SavedAnalysis {
   plannedTitle?: string;
   plannedDescription?: string;
   analyzedAt: string;
+  analyzedBy?: { name: string; email: string };
+  scanCount?: number;
+  lastScannedAt?: string;
+  lastScannedBy?: { name: string; email: string };
+  scanHistory?: Array<{
+    scannedAt: string;
+    scannedBy: { name: string; email: string };
+    score: number;
+    changesDetected: boolean;
+  }>;
+}
+
+interface DashboardClient {
+  client: {
+    _id: string;
+    name: string;
+    website: string;
+  };
+  stats: {
+    totalUrls: number;
+    totalScanRuns: number;
+    averageScore: number;
+    errorCount: number;
+    warningCount: number;
+    lastScanDate: string | null;
+    lastScannedBy: { name: string; email: string } | null;
+  };
+  recentScans: Array<{
+    _id: string;
+    url: string;
+    title: string;
+    score: number;
+    scanCount: number;
+    analyzedAt: string;
+    lastScannedAt: string;
+    lastScannedBy: { name: string; email: string } | null;
+    issueCount: { errors: number; warnings: number };
+  }>;
+}
+
+interface DashboardData {
+  globalStats: {
+    totalClients: number;
+    totalUrls: number;
+    totalScans: number;
+    averageScore: number;
+    totalErrors: number;
+    totalWarnings: number;
+  };
+  clientData: DashboardClient[];
 }
 
 interface BulkResult {
@@ -140,6 +195,12 @@ export default function MetaTagAnalyserPage() {
   // Saved analyses state
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
+  const [rescanning, setRescanning] = useState<string | null>(null);
+  const [expandedSavedRows, setExpandedSavedRows] = useState<Set<string>>(new Set());
+
+  // Dashboard state
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
 
   // Fetch clients on mount
   useEffect(() => {
@@ -152,6 +213,13 @@ export default function MetaTagAnalyserPage() {
       fetchSavedAnalyses();
     }
   }, [selectedClientId]);
+
+  // Fetch dashboard when dashboard tab is active
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      fetchDashboard();
+    }
+  }, [activeTab]);
 
   const fetchClients = async () => {
     try {
@@ -181,6 +249,57 @@ export default function MetaTagAnalyserPage() {
     } finally {
       setLoadingSaved(false);
     }
+  };
+
+  const fetchDashboard = async () => {
+    setLoadingDashboard(true);
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/dashboard');
+      if (res.ok) {
+        const data = await res.json();
+        setDashboardData(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard:', error);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
+  const rescanAnalysis = async (id: string) => {
+    setRescanning(id);
+    try {
+      const res = await fetch(`/api/tools/meta-tag-analyser/saved/${id}/rescan`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Update the analysis in the list
+        setSavedAnalyses(prev =>
+          prev.map(a => a._id === id ? { ...a, ...data.analysis } : a)
+        );
+        // Show feedback if changes detected
+        if (data.changesDetected) {
+          alert(`Changes detected! Previous score: ${data.previousScore}%, New score: ${data.analysis.score}%`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to rescan:', error);
+    } finally {
+      setRescanning(null);
+    }
+  };
+
+  const toggleSavedRowExpand = (id: string) => {
+    setExpandedSavedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const analyzeUrl = async () => {
@@ -407,6 +526,10 @@ export default function MetaTagAnalyserPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="dashboard">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Dashboard
+          </TabsTrigger>
           <TabsTrigger value="single">
             <Search className="mr-2 h-4 w-4" />
             Single URL
@@ -420,6 +543,194 @@ export default function MetaTagAnalyserPage() {
             Saved ({savedAnalyses.length})
           </TabsTrigger>
         </TabsList>
+
+        {/* Dashboard Tab */}
+        <TabsContent value="dashboard">
+          {loadingDashboard ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <RefreshCw className="h-6 w-6 animate-spin text-neutral-400" />
+              </CardContent>
+            </Card>
+          ) : !dashboardData ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <BarChart3 className="h-12 w-12 text-neutral-300" />
+                <p className="mt-4 text-neutral-500">No scan data available yet</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {/* Global Stats */}
+              <div className="grid gap-4 md:grid-cols-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Clients</CardDescription>
+                    <CardTitle className="text-2xl">{dashboardData.globalStats.totalClients}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>URLs Tracked</CardDescription>
+                    <CardTitle className="text-2xl">{dashboardData.globalStats.totalUrls}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Total Scans</CardDescription>
+                    <CardTitle className="text-2xl">{dashboardData.globalStats.totalScans}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Avg Score</CardDescription>
+                    <CardTitle className={`text-2xl ${getScoreColor(dashboardData.globalStats.averageScore).split(' ')[0]}`}>
+                      {dashboardData.globalStats.averageScore}%
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Errors</CardDescription>
+                    <CardTitle className="text-2xl text-red-600">{dashboardData.globalStats.totalErrors}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Warnings</CardDescription>
+                    <CardTitle className="text-2xl text-amber-600">{dashboardData.globalStats.totalWarnings}</CardTitle>
+                  </CardHeader>
+                </Card>
+              </div>
+
+              {/* Client Reports */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-neutral-900">Reports by Client</h2>
+                {dashboardData.clientData.map((clientData) => (
+                  <Card key={clientData.client._id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>{clientData.client.name}</CardTitle>
+                          <CardDescription>{clientData.client.website}</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-1 text-neutral-500">
+                            <Clock className="h-4 w-4" />
+                            {clientData.stats.lastScanDate ? (
+                              <span>
+                                Last scan: {new Date(clientData.stats.lastScanDate).toLocaleDateString('en-GB', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            ) : (
+                              <span>No scans yet</span>
+                            )}
+                          </div>
+                          {clientData.stats.lastScannedBy && (
+                            <div className="flex items-center gap-1 text-neutral-500">
+                              <User className="h-4 w-4" />
+                              <span>{clientData.stats.lastScannedBy.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-5 mb-4">
+                        <div className="rounded-lg bg-neutral-50 p-3 text-center">
+                          <p className="text-xs text-neutral-500">URLs</p>
+                          <p className="text-xl font-semibold">{clientData.stats.totalUrls}</p>
+                        </div>
+                        <div className="rounded-lg bg-neutral-50 p-3 text-center">
+                          <p className="text-xs text-neutral-500">Scans</p>
+                          <p className="text-xl font-semibold">{clientData.stats.totalScanRuns}</p>
+                        </div>
+                        <div className="rounded-lg bg-neutral-50 p-3 text-center">
+                          <p className="text-xs text-neutral-500">Avg Score</p>
+                          <p className={`text-xl font-semibold ${getScoreColor(clientData.stats.averageScore).split(' ')[0]}`}>
+                            {clientData.stats.averageScore}%
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-red-50 p-3 text-center">
+                          <p className="text-xs text-neutral-500">Errors</p>
+                          <p className="text-xl font-semibold text-red-600">{clientData.stats.errorCount}</p>
+                        </div>
+                        <div className="rounded-lg bg-amber-50 p-3 text-center">
+                          <p className="text-xs text-neutral-500">Warnings</p>
+                          <p className="text-xl font-semibold text-amber-600">{clientData.stats.warningCount}</p>
+                        </div>
+                      </div>
+
+                      {/* Recent Scans */}
+                      {clientData.recentScans.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-neutral-700 mb-2">Recent Scans</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>URL</TableHead>
+                                <TableHead>Score</TableHead>
+                                <TableHead>Scans</TableHead>
+                                <TableHead>Last Scanned</TableHead>
+                                <TableHead>By</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {clientData.recentScans.map((scan) => (
+                                <TableRow key={scan._id}>
+                                  <TableCell className="max-w-xs truncate font-mono text-xs">
+                                    <a href={scan.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                      {scan.url.replace(/^https?:\/\//, '').slice(0, 50)}
+                                    </a>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(scan.score)}`}>
+                                      {scan.score}%
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1 text-neutral-500">
+                                      <History className="h-3 w-3" />
+                                      {scan.scanCount}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-neutral-500 text-xs">
+                                    {new Date(scan.lastScannedAt).toLocaleDateString('en-GB', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                    })}
+                                  </TableCell>
+                                  <TableCell className="text-neutral-500 text-xs">
+                                    {scan.lastScannedBy?.name || '-'}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedClientId(clientData.client._id);
+                                setActiveTab('saved');
+                              }}
+                            >
+                              View All Scans
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
         {/* Single URL Tab */}
         <TabsContent value="single">
@@ -1105,53 +1416,233 @@ export default function MetaTagAnalyserPage() {
               {/* Saved Analyses Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Saved Analyses</CardTitle>
-                  <CardDescription>
-                    {savedAnalyses.length} analyses for {clients.find(c => c._id === selectedClientId)?.name}
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Saved Analyses</CardTitle>
+                      <CardDescription>
+                        {savedAnalyses.length} analyses for {clients.find(c => c._id === selectedClientId)?.name}
+                      </CardDescription>
+                    </div>
+                    <p className="text-sm text-neutral-500">Click a row to view details</p>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead>URL</TableHead>
                         <TableHead>Title</TableHead>
                         <TableHead>Score</TableHead>
-                        <TableHead>Analyzed</TableHead>
-                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Scans</TableHead>
+                        <TableHead>Last Scanned</TableHead>
+                        <TableHead>By</TableHead>
+                        <TableHead className="w-24"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {savedAnalyses.map((analysis) => (
-                        <TableRow key={analysis._id}>
-                          <TableCell className="max-w-xs truncate font-mono text-xs">
-                            <a href={analysis.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                              {analysis.url.replace(/^https?:\/\//, '').slice(0, 40)}
-                            </a>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {analysis.plannedTitle || analysis.title || 'No title'}
-                            {analysis.plannedTitle && analysis.plannedTitle !== analysis.title && (
-                              <Badge variant="secondary" className="ml-2 text-xs">Planned</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
-                              {analysis.score}%
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-neutral-500">
-                            {new Date(analysis.analyzedAt).toLocaleDateString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => deleteAnalysis(analysis._id)}>
-                              <Trash2 className="h-4 w-4 text-neutral-400 hover:text-red-500" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                        <>
+                          <TableRow
+                            key={analysis._id}
+                            className="cursor-pointer hover:bg-neutral-50"
+                            onClick={() => toggleSavedRowExpand(analysis._id)}
+                          >
+                            <TableCell>
+                              {expandedSavedRows.has(analysis._id) ? (
+                                <ChevronUp className="h-4 w-4 text-neutral-400" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-neutral-400" />
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate font-mono text-xs">
+                              <a
+                                href={analysis.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {analysis.url.replace(/^https?:\/\//, '').slice(0, 35)}
+                              </a>
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {analysis.plannedTitle || analysis.title || 'No title'}
+                              {analysis.plannedTitle && analysis.plannedTitle !== analysis.title && (
+                                <Badge variant="secondary" className="ml-2 text-xs">Planned</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
+                                {analysis.score}%
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 text-neutral-500">
+                                <History className="h-3 w-3" />
+                                {analysis.scanCount || 1}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-neutral-500 text-xs">
+                              {new Date(analysis.lastScannedAt || analysis.analyzedAt).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}
+                            </TableCell>
+                            <TableCell className="text-neutral-500 text-xs">
+                              {analysis.lastScannedBy?.name || analysis.analyzedBy?.name || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => rescanAnalysis(analysis._id)}
+                                  disabled={rescanning === analysis._id}
+                                  title="Rescan URL"
+                                >
+                                  {rescanning === analysis._id ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+                                  ) : (
+                                    <RotateCcw className="h-4 w-4 text-neutral-400 hover:text-blue-500" />
+                                  )}
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => deleteAnalysis(analysis._id)}>
+                                  <Trash2 className="h-4 w-4 text-neutral-400 hover:text-red-500" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {/* Expanded Details */}
+                          {expandedSavedRows.has(analysis._id) && (
+                            <TableRow key={`${analysis._id}-expanded`}>
+                              <TableCell colSpan={8} className="bg-neutral-50 p-0">
+                                <div className="p-4 space-y-4">
+                                  <div className="grid gap-4 md:grid-cols-2">
+                                    {/* Current Meta Data */}
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Current Meta Tags</h4>
+                                      <div className="space-y-2 text-sm">
+                                        <div>
+                                          <span className="text-neutral-500">Title:</span>
+                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                            {analysis.title || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                          <span className={`text-xs ${(analysis.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                            {analysis.title?.length || 0}/60 characters
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-neutral-500">Description:</span>
+                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                            {analysis.description || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                          <span className={`text-xs ${(analysis.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                            {analysis.description?.length || 0}/160 characters
+                                          </span>
+                                        </div>
+                                        {analysis.plannedTitle && (
+                                          <div>
+                                            <span className="text-neutral-500">Planned Title:</span>
+                                            <p className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-200 mt-1">
+                                              {analysis.plannedTitle}
+                                            </p>
+                                          </div>
+                                        )}
+                                        {analysis.plannedDescription && (
+                                          <div>
+                                            <span className="text-neutral-500">Planned Description:</span>
+                                            <p className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-200 mt-1">
+                                              {analysis.plannedDescription}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Scan History */}
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Scan History</h4>
+                                      <div className="space-y-2">
+                                        <div className="rounded border bg-white p-3 text-sm">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-neutral-500">First analyzed:</span>
+                                            <span>
+                                              {new Date(analysis.analyzedAt).toLocaleDateString('en-GB', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                              })}
+                                            </span>
+                                          </div>
+                                          {analysis.analyzedBy && (
+                                            <div className="flex items-center justify-between mt-1">
+                                              <span className="text-neutral-500">By:</span>
+                                              <span>{analysis.analyzedBy.name}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        {analysis.scanHistory && analysis.scanHistory.length > 0 && (
+                                          <div className="space-y-1">
+                                            <p className="text-xs text-neutral-500 font-medium">Previous Scans:</p>
+                                            {analysis.scanHistory.slice(-5).reverse().map((scan, idx) => (
+                                              <div key={idx} className="rounded border bg-white p-2 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                  <span>
+                                                    {new Date(scan.scannedAt).toLocaleDateString('en-GB', {
+                                                      day: 'numeric',
+                                                      month: 'short',
+                                                      year: 'numeric',
+                                                    })}
+                                                  </span>
+                                                  <span className={`rounded px-1.5 py-0.5 ${getScoreColor(scan.score)}`}>
+                                                    {scan.score}%
+                                                  </span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-neutral-500 mt-1">
+                                                  <span>By: {scan.scannedBy?.name || '-'}</span>
+                                                  {scan.changesDetected && (
+                                                    <Badge variant="warning" className="text-xs">Changes detected</Badge>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Issues */}
+                                  {analysis.issues && analysis.issues.length > 0 && (
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Current Issues</h4>
+                                      <div className="grid gap-2 md:grid-cols-2">
+                                        {analysis.issues.map((issue, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="flex items-start gap-2 rounded border bg-white p-2 text-xs"
+                                          >
+                                            {getIssueIcon(issue.type)}
+                                            <div>
+                                              <Badge
+                                                variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'}
+                                                className="text-xs mb-1"
+                                              >
+                                                {issue.field}
+                                              </Badge>
+                                              <p className="text-neutral-600">{issue.message}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
                       ))}
                     </TableBody>
                   </Table>

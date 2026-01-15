@@ -21,8 +21,10 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const analyses = await MetaTagAnalysis.find({ clientId })
-      .sort({ analyzedAt: -1 })
+      .sort({ lastScannedAt: -1, analyzedAt: -1 })
       .limit(100)
+      .populate('analyzedBy', 'name email')
+      .populate('lastScannedBy', 'name email')
       .lean();
 
     return NextResponse.json(analyses);
@@ -57,6 +59,7 @@ export async function POST(request: NextRequest) {
 
     // Bulk save mode
     if (bulk && results && Array.isArray(results)) {
+      const now = new Date();
       const analysesToCreate = results
         .filter((r: { result?: object; error?: string }) => r.result && !r.error)
         .map((r: { result: { url: string; title: string; description: string; canonical?: string; robots?: string; openGraph: object; twitter: object }; issues: Array<{ type: string }>; score: number }) => {
@@ -72,7 +75,11 @@ export async function POST(request: NextRequest) {
             issues: r.issues || [],
             score: r.score,
             analyzedBy: session.user.id,
-            analyzedAt: new Date(),
+            analyzedAt: now,
+            scanCount: 1,
+            lastScannedAt: now,
+            lastScannedBy: session.user.id,
+            scanHistory: [],
           };
         });
 
@@ -115,6 +122,10 @@ export async function POST(request: NextRequest) {
       score,
       analyzedBy: session.user.id,
       analyzedAt: new Date(),
+      scanCount: 1,
+      lastScannedAt: new Date(),
+      lastScannedBy: session.user.id,
+      scanHistory: [],
     });
 
     return NextResponse.json(analysis, { status: 201 });

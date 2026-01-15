@@ -1,5 +1,14 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface IScanHistoryEntry {
+  scannedAt: Date;
+  scannedBy: mongoose.Types.ObjectId;
+  score: number;
+  previousTitle?: string;
+  previousDescription?: string;
+  changesDetected: boolean;
+}
+
 export interface IMetaTagAnalysis extends Document {
   _id: mongoose.Types.ObjectId;
   clientId: mongoose.Types.ObjectId;
@@ -33,6 +42,10 @@ export interface IMetaTagAnalysis extends Document {
   score: number;
   analyzedBy: mongoose.Types.ObjectId;
   analyzedAt: Date;
+  scanHistory: IScanHistoryEntry[];
+  scanCount: number;
+  lastScannedAt: Date;
+  lastScannedBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -106,6 +119,39 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
     analyzedAt: {
       type: Date,
       default: Date.now,
+    },
+    scanHistory: [{
+      scannedAt: {
+        type: Date,
+        required: true,
+      },
+      scannedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      score: {
+        type: Number,
+        required: true,
+      },
+      previousTitle: String,
+      previousDescription: String,
+      changesDetected: {
+        type: Boolean,
+        default: false,
+      },
+    }],
+    scanCount: {
+      type: Number,
+      default: 1,
+    },
+    lastScannedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastScannedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {
