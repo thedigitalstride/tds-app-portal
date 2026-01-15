@@ -50,6 +50,30 @@ export interface IMetaTagAnalysis extends Document {
   updatedAt: Date;
 }
 
+// Subdocument schemas for nested objects
+const openGraphSchema = new Schema(
+  {
+    title: String,
+    description: String,
+    image: String,
+    url: String,
+    type: String,
+    siteName: String,
+  },
+  { _id: false }
+);
+
+const twitterSchema = new Schema(
+  {
+    card: String,
+    title: String,
+    description: String,
+    image: String,
+    site: String,
+  },
+  { _id: false }
+);
+
 const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
   {
     clientId: {
@@ -74,19 +98,12 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
     canonical: String,
     robots: String,
     openGraph: {
-      title: String,
-      description: String,
-      image: String,
-      url: String,
-      type: String,
-      siteName: String,
+      type: openGraphSchema,
+      default: () => ({}),
     },
     twitter: {
-      card: String,
-      title: String,
-      description: String,
-      image: String,
-      site: String,
+      type: twitterSchema,
+      default: () => ({}),
     },
     issues: [{
       type: {
