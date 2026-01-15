@@ -15,6 +15,8 @@ import {
   List,
   Trash2,
   MapPin,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   Button,
@@ -131,6 +133,9 @@ export default function MetaTagAnalyserPage() {
     averageScore: number;
   } | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkSaveSuccess, setBulkSaveSuccess] = useState(false);
 
   // Saved analyses state
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
@@ -240,11 +245,58 @@ export default function MetaTagAnalyserPage() {
     }
   };
 
+  const toggleRowExpand = (index: number) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const saveBulkResults = async () => {
+    if (!selectedClientId || bulkResults.length === 0) return;
+
+    setBulkSaving(true);
+    setBulkSaveSuccess(false);
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          bulk: true,
+          results: bulkResults,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBulkSaveSuccess(true);
+        fetchSavedAnalyses();
+        setTimeout(() => setBulkSaveSuccess(false), 3000);
+      } else {
+        const data = await res.json();
+        setBulkError(data.error || 'Failed to save results');
+      }
+    } catch (error) {
+      console.error('Failed to save bulk results:', error);
+      setBulkError('Failed to save bulk results');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   const runBulkScan = async () => {
     setBulkLoading(true);
     setBulkError(null);
     setBulkResults([]);
     setBulkStats(null);
+    setExpandedRows(new Set());
+    setBulkSaveSuccess(false);
 
     try {
       const body = bulkMode === 'sitemap'
@@ -728,6 +780,36 @@ export default function MetaTagAnalyserPage() {
           {/* Bulk Results */}
           {bulkStats && !bulkLoading && (
             <div className="space-y-6">
+              {/* Save All Bar */}
+              {selectedClientId && bulkStats.analyzed > 0 && (
+                <Card className={bulkSaveSuccess ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}>
+                  <CardContent className="flex items-center justify-between pt-6">
+                    <div className="flex items-center gap-2">
+                      {bulkSaveSuccess ? (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="text-green-700">
+                            {bulkStats.analyzed} analyses saved to {clients.find(c => c._id === selectedClientId)?.name}!
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-blue-700">
+                          Save all {bulkStats.analyzed} successful analyses to {clients.find(c => c._id === selectedClientId)?.name}
+                        </span>
+                      )}
+                    </div>
+                    <Button onClick={saveBulkResults} disabled={bulkSaving || bulkSaveSuccess}>
+                      {bulkSaving ? (
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      {bulkSaveSuccess ? 'Saved!' : 'Save All to Client'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Stats */}
               <div className="grid gap-4 md:grid-cols-4">
                 <Card>
@@ -761,12 +843,16 @@ export default function MetaTagAnalyserPage() {
               {/* Results Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Scan Results</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Scan Results</CardTitle>
+                    <p className="text-sm text-neutral-500">Click a row to view full meta data</p>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead>URL</TableHead>
                         <TableHead>Title</TableHead>
                         <TableHead>Score</TableHead>
@@ -775,43 +861,201 @@ export default function MetaTagAnalyserPage() {
                     </TableHeader>
                     <TableBody>
                       {bulkResults.map((item, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="max-w-xs truncate font-mono text-xs">
-                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                              {item.url.replace(/^https?:\/\//, '').slice(0, 40)}...
-                            </a>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {item.error ? (
-                              <span className="text-red-500">{item.error}</span>
-                            ) : (
-                              item.result?.title || 'No title'
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {!item.error && (
-                              <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(item.score)}`}>
-                                {item.score}%
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {item.issues && (
-                              <div className="flex gap-1">
-                                {item.issues.filter(i => i.type === 'error').length > 0 && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    {item.issues.filter(i => i.type === 'error').length} errors
-                                  </Badge>
-                                )}
-                                {item.issues.filter(i => i.type === 'warning').length > 0 && (
-                                  <Badge variant="warning" className="text-xs">
-                                    {item.issues.filter(i => i.type === 'warning').length} warnings
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                        <>
+                          <TableRow
+                            key={index}
+                            className="cursor-pointer hover:bg-neutral-50"
+                            onClick={() => !item.error && toggleRowExpand(index)}
+                          >
+                            <TableCell>
+                              {!item.error && (
+                                expandedRows.has(index) ? (
+                                  <ChevronUp className="h-4 w-4 text-neutral-400" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-neutral-400" />
+                                )
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate font-mono text-xs">
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {item.url.replace(/^https?:\/\//, '').slice(0, 40)}...
+                              </a>
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {item.error ? (
+                                <span className="text-red-500">{item.error}</span>
+                              ) : (
+                                item.result?.title || 'No title'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {!item.error && (
+                                <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(item.score)}`}>
+                                  {item.score}%
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.issues && (
+                                <div className="flex gap-1">
+                                  {item.issues.filter(i => i.type === 'error').length > 0 && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      {item.issues.filter(i => i.type === 'error').length} errors
+                                    </Badge>
+                                  )}
+                                  {item.issues.filter(i => i.type === 'warning').length > 0 && (
+                                    <Badge variant="warning" className="text-xs">
+                                      {item.issues.filter(i => i.type === 'warning').length} warnings
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          {/* Expanded Row Details */}
+                          {expandedRows.has(index) && item.result && (
+                            <TableRow key={`${index}-expanded`}>
+                              <TableCell colSpan={5} className="bg-neutral-50 p-0">
+                                <div className="p-4 space-y-4">
+                                  {/* Basic Meta Tags */}
+                                  <div className="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Basic Meta Tags</h4>
+                                      <div className="space-y-2 text-sm">
+                                        <div>
+                                          <span className="text-neutral-500">Title:</span>
+                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                            {item.result.title || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                          <span className={`text-xs ${(item.result.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                            {item.result.title?.length || 0}/60 characters
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-neutral-500">Description:</span>
+                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                            {item.result.description || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                          <span className={`text-xs ${(item.result.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                            {item.result.description?.length || 0}/160 characters
+                                          </span>
+                                        </div>
+                                        {item.result.canonical && (
+                                          <div>
+                                            <span className="text-neutral-500">Canonical:</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate">
+                                              {item.result.canonical}
+                                            </p>
+                                          </div>
+                                        )}
+                                        {item.result.robots && (
+                                          <div>
+                                            <span className="text-neutral-500">Robots:</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                              {item.result.robots}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Open Graph Tags</h4>
+                                      <div className="space-y-2 text-sm">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <span className="text-neutral-500 text-xs">og:title</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate">
+                                              {item.result.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <span className="text-neutral-500 text-xs">og:type</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                              {item.result.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className="text-neutral-500 text-xs">og:description</span>
+                                          <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                            {item.result.openGraph?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                        </div>
+                                        {item.result.openGraph?.image && (
+                                          <div>
+                                            <span className="text-neutral-500 text-xs">og:image</span>
+                                            <div className="mt-1 flex items-center gap-2">
+                                              <img
+                                                src={item.result.openGraph.image}
+                                                alt="OG Preview"
+                                                className="h-16 w-24 object-cover rounded border"
+                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                              />
+                                              <p className="font-mono text-xs truncate flex-1">
+                                                {item.result.openGraph.image}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2 mt-4">Twitter Card Tags</h4>
+                                      <div className="space-y-2 text-sm">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <span className="text-neutral-500 text-xs">twitter:card</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                              {item.result.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <span className="text-neutral-500 text-xs">twitter:site</span>
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
+                                              {item.result.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Issues List */}
+                                  {item.issues && item.issues.length > 0 && (
+                                    <div>
+                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Issues Found</h4>
+                                      <div className="grid gap-2 md:grid-cols-2">
+                                        {item.issues.map((issue, issueIndex) => (
+                                          <div
+                                            key={issueIndex}
+                                            className="flex items-start gap-2 rounded border bg-white p-2 text-xs"
+                                          >
+                                            {getIssueIcon(issue.type)}
+                                            <div>
+                                              <Badge
+                                                variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'}
+                                                className="text-xs mb-1"
+                                              >
+                                                {issue.field}
+                                              </Badge>
+                                              <p className="text-neutral-600">{issue.message}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
                       ))}
                     </TableBody>
                   </Table>

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Save a new analysis
+// POST - Save analysis (single or bulk)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -44,20 +44,60 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { clientId, result, issues, plannedTitle, plannedDescription } = body;
+    const { clientId, result, issues, plannedTitle, plannedDescription, bulk, results } = body;
 
-    if (!clientId || !result) {
+    if (!clientId) {
       return NextResponse.json(
-        { error: 'clientId and result are required' },
+        { error: 'clientId is required' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
+    // Bulk save mode
+    if (bulk && results && Array.isArray(results)) {
+      const analysesToCreate = results
+        .filter((r: { result?: object; error?: string }) => r.result && !r.error)
+        .map((r: { result: { url: string; title: string; description: string; canonical?: string; robots?: string; openGraph: object; twitter: object }; issues: Array<{ type: string }>; score: number }) => {
+          return {
+            clientId,
+            url: r.result.url,
+            title: r.result.title || '',
+            description: r.result.description || '',
+            canonical: r.result.canonical,
+            robots: r.result.robots,
+            openGraph: r.result.openGraph,
+            twitter: r.result.twitter,
+            issues: r.issues || [],
+            score: r.score,
+            analyzedBy: session.user.id,
+            analyzedAt: new Date(),
+          };
+        });
+
+      if (analysesToCreate.length === 0) {
+        return NextResponse.json(
+          { error: 'No valid results to save' },
+          { status: 400 }
+        );
+      }
+
+      const saved = await MetaTagAnalysis.insertMany(analysesToCreate);
+      return NextResponse.json({ saved: saved.length }, { status: 201 });
+    }
+
+    // Single save mode
+    if (!result) {
+      return NextResponse.json(
+        { error: 'result is required' },
+        { status: 400 }
+      );
+    }
+
     // Calculate score based on issues
-    const errorCount = issues.filter((i: { type: string }) => i.type === 'error').length;
-    const warningCount = issues.filter((i: { type: string }) => i.type === 'warning').length;
+    const errorCount = issues?.filter((i: { type: string }) => i.type === 'error').length || 0;
+    const warningCount = issues?.filter((i: { type: string }) => i.type === 'warning').length || 0;
     const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 10));
 
     const analysis = await MetaTagAnalysis.create({
@@ -69,7 +109,7 @@ export async function POST(request: NextRequest) {
       robots: result.robots,
       openGraph: result.openGraph,
       twitter: result.twitter,
-      issues,
+      issues: issues || [],
       plannedTitle,
       plannedDescription,
       score,
