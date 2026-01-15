@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   AlertCircle,
@@ -1172,9 +1172,8 @@ export default function MetaTagAnalyserPage() {
                     </TableHeader>
                     <TableBody>
                       {bulkResults.map((item, index) => (
-                        <>
+                        <React.Fragment key={index}>
                           <TableRow
-                            key={index}
                             className="cursor-pointer hover:bg-neutral-50"
                             onClick={() => !item.error && toggleRowExpand(index)}
                           >
@@ -1366,7 +1365,7 @@ export default function MetaTagAnalyserPage() {
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </React.Fragment>
                       ))}
                     </TableBody>
                   </Table>
@@ -1442,9 +1441,8 @@ export default function MetaTagAnalyserPage() {
                     </TableHeader>
                     <TableBody>
                       {savedAnalyses.map((analysis) => (
-                        <>
+                        <React.Fragment key={analysis._id}>
                           <TableRow
-                            key={analysis._id}
                             className="cursor-pointer hover:bg-neutral-50"
                             onClick={() => toggleSavedRowExpand(analysis._id)}
                           >
@@ -1642,7 +1640,7 @@ export default function MetaTagAnalyserPage() {
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </React.Fragment>
                       ))}
                     </TableBody>
                   </Table>
