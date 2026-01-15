@@ -180,5 +180,10 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
 metaTagAnalysisSchema.index({ clientId: 1, url: 1 });
 metaTagAnalysisSchema.index({ clientId: 1, analyzedAt: -1 });
 
+// Delete cached model in development to pick up schema changes
+if (process.env.NODE_ENV !== 'production' && mongoose.models.MetaTagAnalysis) {
+  delete mongoose.models.MetaTagAnalysis;
+}
+
 export const MetaTagAnalysis: Model<IMetaTagAnalysis> =
   mongoose.models.MetaTagAnalysis || mongoose.model<IMetaTagAnalysis>('MetaTagAnalysis', metaTagAnalysisSchema);
