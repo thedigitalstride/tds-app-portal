@@ -683,7 +683,7 @@ export default function MetaTagAnalyserPage() {
                               {clientData.recentScans.map((scan) => (
                                 <TableRow key={scan._id}>
                                   <TableCell className="max-w-xs truncate font-mono text-xs">
-                                    <a href={scan.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                    <a href={scan.url} target="_blank" rel="noopener noreferrer" className="hover:underline" title={scan.url}>
                                       {scan.url.replace(/^https?:\/\//, '').slice(0, 50)}
                                     </a>
                                   </TableCell>
@@ -1185,13 +1185,14 @@ export default function MetaTagAnalyserPage() {
                                 )
                               )}
                             </TableCell>
-                            <TableCell className="max-w-xs truncate font-mono text-xs">
+                            <TableCell className="max-w-xs truncate font-mono text-xs" title={item.url}>
                               <a
                                 href={item.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
+                                title={item.url}
                               >
                                 {item.url.replace(/^https?:\/\//, '').slice(0, 40)}...
                               </a>
@@ -1258,7 +1259,7 @@ export default function MetaTagAnalyserPage() {
                                         {item.result.canonical && (
                                           <div>
                                             <span className="text-neutral-500">Canonical:</span>
-                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate">
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate" title={item.result.canonical}>
                                               {item.result.canonical}
                                             </p>
                                           </div>
@@ -1280,7 +1281,7 @@ export default function MetaTagAnalyserPage() {
                                         <div className="grid grid-cols-2 gap-2">
                                           <div>
                                             <span className="text-neutral-500 text-xs">og:title</span>
-                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate">
+                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1 truncate" title={item.result.openGraph?.title || ''}>
                                               {item.result.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
                                             </p>
                                           </div>
@@ -1307,7 +1308,7 @@ export default function MetaTagAnalyserPage() {
                                                 className="h-16 w-24 object-cover rounded border"
                                                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                               />
-                                              <p className="font-mono text-xs truncate flex-1">
+                                              <p className="font-mono text-xs truncate flex-1" title={item.result.openGraph.image}>
                                                 {item.result.openGraph.image}
                                               </p>
                                             </div>
@@ -1452,13 +1453,14 @@ export default function MetaTagAnalyserPage() {
                                 <ChevronDown className="h-4 w-4 text-neutral-400" />
                               )}
                             </TableCell>
-                            <TableCell className="max-w-xs truncate font-mono text-xs">
+                            <TableCell className="max-w-xs truncate font-mono text-xs" title={analysis.url}>
                               <a
                                 href={analysis.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
+                                title={analysis.url}
                               >
                                 {analysis.url.replace(/^https?:\/\//, '').slice(0, 35)}
                               </a>
