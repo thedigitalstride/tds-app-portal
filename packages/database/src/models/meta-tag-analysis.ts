@@ -4,9 +4,37 @@ export interface IScanHistoryEntry {
   scannedAt: Date;
   scannedBy: mongoose.Types.ObjectId;
   score: number;
+  changesDetected: boolean;
+  // Full snapshot of data at this point in time
+  snapshot: {
+    title: string;
+    description: string;
+    canonical?: string;
+    robots?: string;
+    openGraph?: {
+      title?: string;
+      description?: string;
+      image?: string;
+      url?: string;
+      type?: string;
+      siteName?: string;
+    };
+    twitter?: {
+      card?: string;
+      title?: string;
+      description?: string;
+      image?: string;
+      site?: string;
+    };
+    issues?: Array<{
+      type: string;
+      field: string;
+      message: string;
+    }>;
+  };
+  // Legacy fields for backwards compatibility
   previousTitle?: string;
   previousDescription?: string;
-  changesDetected: boolean;
 }
 
 export interface IMetaTagAnalysis extends Document {
@@ -151,12 +179,40 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
         type: Number,
         required: true,
       },
-      previousTitle: String,
-      previousDescription: String,
       changesDetected: {
         type: Boolean,
         default: false,
       },
+      // Full snapshot of all fields at this point
+      snapshot: {
+        title: String,
+        description: String,
+        canonical: String,
+        robots: String,
+        openGraph: {
+          title: String,
+          description: String,
+          image: String,
+          url: String,
+          type: String,
+          siteName: String,
+        },
+        twitter: {
+          card: String,
+          title: String,
+          description: String,
+          image: String,
+          site: String,
+        },
+        issues: [{
+          type: { type: String },
+          field: String,
+          message: String,
+        }],
+      },
+      // Legacy fields for backwards compatibility
+      previousTitle: String,
+      previousDescription: String,
     }],
     scanCount: {
       type: Number,

@@ -62,15 +62,42 @@ async function upsertAnalysis(
     // URL exists - update it and add to scan history
     const changesDetected =
       existingAnalysis.title !== result.title ||
-      existingAnalysis.description !== result.description;
+      existingAnalysis.description !== result.description ||
+      existingAnalysis.canonical !== result.canonical ||
+      existingAnalysis.openGraph?.image !== result.openGraph?.image;
 
+    // Create full snapshot of current state before updating
     const historyEntry = {
       scannedAt: now,
       scannedBy: userId,
       score: existingAnalysis.score,
+      changesDetected,
+      // Full snapshot of all fields at this point in time
+      snapshot: {
+        title: existingAnalysis.title || '',
+        description: existingAnalysis.description || '',
+        canonical: existingAnalysis.canonical,
+        robots: existingAnalysis.robots,
+        openGraph: existingAnalysis.openGraph ? {
+          title: existingAnalysis.openGraph.title,
+          description: existingAnalysis.openGraph.description,
+          image: existingAnalysis.openGraph.image,
+          url: existingAnalysis.openGraph.url,
+          type: existingAnalysis.openGraph.type,
+          siteName: existingAnalysis.openGraph.siteName,
+        } : undefined,
+        twitter: existingAnalysis.twitter ? {
+          card: existingAnalysis.twitter.card,
+          title: existingAnalysis.twitter.title,
+          description: existingAnalysis.twitter.description,
+          image: existingAnalysis.twitter.image,
+          site: existingAnalysis.twitter.site,
+        } : undefined,
+        issues: existingAnalysis.issues || [],
+      },
+      // Legacy fields for backwards compatibility
       previousTitle: existingAnalysis.title,
       previousDescription: existingAnalysis.description,
-      changesDetected,
     };
 
     const updatedAnalysis = await MetaTagAnalysis.findByIdAndUpdate(

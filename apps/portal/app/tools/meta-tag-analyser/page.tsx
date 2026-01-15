@@ -101,9 +101,36 @@ interface SavedAnalysis {
     scannedAt: string;
     scannedBy: { name: string; email: string };
     score: number;
+    changesDetected: boolean;
+    snapshot?: {
+      title: string;
+      description: string;
+      canonical?: string;
+      robots?: string;
+      openGraph?: {
+        title?: string;
+        description?: string;
+        image?: string;
+        url?: string;
+        type?: string;
+        siteName?: string;
+      };
+      twitter?: {
+        card?: string;
+        title?: string;
+        description?: string;
+        image?: string;
+        site?: string;
+      };
+      issues?: Array<{
+        type: string;
+        field: string;
+        message: string;
+      }>;
+    };
+    // Legacy fields
     previousTitle?: string;
     previousDescription?: string;
-    changesDetected: boolean;
   }>;
 }
 
@@ -1890,23 +1917,132 @@ export default function MetaTagAnalyserPage() {
                                                         {/* Expanded view with full data snapshot */}
                                                         {isExpanded && (
                                                           <div className="border-t border-neutral-100 bg-neutral-50 p-3 space-y-3">
-                                                            <p className="text-xs font-medium text-neutral-700">Data at this point in time:</p>
+                                                            <p className="text-xs font-medium text-neutral-700">Data snapshot at this point in time:</p>
 
-                                                            {/* Title at that time */}
-                                                            <div className="rounded border bg-white p-2">
-                                                              <span className="text-neutral-500 text-xs">Title:</span>
-                                                              <p className="font-mono text-xs mt-1">
-                                                                {scan.previousTitle || <span className="text-neutral-400 italic">Not recorded</span>}
-                                                              </p>
-                                                            </div>
+                                                            {/* Use snapshot if available, fall back to legacy fields */}
+                                                            {scan.snapshot ? (
+                                                              <>
+                                                                {/* Basic Meta Tags */}
+                                                                <div className="grid gap-2 md:grid-cols-2">
+                                                                  <div className="rounded border bg-white p-2">
+                                                                    <span className="text-neutral-500 text-xs font-medium">Title</span>
+                                                                    <p className="font-mono text-xs mt-1">
+                                                                      {scan.snapshot.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                                    </p>
+                                                                  </div>
+                                                                  <div className="rounded border bg-white p-2">
+                                                                    <span className="text-neutral-500 text-xs font-medium">Description</span>
+                                                                    <p className="font-mono text-xs mt-1 line-clamp-2" title={scan.snapshot.description}>
+                                                                      {scan.snapshot.description || <span className="text-neutral-400 italic">Not set</span>}
+                                                                    </p>
+                                                                  </div>
+                                                                </div>
 
-                                                            {/* Description at that time */}
-                                                            <div className="rounded border bg-white p-2">
-                                                              <span className="text-neutral-500 text-xs">Description:</span>
-                                                              <p className="font-mono text-xs mt-1">
-                                                                {scan.previousDescription || <span className="text-neutral-400 italic">Not recorded</span>}
-                                                              </p>
-                                                            </div>
+                                                                {/* Canonical & Robots */}
+                                                                {(scan.snapshot.canonical || scan.snapshot.robots) && (
+                                                                  <div className="grid gap-2 md:grid-cols-2">
+                                                                    {scan.snapshot.canonical && (
+                                                                      <div className="rounded border bg-white p-2">
+                                                                        <span className="text-neutral-500 text-xs font-medium">Canonical</span>
+                                                                        <p className="font-mono text-xs mt-1 truncate" title={scan.snapshot.canonical}>
+                                                                          {scan.snapshot.canonical}
+                                                                        </p>
+                                                                      </div>
+                                                                    )}
+                                                                    {scan.snapshot.robots && (
+                                                                      <div className="rounded border bg-white p-2">
+                                                                        <span className="text-neutral-500 text-xs font-medium">Robots</span>
+                                                                        <p className="font-mono text-xs mt-1">{scan.snapshot.robots}</p>
+                                                                      </div>
+                                                                    )}
+                                                                  </div>
+                                                                )}
+
+                                                                {/* Open Graph */}
+                                                                {scan.snapshot.openGraph && (
+                                                                  <div className="rounded border bg-white p-2">
+                                                                    <span className="text-neutral-500 text-xs font-medium">Open Graph</span>
+                                                                    <div className="grid gap-1 mt-1 text-xs">
+                                                                      {scan.snapshot.openGraph.title && (
+                                                                        <p><span className="text-neutral-400">og:title:</span> {scan.snapshot.openGraph.title}</p>
+                                                                      )}
+                                                                      {scan.snapshot.openGraph.description && (
+                                                                        <p className="truncate" title={scan.snapshot.openGraph.description}>
+                                                                          <span className="text-neutral-400">og:description:</span> {scan.snapshot.openGraph.description}
+                                                                        </p>
+                                                                      )}
+                                                                      {scan.snapshot.openGraph.image && (
+                                                                        <p className="truncate" title={scan.snapshot.openGraph.image}>
+                                                                          <span className="text-neutral-400">og:image:</span> {scan.snapshot.openGraph.image}
+                                                                        </p>
+                                                                      )}
+                                                                      {scan.snapshot.openGraph.type && (
+                                                                        <p><span className="text-neutral-400">og:type:</span> {scan.snapshot.openGraph.type}</p>
+                                                                      )}
+                                                                      {!scan.snapshot.openGraph.title && !scan.snapshot.openGraph.description && !scan.snapshot.openGraph.image && (
+                                                                        <p className="text-neutral-400 italic">No OG tags set</p>
+                                                                      )}
+                                                                    </div>
+                                                                  </div>
+                                                                )}
+
+                                                                {/* Twitter */}
+                                                                {scan.snapshot.twitter && (
+                                                                  <div className="rounded border bg-white p-2">
+                                                                    <span className="text-neutral-500 text-xs font-medium">Twitter Card</span>
+                                                                    <div className="grid gap-1 mt-1 text-xs">
+                                                                      {scan.snapshot.twitter.card && (
+                                                                        <p><span className="text-neutral-400">twitter:card:</span> {scan.snapshot.twitter.card}</p>
+                                                                      )}
+                                                                      {scan.snapshot.twitter.title && (
+                                                                        <p><span className="text-neutral-400">twitter:title:</span> {scan.snapshot.twitter.title}</p>
+                                                                      )}
+                                                                      {scan.snapshot.twitter.site && (
+                                                                        <p><span className="text-neutral-400">twitter:site:</span> {scan.snapshot.twitter.site}</p>
+                                                                      )}
+                                                                      {!scan.snapshot.twitter.card && !scan.snapshot.twitter.title && (
+                                                                        <p className="text-neutral-400 italic">No Twitter tags set</p>
+                                                                      )}
+                                                                    </div>
+                                                                  </div>
+                                                                )}
+
+                                                                {/* Issues at that time */}
+                                                                {scan.snapshot.issues && scan.snapshot.issues.length > 0 && (
+                                                                  <div className="rounded border bg-white p-2">
+                                                                    <span className="text-neutral-500 text-xs font-medium">Issues at this time ({scan.snapshot.issues.length})</span>
+                                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                                      {scan.snapshot.issues.map((issue, issueIdx) => (
+                                                                        <Badge
+                                                                          key={issueIdx}
+                                                                          variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'}
+                                                                          className="text-xs"
+                                                                          title={issue.message}
+                                                                        >
+                                                                          {issue.field}
+                                                                        </Badge>
+                                                                      ))}
+                                                                    </div>
+                                                                  </div>
+                                                                )}
+                                                              </>
+                                                            ) : (
+                                                              // Legacy display for old records without snapshot
+                                                              <>
+                                                                <div className="rounded border bg-white p-2">
+                                                                  <span className="text-neutral-500 text-xs">Title:</span>
+                                                                  <p className="font-mono text-xs mt-1">
+                                                                    {scan.previousTitle || <span className="text-neutral-400 italic">Not recorded</span>}
+                                                                  </p>
+                                                                </div>
+                                                                <div className="rounded border bg-white p-2">
+                                                                  <span className="text-neutral-500 text-xs">Description:</span>
+                                                                  <p className="font-mono text-xs mt-1">
+                                                                    {scan.previousDescription || <span className="text-neutral-400 italic">Not recorded</span>}
+                                                                  </p>
+                                                                </div>
+                                                              </>
+                                                            )}
 
                                                             {/* Show what changed if changes detected */}
                                                             {scan.changesDetected && (
