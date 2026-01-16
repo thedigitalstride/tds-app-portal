@@ -6,8 +6,8 @@ import { Providers } from '@/components/providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'TDS Portal',
-  description: 'The Digital Stride Team Portal',
+  title: 'TDS Toolbox',
+  description: 'The Digital Stride Team Toolbox',
 };
 
 export default function RootLayout({

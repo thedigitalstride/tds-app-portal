@@ -48,10 +48,12 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   children,
   align = 'end',
+  side = 'bottom',
   className,
 }: {
   children: React.ReactNode;
   align?: 'start' | 'end';
+  side?: 'top' | 'bottom';
   className?: string;
 }) {
   const context = React.useContext(DropdownMenuContext);
@@ -76,8 +78,9 @@ function DropdownMenuContent({
     <div
       ref={ref}
       className={cn(
-        'absolute z-50 mt-2 min-w-[8rem] overflow-hidden rounded-lg border border-neutral-200 bg-white p-1 shadow-lg',
+        'absolute z-50 min-w-[8rem] overflow-hidden rounded-lg border border-neutral-200 bg-white p-1 shadow-lg',
         align === 'end' ? 'right-0' : 'left-0',
+        side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
         className
       )}
     >

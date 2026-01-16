@@ -33,7 +33,7 @@ function LoginForm() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-900 text-white font-bold text-xl">
             T
           </div>
-          <CardTitle className="text-2xl">TDS Portal</CardTitle>
+          <CardTitle className="text-2xl">TDS Toolbox</CardTitle>
           <CardDescription>
             Sign in with your @thedigitalstride.co.uk account
           </CardDescription>
@@ -71,7 +71,7 @@ function LoginForm() {
             Sign in with Google
           </Button>
           <p className="text-center text-xs text-neutral-500">
-            Only @thedigitalstride.co.uk email addresses can access this portal.
+            Only @thedigitalstride.co.uk email addresses can access this application.
           </p>
         </CardContent>
       </Card>

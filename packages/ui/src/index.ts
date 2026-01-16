@@ -33,6 +33,7 @@ export {
 } from './components/table';
 export { Select, type SelectProps } from './components/select';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs';
+export { TDSLogo } from './components/tds-logo';
 
 // Tool Components - Reusable components for building tools
 export {
