@@ -2288,145 +2288,317 @@ export default function MetaTagAnalyserPage() {
                                                           </div>
                                                         </div>
 
-                                                        {/* Expanded view with full data snapshot */}
+                                                        {/* Expanded view with full data snapshot - matches main view layout */}
                                                         {isExpanded && (
                                                           <div className="border-t border-neutral-100 bg-neutral-50 p-3 space-y-3">
-                                                            <p className="text-xs font-medium text-neutral-700">State before this rescan:</p>
+                                                            <p className="text-xs font-medium text-neutral-700 mb-2">State before this rescan:</p>
 
                                                             {/* Use snapshot if available, fall back to legacy fields */}
                                                             {scan.snapshot ? (
-                                                              <>
-                                                                {/* Helper to get issue status for a field */}
-                                                                {(() => {
-                                                                  const getFieldStatus = (fieldName: string) => {
-                                                                    const issue = scan.snapshot?.issues?.find(
-                                                                      i => i.field.toLowerCase() === fieldName.toLowerCase()
-                                                                    );
-                                                                    return issue?.type || 'success';
-                                                                  };
-                                                                  const getFieldMessage = (fieldName: string) => {
-                                                                    const issue = scan.snapshot?.issues?.find(
-                                                                      i => i.field.toLowerCase() === fieldName.toLowerCase()
-                                                                    );
-                                                                    return issue?.message;
-                                                                  };
-                                                                  const statusStyles = {
-                                                                    error: 'border-red-300 bg-red-50/50',
-                                                                    warning: 'border-amber-300 bg-amber-50/50',
-                                                                    success: 'border-green-300 bg-green-50/50',
-                                                                  };
-                                                                  const badgeStyles = {
-                                                                    error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', Icon: AlertCircle },
-                                                                    warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', Icon: AlertTriangle },
-                                                                    success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', Icon: CheckCircle },
-                                                                  };
-
-                                                                  const StatusField = ({ label, value, fieldName, truncate = false }: { label: string; value?: string; fieldName: string; truncate?: boolean }) => {
-                                                                    const status = getFieldStatus(fieldName) as keyof typeof statusStyles;
-                                                                    const message = getFieldMessage(fieldName);
-                                                                    const badge = badgeStyles[status];
+                                                              <div className="grid gap-3 md:grid-cols-2">
+                                                                {/* Left Column - Basic Meta Tags */}
+                                                                <div className="space-y-2">
+                                                                  {/* Title Field */}
+                                                                  {(() => {
+                                                                    const titleIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'title');
+                                                                    const titleStatus = titleIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[titleStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
                                                                     return (
-                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[status]}`}>
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[titleStatus as keyof typeof statusStyles]}`}>
                                                                         <div className="absolute -top-2 right-2">
                                                                           <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
-                                                                            <badge.Icon className="h-2.5 w-2.5" />
-                                                                            <span>{status === 'success' ? 'Good' : status === 'error' ? 'Error' : 'Warning'}</span>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{titleStatus === 'success' ? 'Good' : titleStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                                           </div>
                                                                         </div>
-                                                                        <span className="text-neutral-700 font-medium text-xs">{label}</span>
-                                                                        <p className={`font-mono text-xs bg-white/80 p-1.5 rounded border mt-1 ${truncate ? 'truncate' : 'line-clamp-2'}`} title={value || ''}>
-                                                                          {value || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        <div className="flex items-center justify-between mb-1">
+                                                                          <span className="text-neutral-700 font-medium text-xs">Title</span>
+                                                                          <span className={`text-[10px] ${(scan.snapshot?.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                                            {scan.snapshot?.title?.length || 0}/60
+                                                                          </span>
+                                                                        </div>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border">
+                                                                          {scan.snapshot?.title || <span className="text-neutral-400 italic">Not set</span>}
                                                                         </p>
-                                                                        {message && (
-                                                                          <p className="mt-1 text-[10px] text-neutral-600">{message}</p>
+                                                                        {titleIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{titleIssue.message}</p>
                                                                         )}
                                                                       </div>
                                                                     );
-                                                                  };
+                                                                  })()}
 
-                                                                  const InfoField = ({ label, value, truncate = false }: { label: string; value?: string; truncate?: boolean }) => (
-                                                                    <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
-                                                                      <span className="text-neutral-700 font-medium text-xs">{label}</span>
-                                                                      <p className={`font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1 ${truncate ? 'truncate' : ''}`} title={value || ''}>
-                                                                        {value || <span className="text-neutral-400 italic">Not set</span>}
-                                                                      </p>
-                                                                    </div>
-                                                                  );
-
-                                                                  return (
-                                                                    <div className="space-y-2">
-                                                                      {/* Row 1: Title & Description */}
-                                                                      <div className="grid gap-2 md:grid-cols-2">
-                                                                        <StatusField label="Title" value={scan.snapshot?.title} fieldName="title" />
-                                                                        <StatusField label="Description" value={scan.snapshot?.description} fieldName="description" />
-                                                                      </div>
-
-                                                                      {/* Row 2: Canonical & Viewport */}
-                                                                      <div className="grid gap-2 md:grid-cols-2">
-                                                                        <StatusField label="Canonical" value={scan.snapshot?.canonical} fieldName="canonical" truncate />
-                                                                        <StatusField label="Viewport" value={scan.snapshot?.viewport} fieldName="viewport" truncate />
-                                                                      </div>
-
-                                                                      {/* Row 3: OG Image & Twitter Card */}
-                                                                      <div className="grid gap-2 md:grid-cols-2">
-                                                                        <StatusField label="OG Image" value={scan.snapshot?.openGraph?.image} fieldName="og image" truncate />
-                                                                        <StatusField label="Twitter Card" value={scan.snapshot?.twitter?.card} fieldName="twitter card" />
-                                                                      </div>
-
-                                                                      {/* Row 4: Technical Details */}
-                                                                      <div className="grid gap-2 md:grid-cols-3">
-                                                                        <InfoField label="Charset" value={scan.snapshot?.charset} />
-                                                                        <InfoField label="Language" value={scan.snapshot?.language} />
-                                                                        <InfoField label="Robots" value={scan.snapshot?.robots} />
-                                                                      </div>
-
-                                                                      {/* Additional OG & Twitter Details (collapsed) */}
-                                                                      {(scan.snapshot?.openGraph?.title || scan.snapshot?.twitter?.title) && (
-                                                                        <div className="grid gap-2 md:grid-cols-2">
-                                                                          {scan.snapshot?.openGraph && (
-                                                                            <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
-                                                                              <span className="text-neutral-700 font-medium text-xs">Open Graph Details</span>
-                                                                              <div className="grid gap-1 mt-1 text-[10px] font-mono">
-                                                                                {scan.snapshot.openGraph.title && (
-                                                                                  <p className="truncate"><span className="text-neutral-400">og:title:</span> {scan.snapshot.openGraph.title}</p>
-                                                                                )}
-                                                                                {scan.snapshot.openGraph.type && (
-                                                                                  <p><span className="text-neutral-400">og:type:</span> {scan.snapshot.openGraph.type}</p>
-                                                                                )}
-                                                                              </div>
-                                                                            </div>
-                                                                          )}
-                                                                          {scan.snapshot?.twitter && (
-                                                                            <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
-                                                                              <span className="text-neutral-700 font-medium text-xs">Twitter Details</span>
-                                                                              <div className="grid gap-1 mt-1 text-[10px] font-mono">
-                                                                                {scan.snapshot.twitter.title && (
-                                                                                  <p className="truncate"><span className="text-neutral-400">twitter:title:</span> {scan.snapshot.twitter.title}</p>
-                                                                                )}
-                                                                                {scan.snapshot.twitter.site && (
-                                                                                  <p><span className="text-neutral-400">twitter:site:</span> {scan.snapshot.twitter.site}</p>
-                                                                                )}
-                                                                              </div>
-                                                                            </div>
-                                                                          )}
+                                                                  {/* Description Field */}
+                                                                  {(() => {
+                                                                    const descIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'description');
+                                                                    const descStatus = descIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[descStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[descStatus as keyof typeof statusStyles]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{descStatus === 'success' ? 'Good' : descStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
                                                                         </div>
-                                                                      )}
+                                                                        <div className="flex items-center justify-between mb-1">
+                                                                          <span className="text-neutral-700 font-medium text-xs">Description</span>
+                                                                          <span className={`text-[10px] ${(scan.snapshot?.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                                            {scan.snapshot?.description?.length || 0}/160
+                                                                          </span>
+                                                                        </div>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border line-clamp-2">
+                                                                          {scan.snapshot?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                        {descIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{descIssue.message}</p>
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  })()}
+
+                                                                  {/* Canonical Field */}
+                                                                  {(() => {
+                                                                    const canonicalIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'canonical');
+                                                                    const canonicalStatus = canonicalIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[canonicalStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[canonicalStatus as keyof typeof statusStyles]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{canonicalStatus === 'success' ? 'Good' : canonicalStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
+                                                                        </div>
+                                                                        <span className="text-neutral-700 font-medium text-xs">Canonical URL</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1 truncate" title={scan.snapshot?.canonical || ''}>
+                                                                          {scan.snapshot?.canonical || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                        {canonicalIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{canonicalIssue.message}</p>
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  })()}
+
+                                                                  {/* Robots Field */}
+                                                                  <div className="rounded-lg border-2 border-neutral-200 bg-neutral-50/50 p-2">
+                                                                    <span className="text-neutral-700 font-medium text-xs">Robots</span>
+                                                                    <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1">
+                                                                      {scan.snapshot?.robots || <span className="text-neutral-400 italic">Not set</span>}
+                                                                    </p>
+                                                                  </div>
+                                                                </div>
+
+                                                                {/* Right Column - Open Graph & Twitter */}
+                                                                <div className="space-y-2">
+                                                                  {/* OG Image Field */}
+                                                                  {(() => {
+                                                                    const ogImageIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'og image');
+                                                                    const ogImageStatus = ogImageIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[ogImageStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[ogImageStatus as keyof typeof statusStyles]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{ogImageStatus === 'success' ? 'Good' : ogImageStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
+                                                                        </div>
+                                                                        <span className="text-neutral-700 font-medium text-xs">OG Image</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1 truncate" title={scan.snapshot?.openGraph?.image || ''}>
+                                                                          {scan.snapshot?.openGraph?.image || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                        {ogImageIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{ogImageIssue.message}</p>
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  })()}
+
+                                                                  {/* Twitter Card Field */}
+                                                                  {(() => {
+                                                                    const twitterIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'twitter card');
+                                                                    const twitterStatus = twitterIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[twitterStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[twitterStatus as keyof typeof statusStyles]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{twitterStatus === 'success' ? 'Good' : twitterStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
+                                                                        </div>
+                                                                        <span className="text-neutral-700 font-medium text-xs">Twitter Card</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1">
+                                                                          {scan.snapshot?.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                        {twitterIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{twitterIssue.message}</p>
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  })()}
+
+                                                                  {/* Viewport Field */}
+                                                                  {(() => {
+                                                                    const viewportIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'viewport');
+                                                                    const viewportStatus = viewportIssue?.type || 'success';
+                                                                    const statusStyles = {
+                                                                      error: 'border-red-300 bg-red-50/50',
+                                                                      warning: 'border-amber-300 bg-amber-50/50',
+                                                                      success: 'border-green-300 bg-green-50/50',
+                                                                    };
+                                                                    const badgeStyles = {
+                                                                      error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                                                      warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                                                      success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                                                    };
+                                                                    const badge = badgeStyles[viewportStatus as keyof typeof badgeStyles];
+                                                                    const BadgeIcon = badge.icon;
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[viewportStatus as keyof typeof statusStyles]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <BadgeIcon className="h-2.5 w-2.5" />
+                                                                            <span>{viewportStatus === 'success' ? 'Good' : viewportStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
+                                                                        </div>
+                                                                        <span className="text-neutral-700 font-medium text-xs">Viewport</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1 truncate" title={scan.snapshot?.viewport || ''}>
+                                                                          {scan.snapshot?.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                        {viewportIssue && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{viewportIssue.message}</p>
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  })()}
+
+                                                                  {/* Open Graph Details */}
+                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
+                                                                    <span className="text-neutral-700 font-medium text-xs">Open Graph Details</span>
+                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">og:title</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.openGraph?.title || ''}>
+                                                                          {scan.snapshot?.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">og:type</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                          {scan.snapshot?.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
                                                                     </div>
-                                                                  );
-                                                                })()}
-                                                              </>
+                                                                  </div>
+
+                                                                  {/* Twitter Details */}
+                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
+                                                                    <span className="text-neutral-700 font-medium text-xs">Twitter Details</span>
+                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">twitter:title</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.twitter?.title || ''}>
+                                                                          {scan.snapshot?.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">twitter:site</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                          {scan.snapshot?.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
+                                                                    </div>
+                                                                  </div>
+
+                                                                  {/* Technical Details */}
+                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
+                                                                    <span className="text-neutral-700 font-medium text-xs">Technical Details</span>
+                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">charset</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                          {scan.snapshot?.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
+                                                                      <div>
+                                                                        <span className="text-neutral-500 text-[10px]">language</span>
+                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                          {scan.snapshot?.language || <span className="text-neutral-400 italic">Not set</span>}
+                                                                        </p>
+                                                                      </div>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+                                                              </div>
                                                             ) : (
                                                               // Legacy display for old records without snapshot
-                                                              <div className="grid gap-2 md:grid-cols-2">
+                                                              <div className="grid gap-3 md:grid-cols-2">
                                                                 <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
                                                                   <span className="text-neutral-700 font-medium text-xs">Title</span>
-                                                                  <p className="font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1">
+                                                                  <p className="font-mono text-[10px] bg-neutral-50 p-1.5 rounded border mt-1">
                                                                     {scan.previousTitle || <span className="text-neutral-400 italic">Not recorded</span>}
                                                                   </p>
                                                                 </div>
                                                                 <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
                                                                   <span className="text-neutral-700 font-medium text-xs">Description</span>
-                                                                  <p className="font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1">
+                                                                  <p className="font-mono text-[10px] bg-neutral-50 p-1.5 rounded border mt-1">
                                                                     {scan.previousDescription || <span className="text-neutral-400 italic">Not recorded</span>}
                                                                   </p>
                                                                 </div>
