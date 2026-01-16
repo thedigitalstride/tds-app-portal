@@ -1,0 +1,321 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Plus, ExternalLink, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Badge,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  Skeleton,
+} from '@tds/ui';
+
+interface Client {
+  _id: string;
+  name: string;
+  website: string;
+  description?: string;
+  contactEmail?: string;
+  contactName?: string;
+  isActive: boolean;
+}
+
+export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    website: '',
+    description: '',
+    contactEmail: '',
+    contactName: '',
+  });
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    try {
+      const res = await fetch('/api/clients');
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch clients:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = editingClient
+        ? `/api/clients/${editingClient._id}`
+        : '/api/clients';
+      const method = editingClient ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        fetchClients();
+        setDialogOpen(false);
+        resetForm();
+      }
+    } catch (error) {
+      console.error('Failed to save client:', error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this client?')) return;
+    try {
+      const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchClients();
+      }
+    } catch (error) {
+      console.error('Failed to delete client:', error);
+    }
+  };
+
+  const openEditDialog = (client: Client) => {
+    setEditingClient(client);
+    setFormData({
+      name: client.name,
+      website: client.website,
+      description: client.description || '',
+      contactEmail: client.contactEmail || '',
+      contactName: client.contactName || '',
+    });
+    setDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setEditingClient(null);
+    setFormData({
+      name: '',
+      website: '',
+      description: '',
+      contactEmail: '',
+      contactName: '',
+    });
+  };
+
+  return (
+    <div className="p-8">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">Clients</h1>
+          <p className="mt-1 text-neutral-500">
+            Manage your client list. Client data can be shared across tools.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            resetForm();
+            setDialogOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Client
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="mt-2 h-4 w-48" />
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      ) : clients.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-neutral-500">No clients yet</p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => setDialogOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add your first client
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {clients.map((client) => (
+            <Card key={client._id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      {client.name}
+                      {client.isActive ? (
+                        <Badge variant="success" className="ml-2">Active</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="ml-2">Inactive</Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription className="mt-1 flex items-center">
+                      <a
+                        href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center hover:underline"
+                      >
+                        {client.website}
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </a>
+                    </CardDescription>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEditDialog(client)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(client._id)}
+                        className="text-red-600"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+              {(client.description || client.contactName) && (
+                <CardContent>
+                  {client.description && (
+                    <p className="text-sm text-neutral-600">{client.description}</p>
+                  )}
+                  {client.contactName && (
+                    <p className="mt-2 text-sm text-neutral-500">
+                      Contact: {client.contactName}
+                      {client.contactEmail && ` (${client.contactEmail})`}
+                    </p>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingClient ? 'Edit Client' : 'Add New Client'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingClient
+                ? 'Update the client details below.'
+                : 'Add a new client to your list. This data can be shared across tools.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="text-sm font-medium">Client Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Acme Ltd"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Website *</label>
+                <Input
+                  value={formData.website}
+                  onChange={(e) =>
+                    setFormData({ ...formData, website: e.target.value })
+                  }
+                  placeholder="www.example.com"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Input
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Brief description of the client"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Contact Name</label>
+                <Input
+                  value={formData.contactName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, contactName: e.target.value })
+                  }
+                  placeholder="John Smith"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Contact Email</label>
+                <Input
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={(e) =>
+                    setFormData({ ...formData, contactEmail: e.target.value })
+                  }
+                  placeholder="john@example.com"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {editingClient ? 'Save Changes' : 'Add Client'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
