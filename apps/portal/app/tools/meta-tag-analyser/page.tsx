@@ -1953,7 +1953,7 @@ export default function MetaTagAnalyserPage() {
 
                                       {/* Right Column - Open Graph & Twitter */}
                                       <div className="space-y-3">
-                                        {/* OG Image Field - with full status styling */}
+                                        {/* Open Graph Section - Combined */}
                                         {(() => {
                                           const ogImageIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
                                           const ogImageStatus = ogImageIssue?.type || 'success';
@@ -1977,30 +1977,57 @@ export default function MetaTagAnalyserPage() {
                                                   <span>{ogImageStatus === 'success' ? 'Good' : ogImageStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                 </div>
                                               </div>
-                                              <span className="text-neutral-700 font-medium text-sm">OG Image</span>
-                                              {analysis.openGraph?.image ? (
-                                                <div className="mt-2 flex items-center gap-2">
-                                                  <img
-                                                    src={analysis.openGraph.image}
-                                                    alt="OG Preview"
-                                                    className="h-12 w-20 object-cover rounded border"
-                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                  />
-                                                  <p className="font-mono text-xs bg-white/80 p-2 rounded border truncate flex-1" title={analysis.openGraph.image}>
-                                                    {analysis.openGraph.image}
+                                              <span className="text-neutral-700 font-medium text-sm">Open Graph</span>
+
+                                              {/* OG Image */}
+                                              <div className="mt-2">
+                                                <span className="text-neutral-500 text-xs">og:image</span>
+                                                {analysis.openGraph?.image ? (
+                                                  <div className="mt-1 flex items-center gap-2">
+                                                    <img
+                                                      src={analysis.openGraph.image}
+                                                      alt="OG Preview"
+                                                      className="h-12 w-20 object-cover rounded border"
+                                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                    />
+                                                    <p className="font-mono text-xs bg-white/80 p-1.5 rounded border truncate flex-1" title={analysis.openGraph.image}>
+                                                      {analysis.openGraph.image}
+                                                    </p>
+                                                  </div>
+                                                ) : (
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-1 text-neutral-400 italic">Not set</p>
+                                                )}
+                                                {ogImageIssue && (
+                                                  <p className="mt-1 text-xs text-neutral-600">{ogImageIssue.message}</p>
+                                                )}
+                                              </div>
+
+                                              {/* Other OG Fields */}
+                                              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-current/10">
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">og:title</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.openGraph?.title || ''}>
+                                                    {analysis.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
                                                   </p>
                                                 </div>
-                                              ) : (
-                                                <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1 text-neutral-400 italic">Not set</p>
-                                              )}
-                                              {ogImageIssue && (
-                                                <p className="mt-1 text-xs text-neutral-600">{ogImageIssue.message}</p>
-                                              )}
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">og:type</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                    {analysis.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                                <div className="col-span-2">
+                                                  <span className="text-neutral-500 text-xs">og:description</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 line-clamp-2" title={analysis.openGraph?.description || ''}>
+                                                    {analysis.openGraph?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                              </div>
                                             </div>
                                           );
                                         })()}
 
-                                        {/* Twitter Card Field - with full status styling */}
+                                        {/* Twitter Section - Combined */}
                                         {(() => {
                                           const twitterIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'twitter card');
                                           const twitterStatus = twitterIssue?.type || 'success';
@@ -2025,12 +2052,33 @@ export default function MetaTagAnalyserPage() {
                                                 </div>
                                               </div>
                                               <span className="text-neutral-700 font-medium text-sm">Twitter Card</span>
-                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
-                                                {analysis.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                              {twitterIssue && (
-                                                <p className="mt-1 text-xs text-neutral-600">{twitterIssue.message}</p>
-                                              )}
+
+                                              {/* Twitter Card Type */}
+                                              <div className="mt-2">
+                                                <span className="text-neutral-500 text-xs">twitter:card</span>
+                                                <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                  {analysis.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                                </p>
+                                                {twitterIssue && (
+                                                  <p className="mt-1 text-xs text-neutral-600">{twitterIssue.message}</p>
+                                                )}
+                                              </div>
+
+                                              {/* Other Twitter Fields */}
+                                              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-current/10">
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">twitter:title</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.twitter?.title || ''}>
+                                                    {analysis.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">twitter:site</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                    {analysis.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                              </div>
                                             </div>
                                           );
                                         })()}
@@ -2069,50 +2117,6 @@ export default function MetaTagAnalyserPage() {
                                             </div>
                                           );
                                         })()}
-
-                                        {/* Additional Open Graph fields - info only, neutral styling */}
-                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
-                                          <span className="text-neutral-700 font-medium text-sm">Open Graph Details</span>
-                                          <div className="grid grid-cols-2 gap-2 mt-2">
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">og:title</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.openGraph?.title || ''}>
-                                                {analysis.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">og:type</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
-                                                {analysis.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div className="col-span-2">
-                                              <span className="text-neutral-500 text-xs">og:description</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 line-clamp-2" title={analysis.openGraph?.description || ''}>
-                                                {analysis.openGraph?.description || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        {/* Additional Twitter fields - info only, neutral styling */}
-                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
-                                          <span className="text-neutral-700 font-medium text-sm">Twitter Details</span>
-                                          <div className="grid grid-cols-2 gap-2 mt-2">
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">twitter:title</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.twitter?.title || ''}>
-                                                {analysis.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">twitter:site</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
-                                                {analysis.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </div>
 
                                         {/* Technical Details - info only, neutral styling */}
                                         <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
@@ -2424,7 +2428,7 @@ export default function MetaTagAnalyserPage() {
 
                                                                 {/* Right Column - Open Graph & Twitter */}
                                                                 <div className="space-y-2">
-                                                                  {/* OG Image Field */}
+                                                                  {/* Open Graph Section - Combined */}
                                                                   {(() => {
                                                                     const ogImageIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'og image');
                                                                     const ogImageStatus = ogImageIssue?.type || 'success';
@@ -2448,18 +2452,39 @@ export default function MetaTagAnalyserPage() {
                                                                             <span>{ogImageStatus === 'success' ? 'Good' : ogImageStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                                           </div>
                                                                         </div>
-                                                                        <span className="text-neutral-700 font-medium text-xs">OG Image</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1 truncate" title={scan.snapshot?.openGraph?.image || ''}>
-                                                                          {scan.snapshot?.openGraph?.image || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                        {ogImageIssue && (
-                                                                          <p className="mt-1 text-[10px] text-neutral-600">{ogImageIssue.message}</p>
-                                                                        )}
+                                                                        <span className="text-neutral-700 font-medium text-xs">Open Graph</span>
+
+                                                                        {/* OG Image */}
+                                                                        <div className="mt-1">
+                                                                          <span className="text-neutral-500 text-[10px]">og:image</span>
+                                                                          <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.openGraph?.image || ''}>
+                                                                            {scan.snapshot?.openGraph?.image || <span className="text-neutral-400 italic">Not set</span>}
+                                                                          </p>
+                                                                          {ogImageIssue && (
+                                                                            <p className="mt-1 text-[10px] text-neutral-600">{ogImageIssue.message}</p>
+                                                                          )}
+                                                                        </div>
+
+                                                                        {/* Other OG Fields */}
+                                                                        <div className="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-current/10">
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">og:title</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.openGraph?.title || ''}>
+                                                                              {scan.snapshot?.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">og:type</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                              {scan.snapshot?.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                        </div>
                                                                       </div>
                                                                     );
                                                                   })()}
 
-                                                                  {/* Twitter Card Field */}
+                                                                  {/* Twitter Section - Combined */}
                                                                   {(() => {
                                                                     const twitterIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'twitter card');
                                                                     const twitterStatus = twitterIssue?.type || 'success';
@@ -2484,12 +2509,33 @@ export default function MetaTagAnalyserPage() {
                                                                           </div>
                                                                         </div>
                                                                         <span className="text-neutral-700 font-medium text-xs">Twitter Card</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1">
-                                                                          {scan.snapshot?.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                        {twitterIssue && (
-                                                                          <p className="mt-1 text-[10px] text-neutral-600">{twitterIssue.message}</p>
-                                                                        )}
+
+                                                                        {/* Twitter Card Type */}
+                                                                        <div className="mt-1">
+                                                                          <span className="text-neutral-500 text-[10px]">twitter:card</span>
+                                                                          <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                            {scan.snapshot?.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                                                          </p>
+                                                                          {twitterIssue && (
+                                                                            <p className="mt-1 text-[10px] text-neutral-600">{twitterIssue.message}</p>
+                                                                          )}
+                                                                        </div>
+
+                                                                        {/* Other Twitter Fields */}
+                                                                        <div className="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-current/10">
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">twitter:title</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.twitter?.title || ''}>
+                                                                              {scan.snapshot?.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">twitter:site</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                              {scan.snapshot?.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                        </div>
                                                                       </div>
                                                                     );
                                                                   })()}
@@ -2528,44 +2574,6 @@ export default function MetaTagAnalyserPage() {
                                                                       </div>
                                                                     );
                                                                   })()}
-
-                                                                  {/* Open Graph Details */}
-                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
-                                                                    <span className="text-neutral-700 font-medium text-xs">Open Graph Details</span>
-                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">og:title</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.openGraph?.title || ''}>
-                                                                          {scan.snapshot?.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">og:type</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
-                                                                          {scan.snapshot?.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                    </div>
-                                                                  </div>
-
-                                                                  {/* Twitter Details */}
-                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
-                                                                    <span className="text-neutral-700 font-medium text-xs">Twitter Details</span>
-                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">twitter:title</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.twitter?.title || ''}>
-                                                                          {scan.snapshot?.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">twitter:site</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
-                                                                          {scan.snapshot?.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                    </div>
-                                                                  </div>
 
                                                                   {/* Technical Details */}
                                                                   <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
