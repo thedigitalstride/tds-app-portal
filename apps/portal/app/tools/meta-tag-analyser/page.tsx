@@ -1187,7 +1187,7 @@ export default function MetaTagAnalyserPage() {
                       </div>
 
                       {/* Robots */}
-                      <div className="rounded-lg border-2 border-neutral-200 p-3">
+                      <div className="relative rounded-lg border-2 p-3 border-neutral-300 bg-neutral-50/50">
                         <label className="mb-2 block text-sm font-medium">Robots</label>
                         <p className="font-mono text-xs bg-white/80 p-2 rounded border">
                           {result.robots || <span className="text-neutral-400 italic">Not set</span>}
@@ -1199,7 +1199,7 @@ export default function MetaTagAnalyserPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {/* Author */}
                       {result.author && (
-                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                        <div className="relative rounded-lg border-2 p-3 border-neutral-300 bg-neutral-50/50">
                           <label className="mb-2 block text-sm font-medium">Author</label>
                           <p className="font-mono text-xs bg-white/80 p-2 rounded border">
                             {result.author}
@@ -1209,7 +1209,7 @@ export default function MetaTagAnalyserPage() {
 
                       {/* Theme Color */}
                       {result.themeColor && (
-                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                        <div className="relative rounded-lg border-2 p-3 border-neutral-300 bg-neutral-50/50">
                           <label className="mb-2 block text-sm font-medium">Theme Color</label>
                           <div className="flex items-center gap-2">
                             <div
@@ -1224,7 +1224,7 @@ export default function MetaTagAnalyserPage() {
 
                       {/* Favicon */}
                       {result.favicon && (
-                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                        <div className="relative rounded-lg border-2 p-3 border-neutral-300 bg-neutral-50/50">
                           <label className="mb-2 block text-sm font-medium">Favicon</label>
                           <div className="flex items-center gap-2">
                             <img
@@ -1243,7 +1243,7 @@ export default function MetaTagAnalyserPage() {
 
                     {/* Hreflang entries */}
                     {result.hreflang && result.hreflang.length > 0 && (
-                      <div className="rounded-lg border-2 border-neutral-200 p-3">
+                      <div className="relative rounded-lg border-2 p-3 border-neutral-300 bg-neutral-50/50">
                         <label className="mb-2 block text-sm font-medium">Hreflang Tags ({result.hreflang.length})</label>
                         <div className="space-y-1 max-h-32 overflow-y-auto">
                           {result.hreflang.map((entry, idx) => (
@@ -2099,35 +2099,91 @@ export default function MetaTagAnalyserPage() {
                                         <div className="rounded-lg border border-neutral-200 p-3 bg-white">
                                           <h5 className="text-sm font-medium text-neutral-700 mb-2">Technical</h5>
                                           <div className="grid grid-cols-2 gap-2">
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs">viewport</span>
-                                              <p className="font-mono text-xs mt-1 truncate" title={analysis.viewport || ''}>
-                                                {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs">charset</span>
+                                            {/* Viewport - with status */}
+                                            {(() => {
+                                              const viewportIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'viewport');
+                                              const viewportStatus = viewportIssue?.type || 'success';
+                                              const statusStyles = {
+                                                error: 'border-red-200 bg-red-50/30',
+                                                warning: 'border-amber-200 bg-amber-50/30',
+                                                success: 'border-green-200 bg-green-50/30',
+                                              };
+                                              return (
+                                                <div className={`rounded border p-2 ${statusStyles[viewportStatus as keyof typeof statusStyles]}`}>
+                                                  <span className="text-neutral-500 text-xs font-medium">viewport</span>
+                                                  <p className="font-mono text-xs mt-1 truncate" title={analysis.viewport || ''}>
+                                                    {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                  {viewportIssue && (
+                                                    <p className="mt-1 text-xs text-neutral-600">{viewportIssue.message}</p>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* Charset - with status */}
+                                            {(() => {
+                                              const charsetIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'charset');
+                                              const charsetStatus = charsetIssue?.type || 'success';
+                                              const statusStyles = {
+                                                error: 'border-red-200 bg-red-50/30',
+                                                warning: 'border-amber-200 bg-amber-50/30',
+                                                success: 'border-green-200 bg-green-50/30',
+                                              };
+                                              return (
+                                                <div className={`rounded border p-2 ${statusStyles[charsetStatus as keyof typeof statusStyles]}`}>
+                                                  <span className="text-neutral-500 text-xs font-medium">charset</span>
+                                                  <p className="font-mono text-xs mt-1">
+                                                    {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                  {charsetIssue && (
+                                                    <p className="mt-1 text-xs text-neutral-600">{charsetIssue.message}</p>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* Language - with status */}
+                                            {(() => {
+                                              const langIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'language');
+                                              const langStatus = langIssue?.type || 'success';
+                                              const statusStyles = {
+                                                error: 'border-red-200 bg-red-50/30',
+                                                warning: 'border-amber-200 bg-amber-50/30',
+                                                success: 'border-green-200 bg-green-50/30',
+                                              };
+                                              return (
+                                                <div className={`rounded border p-2 ${statusStyles[langStatus as keyof typeof statusStyles]}`}>
+                                                  <span className="text-neutral-500 text-xs font-medium">language</span>
+                                                  <p className="font-mono text-xs mt-1">
+                                                    {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                  {langIssue && (
+                                                    <p className="mt-1 text-xs text-neutral-600">{langIssue.message}</p>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* Robots - info only */}
+                                            <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs font-medium">robots</span>
                                               <p className="font-mono text-xs mt-1">
-                                                {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                                {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
                                             </div>
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs">language</span>
-                                              <p className="font-mono text-xs mt-1">
-                                                {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
+
                                             {analysis.author && (
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">author</span>
+                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs font-medium">author</span>
                                                 <p className="font-mono text-xs mt-1">
                                                   {analysis.author}
                                                 </p>
                                               </div>
                                             )}
                                             {analysis.themeColor && (
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">theme-color</span>
+                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs font-medium">theme-color</span>
                                                 <div className="flex items-center gap-1 mt-1">
                                                   <div
                                                     className="h-4 w-4 rounded border"
@@ -2138,8 +2194,8 @@ export default function MetaTagAnalyserPage() {
                                               </div>
                                             )}
                                             {analysis.favicon && (
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">favicon</span>
+                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs font-medium">favicon</span>
                                                 <p className="font-mono text-xs mt-1 truncate" title={analysis.favicon}>
                                                   {analysis.favicon}
                                                 </p>
@@ -2147,8 +2203,8 @@ export default function MetaTagAnalyserPage() {
                                             )}
                                           </div>
                                           {analysis.hreflang && analysis.hreflang.length > 0 && (
-                                            <div className="mt-2">
-                                              <span className="text-neutral-500 text-xs">hreflang ({analysis.hreflang.length})</span>
+                                            <div className="mt-2 rounded border border-neutral-200 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs font-medium">hreflang ({analysis.hreflang.length})</span>
                                               <div className="flex flex-wrap gap-1 mt-1">
                                                 {analysis.hreflang.map((entry, idx) => (
                                                   <Badge key={idx} variant="secondary" className="font-mono text-xs">
