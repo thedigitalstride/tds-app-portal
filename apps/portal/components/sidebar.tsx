@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   Badge,
+  TDSLogo,
 } from '@tds/ui';
 import { tools } from '@/lib/tools';
 
@@ -44,10 +45,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b border-neutral-200 px-6">
         <Link href="/dashboard" className="flex items-center space-x-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-900 text-white font-bold">
-            T
-          </div>
-          <span className="text-lg font-semibold">TDS Portal</span>
+          <TDSLogo variant="minimal" size="md" />
+          <span className="text-lg font-semibold">TDS Toolbox</span>
         </Link>
       </div>
 
@@ -164,7 +163,7 @@ export function Sidebar() {
               <ChevronDown className="h-4 w-4 text-neutral-400" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="start" side="top" className="w-56">
             <div className="px-2 py-1.5">
               <p className="text-sm font-medium">{session?.user?.name}</p>
               <p className="text-xs text-neutral-500">{session?.user?.email}</p>
