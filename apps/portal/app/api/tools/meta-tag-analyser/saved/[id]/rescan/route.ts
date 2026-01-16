@@ -47,6 +47,44 @@ interface AnalysisIssue {
   field: string;
 }
 
+// Decode HTML entities in scraped text
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+
+  // Map of common named entities
+  const namedEntities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&#39;': "'",
+    '&nbsp;': ' ',
+    '&ndash;': '\u2013', // en dash
+    '&mdash;': '\u2014', // em dash
+    '&lsquo;': '\u2018', // left single quote
+    '&rsquo;': '\u2019', // right single quote
+    '&ldquo;': '\u201C', // left double quote
+    '&rdquo;': '\u201D', // right double quote
+    '&hellip;': '\u2026', // ellipsis
+    '&copy;': '\u00A9', // copyright
+    '&reg;': '\u00AE', // registered
+    '&trade;': '\u2122', // trademark
+  };
+
+  // First, replace named entities
+  let decoded = text;
+  for (const [entity, char] of Object.entries(namedEntities)) {
+    decoded = decoded.split(entity).join(char);
+  }
+
+  // Decode numeric entities (decimal: &#39; and hex: &#x27;)
+  decoded = decoded.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  return decoded;
+}
+
 function analyzeMetaTags(result: MetaTagResult): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
 
@@ -231,19 +269,19 @@ export async function POST(
       ) || html.match(
         new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*name=["']${name}["']`, 'i')
       );
-      if (nameMatch) return nameMatch[1];
+      if (nameMatch) return decodeHtmlEntities(nameMatch[1]);
 
       const propMatch = html.match(
         new RegExp(`<meta[^>]*property=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i')
       ) || html.match(
         new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*property=["']${name}["']`, 'i')
       );
-      return propMatch ? propMatch[1] : '';
+      return propMatch ? decodeHtmlEntities(propMatch[1]) : '';
     };
 
     const getTitle = (): string => {
       const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-      return titleMatch ? titleMatch[1].trim() : '';
+      return titleMatch ? decodeHtmlEntities(titleMatch[1].trim()) : '';
     };
 
     const getCanonical = (): string => {
