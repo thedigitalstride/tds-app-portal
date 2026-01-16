@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   X,
@@ -12,6 +12,10 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Pause,
+  Play,
+  Square,
+  Clock,
 } from 'lucide-react';
 import {
   Button,
@@ -66,15 +70,64 @@ interface BulkResult {
   selected?: boolean;
 }
 
+interface QueueStatus {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  permanentlyFailed: number;
+  remainingToProcess: number;
+  failedUrls: Array<{ url: string; error: string; retryCount: number; batchId: string }>;
+  activeBatches: string[];
+  hasQueuedUrls: boolean;
+}
+
 interface ScanPanelProps {
   isOpen: boolean;
   onClose: () => void;
   clientId: string | null;
   clientName: string;
   onScanComplete: () => void;
+  // Polling props (lifted from page)
+  queueStatus: QueueStatus | null;
+  isPolling: boolean;
+  isPaused: boolean;
+  queueLoading: boolean;
+  queueProgress: { completed: number; total: number } | null;
+  startPolling: () => void;
+  stopPolling: () => void;
+  pausePolling: () => void;
+  resumePolling: () => void;
+  cancelQueue: (batchId?: string) => Promise<void>;
+  refreshStatus: () => Promise<void>;
+  queueUrls: (urls: string[]) => Promise<{ queued: number; batchId: string }>;
+  totalProcessed: number;
 }
 
-export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplete }: ScanPanelProps) {
+const IMMEDIATE_SCAN_LIMIT = 50;
+
+export function ScanPanel({
+  isOpen,
+  onClose,
+  clientId,
+  clientName,
+  onScanComplete,
+  // Polling props
+  queueStatus,
+  isPolling,
+  isPaused,
+  queueLoading,
+  queueProgress,
+  startPolling,
+  stopPolling,
+  pausePolling,
+  resumePolling,
+  cancelQueue,
+  refreshStatus,
+  queueUrls,
+  totalProcessed,
+}: ScanPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
 
   // Single URL state
@@ -98,6 +151,16 @@ export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplet
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  // Show resume prompt if there are pending URLs and not already polling
+  const showResumePrompt = queueStatus?.hasQueuedUrls && !isPolling;
+
+  // Check for pending URLs when client changes
+  useEffect(() => {
+    if (clientId && isOpen) {
+      refreshStatus();
+    }
+  }, [clientId, isOpen, refreshStatus]);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600 bg-green-50';
@@ -159,35 +222,120 @@ export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplet
     setExpandedRows(new Set());
 
     try {
-      const body = bulkMode === 'sitemap'
-        ? { mode: 'sitemap', sitemapUrl }
-        : { mode: 'urls', urls: urlList.split('\n').map(u => u.trim()).filter(Boolean) };
+      let urlsToScan: string[] = [];
 
-      const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      if (bulkMode === 'sitemap') {
+        // For sitemap, fetch and parse first to get URL list
+        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'sitemap', sitemapUrl }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Bulk scan failed');
+        if (!res.ok) {
+          throw new Error(data.error || 'Bulk scan failed');
+        }
+
+        // Mark all successful results as selected by default
+        const resultsWithSelection = data.results.map((r: BulkResult) => ({
+          ...r,
+          selected: !r.error,
+        }));
+
+        setBulkResults(resultsWithSelection);
+        setBulkStats({
+          totalUrls: data.totalUrls,
+          analyzed: data.analyzed,
+          failed: data.failed,
+          averageScore: data.averageScore,
+        });
+
+        // Queue remaining URLs if there are more than 50
+        if (data.hasMoreUrls && data.remainingUrls?.length > 0) {
+          const queueResult = await queueUrls(data.remainingUrls);
+
+          // Start background processing
+          startPolling();
+
+          setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
+          setTimeout(() => setSuccess(null), 5000);
+        }
+
+        setBulkLoading(false);
+        return;
       }
 
-      // Mark all successful results as selected by default, failed as not selected
-      const resultsWithSelection = data.results.map((r: BulkResult) => ({
-        ...r,
-        selected: !r.error,
-      }));
+      // For URL list mode, handle the split
+      urlsToScan = urlList.split('\n').map(u => u.trim()).filter(Boolean);
 
-      setBulkResults(resultsWithSelection);
-      setBulkStats({
-        totalUrls: data.totalUrls,
-        analyzed: data.analyzed,
-        failed: data.failed,
-        averageScore: data.averageScore,
-      });
+      if (urlsToScan.length <= IMMEDIATE_SCAN_LIMIT) {
+        // All URLs can be scanned immediately
+        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'urls', urls: urlsToScan }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Bulk scan failed');
+        }
+
+        const resultsWithSelection = data.results.map((r: BulkResult) => ({
+          ...r,
+          selected: !r.error,
+        }));
+
+        setBulkResults(resultsWithSelection);
+        setBulkStats({
+          totalUrls: data.totalUrls,
+          analyzed: data.analyzed,
+          failed: data.failed,
+          averageScore: data.averageScore,
+        });
+      } else {
+        // Split: first 50 immediate, rest queued
+        const immediateUrls = urlsToScan.slice(0, IMMEDIATE_SCAN_LIMIT);
+        const queuedUrls = urlsToScan.slice(IMMEDIATE_SCAN_LIMIT);
+
+        // Scan first 50 immediately
+        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'urls', urls: immediateUrls }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Bulk scan failed');
+        }
+
+        const resultsWithSelection = data.results.map((r: BulkResult) => ({
+          ...r,
+          selected: !r.error,
+        }));
+
+        setBulkResults(resultsWithSelection);
+        setBulkStats({
+          totalUrls: urlsToScan.length,
+          analyzed: data.analyzed,
+          failed: data.failed,
+          averageScore: data.averageScore,
+        });
+
+        // Queue remaining URLs
+        const queueResult = await queueUrls(queuedUrls);
+
+        // Start background processing
+        startPolling();
+
+        setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
+        setTimeout(() => setSuccess(null), 5000);
+      }
     } catch (err) {
       setBulkError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -389,7 +537,7 @@ export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplet
                     disabled={bulkLoading}
                   />
                   <p className="mt-1 text-xs text-neutral-500">
-                    Maximum 50 URLs will be scanned
+                    First 50 URLs scanned immediately, rest processed in background
                   </p>
                 </div>
               ) : (
@@ -405,7 +553,12 @@ export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplet
                     disabled={bulkLoading}
                   />
                   <p className="mt-1 text-xs text-neutral-500">
-                    {urlList.split('\n').filter(Boolean).length} URLs - Maximum 50
+                    {urlList.split('\n').filter(Boolean).length} URLs
+                    {urlList.split('\n').filter(Boolean).length > IMMEDIATE_SCAN_LIMIT && (
+                      <span className="text-amber-600">
+                        {' '}- First {IMMEDIATE_SCAN_LIMIT} scanned immediately, rest queued
+                      </span>
+                    )}
                   </p>
                 </div>
               )}
@@ -431,11 +584,113 @@ export function ScanPanel({ isOpen, onClose, clientId, clientName, onScanComplet
                 </Button>
               )}
 
+              {/* Resume Prompt */}
+              {showResumePrompt && queueStatus && (
+                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-amber-800">
+                        Resume background processing?
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        {queueStatus.remainingToProcess} URLs are waiting to be processed.
+                        {queueStatus.permanentlyFailed > 0 && (
+                          <span> ({queueStatus.permanentlyFailed} failed)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={startPolling}
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Resume
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => cancelQueue()}
+                    >
+                      <Square className="mr-2 h-4 w-4" />
+                      Cancel All
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Queue Progress */}
+              {isPolling && queueProgress && (
+                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
+                      <span className="font-medium text-blue-800">
+                        Background processing...
+                      </span>
+                    </div>
+                    <span className="text-sm text-blue-700">
+                      {queueProgress.completed}/{queueProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.round((queueProgress.completed / queueProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-600">
+                    You can close this panel - processing will continue in the background.
+                  </p>
+                  <div className="flex gap-2">
+                    {isPaused ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resumePolling}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Resume
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={pausePolling}
+                      >
+                        <Pause className="mr-2 h-4 w-4" />
+                        Pause
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => cancelQueue()}
+                    >
+                      <Square className="mr-2 h-4 w-4" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Error */}
               {bulkError && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {bulkError}
+                </div>
+              )}
+
+              {/* Success message for queue */}
+              {success && mode === 'bulk' && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                  {success}
                 </div>
               )}
 
