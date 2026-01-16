@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "turbo": "^2.3.0",
-    "turbo-darwin-arm64": "^2.7.4",
     "typescript": "^5.7.0"
   },
   "engines": {
