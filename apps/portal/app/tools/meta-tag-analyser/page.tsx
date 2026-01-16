@@ -2240,7 +2240,6 @@ export default function MetaTagAnalyserPage() {
                                       </div>
                                     </div>
                                   </div>
-                                </div>
                               </TableCell>
                             </TableRow>
                           )}
