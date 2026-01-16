@@ -272,11 +272,28 @@ export async function POST(
     const getHreflang = (): HreflangEntry[] => {
       const entries: HreflangEntry[] = [];
       const hreflangRegex = /<link[^>]*rel=["']alternate["'][^>]*hreflang=["']([^"']*)["'][^>]*href=["']([^"']*)["']/gi;
+      const hreflangRegex2 = /<link[^>]*hreflang=["']([^"']*)["'][^>]*rel=["']alternate["'][^>]*href=["']([^"']*)["']/gi;
+      const hreflangRegex3 = /<link[^>]*href=["']([^"']*)["'][^>]*hreflang=["']([^"']*)["'][^>]*rel=["']alternate["']/gi;
+
       let match;
       while ((match = hreflangRegex.exec(html)) !== null) {
         entries.push({ lang: match[1], url: match[2] });
       }
-      return entries;
+      while ((match = hreflangRegex2.exec(html)) !== null) {
+        entries.push({ lang: match[1], url: match[2] });
+      }
+      while ((match = hreflangRegex3.exec(html)) !== null) {
+        entries.push({ lang: match[2], url: match[1] });
+      }
+
+      // Deduplicate
+      const seen = new Set<string>();
+      return entries.filter(e => {
+        const key = `${e.lang}:${e.url}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     };
 
     const hreflangEntries = getHreflang();

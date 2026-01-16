@@ -53,16 +53,13 @@ async function parseSitemap(sitemapUrl: string): Promise<string[]> {
 
   while ((match = locRegex.exec(xml)) !== null) {
     const url = match[1].trim();
-    // Check if it's a sitemap index (contains other sitemaps)
-    if (url.endsWith('.xml') || url.includes('sitemap')) {
-      // This might be a nested sitemap, but we'll keep it simple for now
-      // and only process direct URLs
-      if (!url.includes('sitemap')) {
-        urls.push(url);
-      }
-    } else {
-      urls.push(url);
+    // Skip XML files entirely - they're either nested sitemaps or non-webpage files
+    // Nested sitemaps are handled separately below
+    if (url.endsWith('.xml')) {
+      continue;
     }
+    // Add all non-XML URLs as pages to analyse
+    urls.push(url);
   }
 
   // If we found sitemap index entries, try to fetch them
