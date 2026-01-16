@@ -537,7 +537,7 @@ export function ScanPanel({
                     disabled={bulkLoading}
                   />
                   <p className="mt-1 text-xs text-neutral-500">
-                    Maximum 50 URLs will be scanned
+                    First 50 URLs scanned immediately, rest processed in background
                   </p>
                 </div>
               ) : (
