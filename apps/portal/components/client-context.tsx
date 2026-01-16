@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface Client {
   _id: string;
@@ -26,28 +26,15 @@ const ClientContext = createContext<ClientContextValue | null>(null);
 
 const STORAGE_KEY = 'tds-selected-client';
 
-// Inner component that uses searchParams (needs Suspense boundary)
-function ClientProviderInner({
-  children,
-  setSelectedClientIdFromUrl
-}: {
-  children: React.ReactNode;
-  setSelectedClientIdFromUrl: (id: string) => void;
-}) {
-  const searchParams = useSearchParams();
-
-  // Listen for URL query param changes (e.g., from client dashboard badge links)
-  useEffect(() => {
-    const clientIdFromUrl = searchParams.get('clientId');
-    if (clientIdFromUrl) {
-      setSelectedClientIdFromUrl(clientIdFromUrl);
-    }
-  }, [searchParams, setSelectedClientIdFromUrl]);
-
-  return <>{children}</>;
+// Helper to get clientId from URL (works on client-side only)
+function getClientIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('clientId');
 }
 
 export function ClientProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [clients, setClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [selectedClientId, setSelectedClientIdState] = useState<string | null>(null);
@@ -67,22 +54,32 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Initialize: Load from localStorage
+  // Initialize: Load from localStorage, then check URL
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       setSelectedClientIdState(stored);
     }
 
+    // Check URL for clientId (overrides localStorage)
+    const urlClientId = getClientIdFromUrl();
+    if (urlClientId) {
+      setSelectedClientIdState(urlClientId);
+      localStorage.setItem(STORAGE_KEY, urlClientId);
+    }
+
     // Fetch clients
     fetchClients();
   }, [fetchClients]);
 
-  // Callback to set client ID from URL (called by inner component)
-  const setSelectedClientIdFromUrl = useCallback((id: string) => {
-    setSelectedClientIdState(id);
-    localStorage.setItem(STORAGE_KEY, id);
-  }, []);
+  // Watch for pathname changes and sync clientId from URL
+  useEffect(() => {
+    const urlClientId = getClientIdFromUrl();
+    if (urlClientId) {
+      setSelectedClientIdState(urlClientId);
+      localStorage.setItem(STORAGE_KEY, urlClientId);
+    }
+  }, [pathname]); // Re-run when pathname changes (navigation occurred)
 
   // Wrapper to also persist to localStorage
   const setSelectedClientId = useCallback((id: string | null) => {
@@ -111,11 +108,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ClientContext.Provider value={value}>
-      <Suspense fallback={children}>
-        <ClientProviderInner setSelectedClientIdFromUrl={setSelectedClientIdFromUrl}>
-          {children}
-        </ClientProviderInner>
-      </Suspense>
+      {children}
     </ClientContext.Provider>
   );
 }
