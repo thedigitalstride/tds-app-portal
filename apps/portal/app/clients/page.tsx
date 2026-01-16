@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Plus, ExternalLink, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import {
   Button,
@@ -22,7 +23,24 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@tds/ui';
+import { tools, type Tool } from '@/lib/tools';
+
+interface ToolUsageData {
+  toolId: string;
+  count: number;
+  lastUsed: string;
+}
+
+interface ClientToolUsage {
+  [clientId: string]: {
+    tools: ToolUsageData[];
+  };
+}
 
 interface Client {
   _id: string;
@@ -32,6 +50,7 @@ interface Client {
   contactEmail?: string;
   contactName?: string;
   isActive: boolean;
+  toolUsage?: ToolUsageData[];
 }
 
 export default function ClientsPage() {
@@ -53,10 +72,26 @@ export default function ClientsPage() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch('/api/clients');
-      if (res.ok) {
-        const data = await res.json();
-        setClients(data);
+      const [clientsRes, toolUsageRes] = await Promise.all([
+        fetch('/api/clients'),
+        fetch('/api/clients/tool-usage'),
+      ]);
+
+      if (clientsRes.ok) {
+        const clientsData = await clientsRes.json();
+        let toolUsage: ClientToolUsage = {};
+
+        if (toolUsageRes.ok) {
+          toolUsage = await toolUsageRes.json();
+        }
+
+        // Merge tool usage into clients
+        const clientsWithToolUsage = clientsData.map((client: Client) => ({
+          ...client,
+          toolUsage: toolUsage[client._id]?.tools || [],
+        }));
+
+        setClients(clientsWithToolUsage);
       }
     } catch (error) {
       console.error('Failed to fetch clients:', error);
@@ -218,19 +253,52 @@ export default function ClientsPage() {
                   </DropdownMenu>
                 </div>
               </CardHeader>
-              {(client.description || client.contactName) && (
-                <CardContent>
-                  {client.description && (
-                    <p className="text-sm text-neutral-600">{client.description}</p>
-                  )}
-                  {client.contactName && (
-                    <p className="mt-2 text-sm text-neutral-500">
-                      Contact: {client.contactName}
-                      {client.contactEmail && ` (${client.contactEmail})`}
-                    </p>
-                  )}
-                </CardContent>
-              )}
+              <CardContent>
+                {client.description && (
+                  <p className="text-sm text-neutral-600">{client.description}</p>
+                )}
+                {client.contactName && (
+                  <p className="mt-2 text-sm text-neutral-500">
+                    Contact: {client.contactName}
+                    {client.contactEmail && ` (${client.contactEmail})`}
+                  </p>
+                )}
+                {client.toolUsage && client.toolUsage.length > 0 && (
+                  <div className={`flex flex-wrap gap-2 ${client.description || client.contactName ? 'mt-3 pt-3 border-t border-neutral-100' : ''}`}>
+                    <TooltipProvider>
+                      {client.toolUsage.map((usage) => {
+                        const tool = tools.find((t) => t.id === usage.toolId);
+                        if (!tool) return null;
+                        const Icon = tool.icon;
+                        const lastUsedDate = new Date(usage.lastUsed).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        });
+                        return (
+                          <Tooltip key={usage.toolId}>
+                            <TooltipTrigger asChild>
+                              <Link href={`${tool.href}?clientId=${client._id}`}>
+                                <Badge
+                                  variant="outline"
+                                  className="cursor-pointer hover:bg-neutral-100 transition-colors"
+                                >
+                                  <Icon className="mr-1 h-3 w-3" />
+                                  {tool.name}
+                                  <span className="ml-1 text-neutral-400">({usage.count})</span>
+                                </Badge>
+                              </Link>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Last used: {lastUsedDate}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </TooltipProvider>
+                  </div>
+                )}
+              </CardContent>
             </Card>
           ))}
         </div>

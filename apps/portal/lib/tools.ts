@@ -9,6 +9,7 @@ export interface Tool {
   category: 'seo' | 'social' | 'analytics' | 'content' | 'utility';
   isNew?: boolean;
   requiredRole?: 'admin' | 'user';
+  hasClientData?: boolean;
 }
 
 export const tools: Tool[] = [
@@ -20,6 +21,7 @@ export const tools: Tool[] = [
     href: '/tools/meta-tag-analyser',
     category: 'seo',
     isNew: true,
+    hasClientData: true,
   },
   // Add more tools here as they are built
 ];
