@@ -33,3 +33,21 @@ export {
 } from './components/table';
 export { Select, type SelectProps } from './components/select';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs';
+
+// Tool Components - Reusable components for building tools
+export {
+  FieldStatusBadge,
+  FieldContainer,
+  StatusField,
+  getFieldStatus,
+  getFieldMessage,
+  type FieldStatus,
+  type FieldStatusBadgeProps,
+  type FieldContainerProps,
+  type StatusFieldProps,
+  type Issue,
+  ScanHistoryTimeline,
+  type HistorySnapshot,
+  type HistoryEntry,
+  type ScanHistoryTimelineProps,
+} from './components/tool-components';

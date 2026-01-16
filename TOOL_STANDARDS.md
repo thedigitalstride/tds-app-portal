@@ -30,28 +30,51 @@ if (existing) {
 }
 ```
 
-### Scan/Activity History
+### Scan/Activity History with Full Snapshots
 
-All tools that perform scans or analyses must track history:
+All tools that perform scans or analyses must track history with full data snapshots:
 
 ```typescript
 interface IHistoryEntry {
-  performedAt: Date;
-  performedBy: mongoose.Types.ObjectId;  // Reference to User
-  previousValue?: string;                 // What it was before
+  scannedAt: Date;
+  scannedBy: mongoose.Types.ObjectId;
+  score: number;
   changesDetected: boolean;
+  // Full snapshot of ALL fields at this point in time
+  snapshot: {
+    title: string;
+    description: string;
+    // Include ALL relevant fields for this tool
+    openGraph?: { title?: string; image?: string; /* etc */ };
+    twitter?: { card?: string; /* etc */ };
+    issues?: Array<{ type: string; field: string; message: string }>;
+  };
+  // Legacy fields for backwards compatibility with old records
+  previousTitle?: string;
+  previousDescription?: string;
 }
 
 // In schema
-history: [{
-  performedAt: { type: Date, required: true },
-  performedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  // ... additional fields
+scanHistory: [{
+  scannedAt: { type: Date, required: true },
+  scannedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  score: { type: Number, required: true },
+  changesDetected: { type: Boolean, default: false },
+  snapshot: {
+    title: String,
+    description: String,
+    // All other fields...
+  },
 }],
 scanCount: { type: Number, default: 1 },
 lastScannedAt: { type: Date, default: Date.now },
 lastScannedBy: { type: Schema.Types.ObjectId, ref: 'User' },
 ```
+
+**Important:** The snapshot must capture ALL fields so users can view the complete state at any point in time. This enables:
+- Viewing historical data by clicking on timeline entries
+- Comparing changes over time
+- Auditing when specific changes occurred
 
 ### Nested Object Schemas
 
@@ -98,6 +121,61 @@ export const ModelName: Model<IModelName> =
 ```
 
 ## UI Patterns
+
+### Reusable Tool Components
+
+Use the shared components from `@tds/ui` for consistent UI across all tools:
+
+```tsx
+import {
+  StatusField,
+  FieldStatusBadge,
+  getFieldStatus,
+  getFieldMessage,
+  ScanHistoryTimeline,
+} from '@tds/ui';
+```
+
+#### Field Status Highlighting
+
+Use `StatusField` to display fields with colored borders and status badges:
+
+```tsx
+<StatusField
+  label="Title"
+  status={getFieldStatus(issues, 'title')}
+  message={getFieldMessage(issues, 'title')}
+  characterCount={{ current: title.length, max: 60 }}
+>
+  <Input value={title} readOnly className="bg-white/80" />
+</StatusField>
+```
+
+Colors:
+- **Green** (success): Field is good
+- **Amber** (warning): Field has warnings
+- **Red** (error): Field has errors
+
+#### Scan History Timeline
+
+Use `ScanHistoryTimeline` for displaying clickable history with data snapshots:
+
+```tsx
+<ScanHistoryTimeline
+  history={analysis.scanHistory}
+  parentId={analysis._id}
+  initialDisplayCount={3}
+  scoreColorFn={(score) => score >= 80 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}
+  // Optional: custom snapshot renderer for tool-specific data
+  renderSnapshot={(snapshot) => <MyCustomSnapshotView data={snapshot} />}
+/>
+```
+
+Features:
+- Timeline visualization with dots (amber for changes, grey for no changes)
+- Expandable entries showing full data snapshot
+- "Show all" button for histories with many entries
+- Displays: date, time, user, score, changes detected badge
 
 ### Truncated Content with Tooltips
 
@@ -341,15 +419,30 @@ packages/database/src/models/
 
 ## Checklist for New Tools
 
-- [ ] Model has scan history tracking
+### Data & API
+- [ ] Model has scan history with **full snapshot** tracking
 - [ ] Model uses explicit subdocument schemas
 - [ ] Model has development cache clearing
 - [ ] API uses upsert pattern (no duplicates)
 - [ ] API returns informative messages
-- [ ] API populates user references
-- [ ] UI has tooltips on truncated content
-- [ ] UI shows score with color coding
-- [ ] UI has expandable rows for details
-- [ ] UI shows save feedback messages
-- [ ] Dashboard shows global and per-client stats
+- [ ] API populates user references (including `scanHistory.scannedBy`)
+- [ ] Rescan endpoint stores full snapshot (not just title/description)
+
+### UI - Use Reusable Components
+- [ ] Uses `StatusField` component for field status highlighting
+- [ ] Uses `ScanHistoryTimeline` component for history display
+- [ ] History entries are clickable to view full data snapshot
+- [ ] All truncated content has tooltips
+- [ ] Score badges use consistent color coding
+- [ ] Save feedback shows created/updated counts
+
+### Views - Consistent Across All
+- [ ] Single scan view shows field status highlighting
+- [ ] Bulk scan results show expandable rows with field status
+- [ ] Saved analyses show expandable rows with history timeline
+- [ ] Dashboard lists show same expandable pattern
+- [ ] All views use the same components for consistency
+
+### Registration
 - [ ] Registered in `lib/tools.ts`
+- [ ] Dashboard stats include history data
