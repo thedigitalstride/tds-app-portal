@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Plus, RefreshCw, Pause, Play, Square } from 'lucide-react';
 import { Button } from '@tds/ui';
 import { useClient } from '@/components/client-context';
@@ -16,6 +16,10 @@ export default function MetaTagAnalyserPage() {
   const { clients, selectedClientId } = useClient();
   const { addToast, updateToast, removeToast } = useToast();
 
+  // Keep a ref to selectedClientId for use in callbacks (avoids stale closures)
+  const selectedClientIdRef = useRef(selectedClientId);
+  selectedClientIdRef.current = selectedClientId;
+
   // Panel state
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -28,6 +32,9 @@ export default function MetaTagAnalyserPage() {
 
   // Track toast ID for progress updates
   const progressToastIdRef = useRef<string | null>(null);
+
+  // Ref for fetch function (needed because useQueuePolling is called before fetchSavedAnalyses is defined)
+  const fetchSavedAnalysesRef = useRef<(clientId: string | null) => Promise<void>>(() => Promise.resolve());
 
   // Stats computed from saved analyses
   const stats = React.useMemo(() => {
@@ -92,8 +99,8 @@ export default function MetaTagAnalyserPage() {
         progressToastIdRef.current = null;
       }
 
-      // Refresh the library
-      fetchSavedAnalyses();
+      // Refresh the library using refs to get current values
+      fetchSavedAnalysesRef.current(selectedClientIdRef.current);
     },
     onError: (err) => {
       addToast({
@@ -103,16 +110,30 @@ export default function MetaTagAnalyserPage() {
     },
   });
 
-  // Fetch saved analyses
-  const fetchSavedAnalyses = useCallback(async (markNewIds?: string[]) => {
-    if (!selectedClientId) {
+  // Ref to track current fetch and abort previous ones
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Fetch saved analyses - now takes clientId as param to avoid stale closure
+  const fetchSavedAnalyses = useCallback(async (clientId: string | null, markNewIds?: string[]) => {
+    // Abort any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (!clientId) {
       setSavedAnalyses([]);
       return;
     }
 
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setLoadingSaved(true);
     try {
-      const res = await fetch(`/api/tools/meta-tag-analyser/saved?clientId=${selectedClientId}`);
+      const res = await fetch(`/api/tools/meta-tag-analyser/saved?clientId=${clientId}`, {
+        signal: abortController.signal,
+      });
       if (res.ok) {
         const data = await res.json();
 
@@ -134,16 +155,26 @@ export default function MetaTagAnalyserPage() {
         }
       }
     } catch (error) {
+      // Ignore abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       console.error('Failed to fetch saved analyses:', error);
     } finally {
-      setLoadingSaved(false);
+      // Only clear loading if this is still the current request
+      if (abortControllerRef.current === abortController) {
+        setLoadingSaved(false);
+      }
     }
-  }, [selectedClientId]);
+  }, []);
 
-  // Fetch when client changes
+  // Keep ref updated with latest fetch function
+  fetchSavedAnalysesRef.current = fetchSavedAnalyses;
+
+  // Fetch when client changes - pass clientId directly to avoid stale closure
   useEffect(() => {
-    fetchSavedAnalyses();
-  }, [fetchSavedAnalyses]);
+    fetchSavedAnalyses(selectedClientId);
+  }, [selectedClientId, fetchSavedAnalyses]);
 
   // Show toast when polling starts and drawer closes
   useEffect(() => {
@@ -213,7 +244,7 @@ export default function MetaTagAnalyserPage() {
 
   // Handle scan complete - refresh the library
   const handleScanComplete = () => {
-    fetchSavedAnalyses();
+    fetchSavedAnalyses(selectedClientId);
   };
 
   return (

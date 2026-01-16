@@ -834,7 +834,7 @@ export function ScanPanel({
 
         {/* Footer - Add Selected Button for Bulk Mode */}
         {mode === 'bulk' && bulkStats && selectedCount > 0 && (
-          <div className="p-4 border-t bg-neutral-50">
+          <div className="p-4 border-t bg-neutral-50 space-y-2">
             <Button
               onClick={saveBulkResults}
               disabled={bulkSaving}
@@ -852,6 +852,11 @@ export function ScanPanel({
                 </>
               )}
             </Button>
+            {isPolling && queueProgress && (
+              <p className="text-xs text-center text-neutral-500">
+                + {queueProgress.total - queueProgress.completed} more URLs processing in background
+              </p>
+            )}
           </div>
         )}
       </div>
