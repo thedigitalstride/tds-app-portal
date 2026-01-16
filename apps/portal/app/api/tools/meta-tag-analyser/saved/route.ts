@@ -3,12 +3,26 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectDB, MetaTagAnalysis } from '@tds/database';
 
+interface HreflangEntry {
+  lang: string;
+  url: string;
+}
+
 interface ScanResult {
   url: string;
   title: string;
   description: string;
   canonical?: string;
   robots?: string;
+  // Additional meta tags
+  viewport?: string;
+  charset?: string;
+  author?: string;
+  themeColor?: string;
+  language?: string;
+  favicon?: string;
+  hreflang?: HreflangEntry[];
+  // Social tags
   openGraph: {
     title?: string;
     description?: string;
@@ -78,6 +92,15 @@ async function upsertAnalysis(
         description: existingAnalysis.description || '',
         canonical: existingAnalysis.canonical,
         robots: existingAnalysis.robots,
+        // Additional meta tags
+        viewport: existingAnalysis.viewport,
+        charset: existingAnalysis.charset,
+        author: existingAnalysis.author,
+        themeColor: existingAnalysis.themeColor,
+        language: existingAnalysis.language,
+        favicon: existingAnalysis.favicon,
+        hreflang: existingAnalysis.hreflang,
+        // Social tags
         openGraph: existingAnalysis.openGraph ? {
           title: existingAnalysis.openGraph.title,
           description: existingAnalysis.openGraph.description,
@@ -108,6 +131,15 @@ async function upsertAnalysis(
           description: result.description || '',
           canonical: result.canonical,
           robots: result.robots,
+          // Additional meta tags
+          viewport: result.viewport,
+          charset: result.charset,
+          author: result.author,
+          themeColor: result.themeColor,
+          language: result.language,
+          favicon: result.favicon,
+          hreflang: result.hreflang,
+          // Social tags
           openGraph: result.openGraph,
           twitter: result.twitter,
           issues,
@@ -140,6 +172,15 @@ async function upsertAnalysis(
     description: result.description || '',
     canonical: result.canonical,
     robots: result.robots,
+    // Additional meta tags
+    viewport: result.viewport,
+    charset: result.charset,
+    author: result.author,
+    themeColor: result.themeColor,
+    language: result.language,
+    favicon: result.favicon,
+    hreflang: result.hreflang,
+    // Social tags
     openGraph: result.openGraph,
     twitter: result.twitter,
     issues,

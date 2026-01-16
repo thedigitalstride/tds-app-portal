@@ -47,12 +47,26 @@ import {
   TableCell,
 } from '@tds/ui';
 
+interface HreflangEntry {
+  lang: string;
+  url: string;
+}
+
 interface MetaTagResult {
   url: string;
   title: string;
   description: string;
   canonical?: string;
   robots?: string;
+  // Additional meta tags
+  viewport?: string;
+  charset?: string;
+  author?: string;
+  themeColor?: string;
+  language?: string;
+  favicon?: string;
+  hreflang?: HreflangEntry[];
+  // Social tags
   openGraph: {
     title?: string;
     description?: string;
@@ -90,6 +104,15 @@ interface SavedAnalysis {
   description: string;
   canonical?: string;
   robots?: string;
+  // Additional meta tags
+  viewport?: string;
+  charset?: string;
+  author?: string;
+  themeColor?: string;
+  language?: string;
+  favicon?: string;
+  hreflang?: HreflangEntry[];
+  // Social tags
   openGraph?: {
     title?: string;
     description?: string;
@@ -124,6 +147,15 @@ interface SavedAnalysis {
       description: string;
       canonical?: string;
       robots?: string;
+      // Additional meta tags
+      viewport?: string;
+      charset?: string;
+      author?: string;
+      themeColor?: string;
+      language?: string;
+      favicon?: string;
+      hreflang?: HreflangEntry[];
+      // Social tags
       openGraph?: {
         title?: string;
         description?: string;
@@ -545,6 +577,9 @@ export default function MetaTagAnalyserPage() {
     'title': ['title'],
     'description': ['description'],
     'canonical': ['canonical'],
+    'viewport': ['viewport'],
+    'charset': ['charset'],
+    'language': ['language'],
     'og:image': ['og image'],
     'og:title': ['open graph'],
     'og:description': ['open graph'],
@@ -1107,6 +1142,119 @@ export default function MetaTagAnalyserPage() {
                         <p className="mt-2 text-xs text-neutral-600">{getFieldMessage('twitter:title')}</p>
                       )}
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Technical Meta Tags */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Technical Meta Tags</CardTitle>
+                    <CardDescription>Page configuration and accessibility</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Viewport */}
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('viewport'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('viewport')} message={getFieldMessage('viewport')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Viewport</label>
+                        <p className="font-mono text-xs bg-white/80 p-2 rounded border truncate" title={result.viewport || ''}>
+                          {result.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                        </p>
+                      </div>
+
+                      {/* Charset */}
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('charset'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('charset')} message={getFieldMessage('charset')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Charset</label>
+                        <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                          {result.charset || <span className="text-neutral-400 italic">Not set</span>}
+                        </p>
+                      </div>
+
+                      {/* Language */}
+                      <div className={`relative rounded-lg border-2 p-3 ${getFieldContainerStyles(getFieldStatus('language'))}`}>
+                        <div className="absolute -top-3 right-2">
+                          <FieldStatusBadge status={getFieldStatus('language')} message={getFieldMessage('language')} />
+                        </div>
+                        <label className="mb-2 block text-sm font-medium">Language</label>
+                        <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                          {result.language || <span className="text-neutral-400 italic">Not set</span>}
+                        </p>
+                      </div>
+
+                      {/* Robots */}
+                      <div className="rounded-lg border-2 border-neutral-200 p-3">
+                        <label className="mb-2 block text-sm font-medium">Robots</label>
+                        <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                          {result.robots || <span className="text-neutral-400 italic">Not set</span>}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Additional fields */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Author */}
+                      {result.author && (
+                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                          <label className="mb-2 block text-sm font-medium">Author</label>
+                          <p className="font-mono text-xs bg-white/80 p-2 rounded border">
+                            {result.author}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Theme Color */}
+                      {result.themeColor && (
+                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                          <label className="mb-2 block text-sm font-medium">Theme Color</label>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-6 w-6 rounded border"
+                              style={{ backgroundColor: result.themeColor }}
+                              title={result.themeColor}
+                            />
+                            <span className="font-mono text-xs">{result.themeColor}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Favicon */}
+                      {result.favicon && (
+                        <div className="rounded-lg border-2 border-neutral-200 p-3">
+                          <label className="mb-2 block text-sm font-medium">Favicon</label>
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={result.favicon.startsWith('http') ? result.favicon : new URL(result.favicon, result.url).toString()}
+                              alt="Favicon"
+                              className="h-6 w-6"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                            <span className="font-mono text-xs truncate flex-1" title={result.favicon}>
+                              {result.favicon}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hreflang entries */}
+                    {result.hreflang && result.hreflang.length > 0 && (
+                      <div className="rounded-lg border-2 border-neutral-200 p-3">
+                        <label className="mb-2 block text-sm font-medium">Hreflang Tags ({result.hreflang.length})</label>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {result.hreflang.map((entry, idx) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs">
+                              <Badge variant="secondary" className="font-mono">{entry.lang}</Badge>
+                              <span className="font-mono truncate flex-1" title={entry.url}>{entry.url}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1945,6 +2093,71 @@ export default function MetaTagAnalyserPage() {
                                               </div>
                                             )}
                                           </div>
+                                        </div>
+
+                                        {/* Technical Meta Tags */}
+                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
+                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Technical</h5>
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">viewport</span>
+                                              <p className="font-mono text-xs mt-1 truncate" title={analysis.viewport || ''}>
+                                                {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">charset</span>
+                                              <p className="font-mono text-xs mt-1">
+                                                {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">language</span>
+                                              <p className="font-mono text-xs mt-1">
+                                                {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            {analysis.author && (
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">author</span>
+                                                <p className="font-mono text-xs mt-1">
+                                                  {analysis.author}
+                                                </p>
+                                              </div>
+                                            )}
+                                            {analysis.themeColor && (
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">theme-color</span>
+                                                <div className="flex items-center gap-1 mt-1">
+                                                  <div
+                                                    className="h-4 w-4 rounded border"
+                                                    style={{ backgroundColor: analysis.themeColor }}
+                                                  />
+                                                  <span className="font-mono text-xs">{analysis.themeColor}</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {analysis.favicon && (
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">favicon</span>
+                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.favicon}>
+                                                  {analysis.favicon}
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                          {analysis.hreflang && analysis.hreflang.length > 0 && (
+                                            <div className="mt-2">
+                                              <span className="text-neutral-500 text-xs">hreflang ({analysis.hreflang.length})</span>
+                                              <div className="flex flex-wrap gap-1 mt-1">
+                                                {analysis.hreflang.map((entry, idx) => (
+                                                  <Badge key={idx} variant="secondary" className="font-mono text-xs">
+                                                    {entry.lang}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
 
                                         {/* Planned Values */}

@@ -2,12 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
+interface HreflangEntry {
+  lang: string;
+  url: string;
+}
+
 interface MetaTagResult {
   url: string;
   title: string;
   description: string;
   canonical?: string;
   robots?: string;
+  // Additional meta tags
+  viewport?: string;
+  charset?: string;
+  author?: string;
+  themeColor?: string;
+  language?: string;
+  favicon?: string;
+  hreflang?: HreflangEntry[];
+  // Social tags
   openGraph: {
     title?: string;
     description?: string;
@@ -124,6 +138,45 @@ function analyzeMetaTags(result: MetaTagResult): AnalysisIssue[] {
     });
   }
 
+  // Viewport (critical for mobile)
+  if (!result.viewport) {
+    issues.push({
+      type: 'error',
+      field: 'Viewport',
+      message: 'No viewport meta tag. Page may not display correctly on mobile devices.',
+    });
+  } else if (!result.viewport.includes('width=device-width')) {
+    issues.push({
+      type: 'warning',
+      field: 'Viewport',
+      message: 'Viewport should include "width=device-width" for proper mobile scaling.',
+    });
+  } else {
+    issues.push({
+      type: 'success',
+      field: 'Viewport',
+      message: 'Viewport is configured for mobile devices.',
+    });
+  }
+
+  // Charset
+  if (!result.charset) {
+    issues.push({
+      type: 'warning',
+      field: 'Charset',
+      message: 'No character encoding specified. Consider adding <meta charset="UTF-8">.',
+    });
+  }
+
+  // Language
+  if (!result.language) {
+    issues.push({
+      type: 'warning',
+      field: 'Language',
+      message: 'No language attribute on <html> tag. This helps search engines and accessibility.',
+    });
+  }
+
   return issues;
 }
 
@@ -195,6 +248,55 @@ export async function POST(request: NextRequest) {
       return match ? match[1] : '';
     };
 
+    const getCharset = (): string => {
+      // Try <meta charset="...">
+      const charsetMatch = html.match(/<meta[^>]*charset=["']([^"']*)["']/i);
+      if (charsetMatch) return charsetMatch[1];
+
+      // Try <meta http-equiv="Content-Type" content="...;charset=...">
+      const httpEquivMatch = html.match(/<meta[^>]*http-equiv=["']Content-Type["'][^>]*content=["'][^"']*charset=([^"'\s;]+)/i);
+      return httpEquivMatch ? httpEquivMatch[1] : '';
+    };
+
+    const getLanguage = (): string => {
+      const match = html.match(/<html[^>]*lang=["']([^"']*)["']/i);
+      return match ? match[1] : '';
+    };
+
+    const getFavicon = (): string => {
+      // Try various favicon link types
+      const iconMatch = html.match(/<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["']([^"']*)["']/i) ||
+        html.match(/<link[^>]*href=["']([^"']*)["'][^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["']/i);
+      return iconMatch ? iconMatch[1] : '';
+    };
+
+    const getHreflang = (): HreflangEntry[] => {
+      const entries: HreflangEntry[] = [];
+      const hreflangRegex = /<link[^>]*rel=["']alternate["'][^>]*hreflang=["']([^"']*)["'][^>]*href=["']([^"']*)["']/gi;
+      const hreflangRegex2 = /<link[^>]*hreflang=["']([^"']*)["'][^>]*rel=["']alternate["'][^>]*href=["']([^"']*)["']/gi;
+      const hreflangRegex3 = /<link[^>]*href=["']([^"']*)["'][^>]*hreflang=["']([^"']*)["'][^>]*rel=["']alternate["']/gi;
+
+      let match;
+      while ((match = hreflangRegex.exec(html)) !== null) {
+        entries.push({ lang: match[1], url: match[2] });
+      }
+      while ((match = hreflangRegex2.exec(html)) !== null) {
+        entries.push({ lang: match[1], url: match[2] });
+      }
+      while ((match = hreflangRegex3.exec(html)) !== null) {
+        entries.push({ lang: match[2], url: match[1] });
+      }
+
+      // Deduplicate
+      const seen = new Set<string>();
+      return entries.filter(e => {
+        const key = `${e.lang}:${e.url}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
     // Extract other meta tags
     const otherMetas: Array<{ name: string; content: string }> = [];
     const metaRegex = /<meta[^>]*name=["']([^"']*)["'][^>]*content=["']([^"']*)["'][^>]*>/gi;
@@ -208,12 +310,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const hreflangEntries = getHreflang();
+
     const result: MetaTagResult = {
       url: validUrl.toString(),
       title: getTitle(),
       description: getMetaContent('description'),
       canonical: getCanonical(),
       robots: getMetaContent('robots'),
+      // Additional meta tags
+      viewport: getMetaContent('viewport'),
+      charset: getCharset(),
+      author: getMetaContent('author'),
+      themeColor: getMetaContent('theme-color'),
+      language: getLanguage(),
+      favicon: getFavicon(),
+      hreflang: hreflangEntries.length > 0 ? hreflangEntries : undefined,
+      // Social tags
       openGraph: {
         title: getMetaContent('og:title'),
         description: getMetaContent('og:description'),

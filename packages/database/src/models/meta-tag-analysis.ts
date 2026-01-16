@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface IHreflangEntry {
+  lang: string;
+  url: string;
+}
+
 export interface IScanHistoryEntry {
   scannedAt: Date;
   scannedBy: mongoose.Types.ObjectId;
@@ -11,6 +16,15 @@ export interface IScanHistoryEntry {
     description: string;
     canonical?: string;
     robots?: string;
+    // Additional meta tags
+    viewport?: string;
+    charset?: string;
+    author?: string;
+    themeColor?: string;
+    language?: string;
+    favicon?: string;
+    hreflang?: IHreflangEntry[];
+    // Social tags
     openGraph?: {
       title?: string;
       description?: string;
@@ -45,6 +59,15 @@ export interface IMetaTagAnalysis extends Document {
   description: string;
   canonical?: string;
   robots?: string;
+  // Additional meta tags
+  viewport?: string;
+  charset?: string;
+  author?: string;
+  themeColor?: string;
+  language?: string;
+  favicon?: string;
+  hreflang?: IHreflangEntry[];
+  // Social tags
   openGraph: {
     title?: string;
     description?: string;
@@ -112,6 +135,15 @@ const issueSchema = new Schema(
   { _id: false }
 );
 
+// Hreflang entry schema for internationalization
+const hreflangSchema = new Schema(
+  {
+    lang: String,
+    url: String,
+  },
+  { _id: false }
+);
+
 // Snapshot schema for history entries - captures complete state at a point in time
 const snapshotSchema = new Schema(
   {
@@ -119,6 +151,15 @@ const snapshotSchema = new Schema(
     description: String,
     canonical: String,
     robots: String,
+    // Additional meta tags
+    viewport: String,
+    charset: String,
+    author: String,
+    themeColor: String,
+    language: String,
+    favicon: String,
+    hreflang: [hreflangSchema],
+    // Social tags
     openGraph: {
       type: openGraphSchema,
       default: undefined,
@@ -187,6 +228,15 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
     },
     canonical: String,
     robots: String,
+    // Additional meta tags
+    viewport: String,
+    charset: String,
+    author: String,
+    themeColor: String,
+    language: String,
+    favicon: String,
+    hreflang: [hreflangSchema],
+    // Social tags
     openGraph: {
       type: openGraphSchema,
       default: () => ({}),
