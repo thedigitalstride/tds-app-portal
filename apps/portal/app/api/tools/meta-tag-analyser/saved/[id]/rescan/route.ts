@@ -231,16 +231,42 @@ export async function POST(
     // Detect if changes were made
     const changesDetected =
       previousTitle !== result.title ||
-      previousDescription !== result.description;
+      previousDescription !== result.description ||
+      existingAnalysis.canonical !== result.canonical ||
+      existingAnalysis.openGraph?.image !== result.openGraph?.image;
 
-    // Add to scan history
+    // Add to scan history with full snapshot
     const historyEntry = {
       scannedAt: new Date(),
       scannedBy: session.user.id,
       score: previousScore,
+      changesDetected,
+      // Full snapshot of all fields at this point in time
+      snapshot: {
+        title: existingAnalysis.title || '',
+        description: existingAnalysis.description || '',
+        canonical: existingAnalysis.canonical,
+        robots: existingAnalysis.robots,
+        openGraph: existingAnalysis.openGraph ? {
+          title: existingAnalysis.openGraph.title,
+          description: existingAnalysis.openGraph.description,
+          image: existingAnalysis.openGraph.image,
+          url: existingAnalysis.openGraph.url,
+          type: existingAnalysis.openGraph.type,
+          siteName: existingAnalysis.openGraph.siteName,
+        } : undefined,
+        twitter: existingAnalysis.twitter ? {
+          card: existingAnalysis.twitter.card,
+          title: existingAnalysis.twitter.title,
+          description: existingAnalysis.twitter.description,
+          image: existingAnalysis.twitter.image,
+          site: existingAnalysis.twitter.site,
+        } : undefined,
+        issues: existingAnalysis.issues || [],
+      },
+      // Legacy fields for backwards compatibility
       previousTitle,
       previousDescription,
-      changesDetected,
     };
 
     // Update the analysis with new data
