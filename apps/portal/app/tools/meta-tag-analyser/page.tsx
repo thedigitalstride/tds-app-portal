@@ -88,6 +88,23 @@ interface SavedAnalysis {
   url: string;
   title: string;
   description: string;
+  canonical?: string;
+  robots?: string;
+  openGraph?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    url?: string;
+    type?: string;
+    siteName?: string;
+  };
+  twitter?: {
+    card?: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    site?: string;
+  };
   score: number;
   issues: AnalysisIssue[];
   plannedTitle?: string;
@@ -1656,11 +1673,12 @@ export default function MetaTagAnalyserPage() {
                             <TableRow key={`${analysis._id}-expanded`}>
                               <TableCell colSpan={8} className="bg-neutral-50 p-0">
                                 <div className="p-4 space-y-4">
-                                  <div className="grid gap-4 md:grid-cols-2">
-                                    {/* Current Meta Data with Status Highlighting */}
-                                    <div>
-                                      <h4 className="text-sm font-medium text-neutral-700 mb-3">Current Meta Tags</h4>
-                                      <div className="space-y-3 text-sm">
+                                  {/* Current Meta Data - All Fields */}
+                                  <div>
+                                    <h4 className="text-sm font-medium text-neutral-700 mb-3">Current Meta Tags</h4>
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                      {/* Left Column - Basic Meta Tags */}
+                                      <div className="space-y-3">
                                         {/* Title Field */}
                                         {(() => {
                                           const titleIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'title');
@@ -1686,7 +1704,7 @@ export default function MetaTagAnalyserPage() {
                                                 </div>
                                               </div>
                                               <div className="flex items-center justify-between mb-1">
-                                                <span className="text-neutral-700 font-medium">Title</span>
+                                                <span className="text-neutral-700 font-medium text-sm">Title</span>
                                                 <span className={`text-xs ${(analysis.title?.length || 0) > 60 ? 'text-red-500' : 'text-neutral-400'}`}>
                                                   {analysis.title?.length || 0}/60
                                                 </span>
@@ -1726,7 +1744,7 @@ export default function MetaTagAnalyserPage() {
                                                 </div>
                                               </div>
                                               <div className="flex items-center justify-between mb-1">
-                                                <span className="text-neutral-700 font-medium">Description</span>
+                                                <span className="text-neutral-700 font-medium text-sm">Description</span>
                                                 <span className={`text-xs ${(analysis.description?.length || 0) > 160 ? 'text-red-500' : 'text-neutral-400'}`}>
                                                   {analysis.description?.length || 0}/160
                                                 </span>
@@ -1741,10 +1759,10 @@ export default function MetaTagAnalyserPage() {
                                           );
                                         })()}
 
-                                        {/* OG Image Field */}
+                                        {/* Canonical Field */}
                                         {(() => {
-                                          const ogIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
-                                          const ogStatus = ogIssue?.type || 'success';
+                                          const canonicalIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'canonical');
+                                          const canonicalStatus = canonicalIssue?.type || 'success';
                                           const statusStyles = {
                                             error: 'border-red-300 bg-red-50/50',
                                             warning: 'border-amber-300 bg-amber-50/50',
@@ -1755,50 +1773,209 @@ export default function MetaTagAnalyserPage() {
                                             warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
                                             success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
                                           };
-                                          const badge = badgeStyles[ogStatus as keyof typeof badgeStyles];
+                                          const badge = badgeStyles[canonicalStatus as keyof typeof badgeStyles];
                                           const BadgeIcon = badge.icon;
                                           return (
-                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[ogStatus as keyof typeof statusStyles]}`}>
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[canonicalStatus as keyof typeof statusStyles]}`}>
                                               <div className="absolute -top-2.5 right-2">
                                                 <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
                                                   <BadgeIcon className="h-3 w-3" />
-                                                  <span>{ogStatus === 'success' ? 'Good' : ogStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                  <span>{canonicalStatus === 'success' ? 'Good' : canonicalStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                 </div>
                                               </div>
-                                              <span className="text-neutral-700 font-medium">OG Image</span>
-                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
-                                                {analysis.openGraph?.image || <span className="text-neutral-400 italic">Not set</span>}
+                                              <span className="text-neutral-700 font-medium text-sm">Canonical URL</span>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1 truncate" title={analysis.canonical || ''}>
+                                                {analysis.canonical || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
-                                              {ogIssue && (
-                                                <p className="mt-1 text-xs text-neutral-600">{ogIssue.message}</p>
+                                              {canonicalIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{canonicalIssue.message}</p>
                                               )}
                                             </div>
                                           );
                                         })()}
 
-                                        {/* Planned Title */}
-                                        {analysis.plannedTitle && (
-                                          <div className="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-3">
-                                            <span className="text-neutral-700 font-medium">Planned Title</span>
-                                            <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
-                                              {analysis.plannedTitle}
-                                            </p>
+                                        {/* Robots Field */}
+                                        <div className="rounded-lg border-2 border-neutral-200 bg-neutral-50/50 p-3">
+                                          <span className="text-neutral-700 font-medium text-sm">Robots</span>
+                                          <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
+                                            {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Right Column - Open Graph & Twitter */}
+                                      <div className="space-y-3">
+                                        {/* Open Graph Section */}
+                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
+                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Open Graph</h5>
+                                          <div className="space-y-2">
+                                            {/* OG Image */}
+                                            {(() => {
+                                              const ogImageIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
+                                              const ogImageStatus = ogImageIssue?.type || 'success';
+                                              const statusStyles = {
+                                                error: 'border-red-200 bg-red-50/30',
+                                                warning: 'border-amber-200 bg-amber-50/30',
+                                                success: 'border-green-200 bg-green-50/30',
+                                              };
+                                              return (
+                                                <div className={`rounded border p-2 ${statusStyles[ogImageStatus as keyof typeof statusStyles]}`}>
+                                                  <span className="text-neutral-500 text-xs font-medium">og:image</span>
+                                                  {analysis.openGraph?.image ? (
+                                                    <div className="mt-1 flex items-center gap-2">
+                                                      <img
+                                                        src={analysis.openGraph.image}
+                                                        alt="OG Preview"
+                                                        className="h-12 w-20 object-cover rounded border"
+                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                      />
+                                                      <p className="font-mono text-xs truncate flex-1" title={analysis.openGraph.image}>
+                                                        {analysis.openGraph.image}
+                                                      </p>
+                                                    </div>
+                                                  ) : (
+                                                    <p className="font-mono text-xs mt-1 text-neutral-400 italic">Not set</p>
+                                                  )}
+                                                  {ogImageIssue && (
+                                                    <p className="mt-1 text-xs text-neutral-600">{ogImageIssue.message}</p>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* OG Title & Type */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">og:title</span>
+                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.title || ''}>
+                                                  {analysis.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                                </p>
+                                              </div>
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">og:type</span>
+                                                <p className="font-mono text-xs mt-1">
+                                                  {analysis.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* OG Description */}
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">og:description</span>
+                                              <p className="font-mono text-xs mt-1 line-clamp-2" title={analysis.openGraph?.description || ''}>
+                                                {analysis.openGraph?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+
+                                            {/* OG URL & Site Name */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">og:url</span>
+                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.url || ''}>
+                                                  {analysis.openGraph?.url || <span className="text-neutral-400 italic">Not set</span>}
+                                                </p>
+                                              </div>
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">og:site_name</span>
+                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.siteName || ''}>
+                                                  {analysis.openGraph?.siteName || <span className="text-neutral-400 italic">Not set</span>}
+                                                </p>
+                                              </div>
+                                            </div>
                                           </div>
-                                        )}
-                                        {analysis.plannedDescription && (
-                                          <div className="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-3">
-                                            <span className="text-neutral-700 font-medium">Planned Description</span>
-                                            <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
-                                              {analysis.plannedDescription}
-                                            </p>
+                                        </div>
+
+                                        {/* Twitter Card Section */}
+                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
+                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Twitter Card</h5>
+                                          <div className="space-y-2">
+                                            {/* Twitter Card & Site */}
+                                            {(() => {
+                                              const twitterIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'twitter card');
+                                              const twitterStatus = twitterIssue?.type || 'success';
+                                              const statusStyles = {
+                                                error: 'border-red-200 bg-red-50/30',
+                                                warning: 'border-amber-200 bg-amber-50/30',
+                                                success: 'border-green-200 bg-green-50/30',
+                                              };
+                                              return (
+                                                <div className={`grid grid-cols-2 gap-2`}>
+                                                  <div className={`rounded border p-2 ${statusStyles[twitterStatus as keyof typeof statusStyles]}`}>
+                                                    <span className="text-neutral-500 text-xs">twitter:card</span>
+                                                    <p className="font-mono text-xs mt-1">
+                                                      {analysis.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                                    </p>
+                                                    {twitterIssue && (
+                                                      <p className="mt-1 text-xs text-neutral-600">{twitterIssue.message}</p>
+                                                    )}
+                                                  </div>
+                                                  <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                    <span className="text-neutral-500 text-xs">twitter:site</span>
+                                                    <p className="font-mono text-xs mt-1">
+                                                      {analysis.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* Twitter Title */}
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">twitter:title</span>
+                                              <p className="font-mono text-xs mt-1 truncate" title={analysis.twitter?.title || ''}>
+                                                {analysis.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+
+                                            {/* Twitter Description */}
+                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                              <span className="text-neutral-500 text-xs">twitter:description</span>
+                                              <p className="font-mono text-xs mt-1 line-clamp-2" title={analysis.twitter?.description || ''}>
+                                                {analysis.twitter?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+
+                                            {/* Twitter Image */}
+                                            {analysis.twitter?.image && (
+                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                                <span className="text-neutral-500 text-xs">twitter:image</span>
+                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.twitter.image}>
+                                                  {analysis.twitter.image}
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Planned Values */}
+                                        {(analysis.plannedTitle || analysis.plannedDescription) && (
+                                          <div className="rounded-lg border-2 border-blue-200 bg-blue-50/50 p-3">
+                                            <h5 className="text-sm font-medium text-blue-700 mb-2">Planned Changes</h5>
+                                            {analysis.plannedTitle && (
+                                              <div className="mb-2">
+                                                <span className="text-blue-600 text-xs font-medium">Planned Title</span>
+                                                <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
+                                                  {analysis.plannedTitle}
+                                                </p>
+                                              </div>
+                                            )}
+                                            {analysis.plannedDescription && (
+                                              <div>
+                                                <span className="text-blue-600 text-xs font-medium">Planned Description</span>
+                                                <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
+                                                  {analysis.plannedDescription}
+                                                </p>
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>
                                     </div>
+                                  </div>
 
-                                    {/* Scan History */}
-                                    <div>
-                                      <h4 className="text-sm font-medium text-neutral-700 mb-2">Scan History</h4>
+                                  {/* Scan History */}
+                                  <div className="border-t pt-4">
+                                    <h4 className="text-sm font-medium text-neutral-700 mb-2">Scan History</h4>
                                       <div className="space-y-2">
                                         <div className="rounded border bg-white p-3 text-sm">
                                           <div className="flex items-center justify-between">
