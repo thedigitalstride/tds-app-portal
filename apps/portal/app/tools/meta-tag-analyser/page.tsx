@@ -2296,131 +2296,146 @@ export default function MetaTagAnalyserPage() {
                                                             {/* Use snapshot if available, fall back to legacy fields */}
                                                             {scan.snapshot ? (
                                                               <>
-                                                                {/* Basic Meta Tags */}
-                                                                <div className="grid gap-2 md:grid-cols-2">
-                                                                  <div className="rounded border bg-white p-2">
-                                                                    <span className="text-neutral-500 text-xs font-medium">Title</span>
-                                                                    <p className="font-mono text-xs mt-1">
-                                                                      {scan.snapshot.title || <span className="text-neutral-400 italic">Not set</span>}
-                                                                    </p>
-                                                                  </div>
-                                                                  <div className="rounded border bg-white p-2">
-                                                                    <span className="text-neutral-500 text-xs font-medium">Description</span>
-                                                                    <p className="font-mono text-xs mt-1 line-clamp-2" title={scan.snapshot.description}>
-                                                                      {scan.snapshot.description || <span className="text-neutral-400 italic">Not set</span>}
-                                                                    </p>
-                                                                  </div>
-                                                                </div>
+                                                                {/* Helper to get issue status for a field */}
+                                                                {(() => {
+                                                                  const getFieldStatus = (fieldName: string) => {
+                                                                    const issue = scan.snapshot?.issues?.find(
+                                                                      i => i.field.toLowerCase() === fieldName.toLowerCase()
+                                                                    );
+                                                                    return issue?.type || 'success';
+                                                                  };
+                                                                  const getFieldMessage = (fieldName: string) => {
+                                                                    const issue = scan.snapshot?.issues?.find(
+                                                                      i => i.field.toLowerCase() === fieldName.toLowerCase()
+                                                                    );
+                                                                    return issue?.message;
+                                                                  };
+                                                                  const statusStyles = {
+                                                                    error: 'border-red-300 bg-red-50/50',
+                                                                    warning: 'border-amber-300 bg-amber-50/50',
+                                                                    success: 'border-green-300 bg-green-50/50',
+                                                                  };
+                                                                  const badgeStyles = {
+                                                                    error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', Icon: AlertCircle },
+                                                                    warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', Icon: AlertTriangle },
+                                                                    success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', Icon: CheckCircle },
+                                                                  };
 
-                                                                {/* Canonical & Robots */}
-                                                                {(scan.snapshot.canonical || scan.snapshot.robots) && (
-                                                                  <div className="grid gap-2 md:grid-cols-2">
-                                                                    {scan.snapshot.canonical && (
-                                                                      <div className="rounded border bg-white p-2">
-                                                                        <span className="text-neutral-500 text-xs font-medium">Canonical</span>
-                                                                        <p className="font-mono text-xs mt-1 truncate" title={scan.snapshot.canonical}>
-                                                                          {scan.snapshot.canonical}
+                                                                  const StatusField = ({ label, value, fieldName, truncate = false }: { label: string; value?: string; fieldName: string; truncate?: boolean }) => {
+                                                                    const status = getFieldStatus(fieldName) as keyof typeof statusStyles;
+                                                                    const message = getFieldMessage(fieldName);
+                                                                    const badge = badgeStyles[status];
+                                                                    return (
+                                                                      <div className={`relative rounded-lg border-2 p-2 ${statusStyles[status]}`}>
+                                                                        <div className="absolute -top-2 right-2">
+                                                                          <div className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                                            <badge.Icon className="h-2.5 w-2.5" />
+                                                                            <span>{status === 'success' ? 'Good' : status === 'error' ? 'Error' : 'Warning'}</span>
+                                                                          </div>
+                                                                        </div>
+                                                                        <span className="text-neutral-700 font-medium text-xs">{label}</span>
+                                                                        <p className={`font-mono text-xs bg-white/80 p-1.5 rounded border mt-1 ${truncate ? 'truncate' : 'line-clamp-2'}`} title={value || ''}>
+                                                                          {value || <span className="text-neutral-400 italic">Not set</span>}
                                                                         </p>
+                                                                        {message && (
+                                                                          <p className="mt-1 text-[10px] text-neutral-600">{message}</p>
+                                                                        )}
                                                                       </div>
-                                                                    )}
-                                                                    {scan.snapshot.robots && (
-                                                                      <div className="rounded border bg-white p-2">
-                                                                        <span className="text-neutral-500 text-xs font-medium">Robots</span>
-                                                                        <p className="font-mono text-xs mt-1">{scan.snapshot.robots}</p>
+                                                                    );
+                                                                  };
+
+                                                                  const InfoField = ({ label, value, truncate = false }: { label: string; value?: string; truncate?: boolean }) => (
+                                                                    <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
+                                                                      <span className="text-neutral-700 font-medium text-xs">{label}</span>
+                                                                      <p className={`font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1 ${truncate ? 'truncate' : ''}`} title={value || ''}>
+                                                                        {value || <span className="text-neutral-400 italic">Not set</span>}
+                                                                      </p>
+                                                                    </div>
+                                                                  );
+
+                                                                  return (
+                                                                    <div className="space-y-2">
+                                                                      {/* Row 1: Title & Description */}
+                                                                      <div className="grid gap-2 md:grid-cols-2">
+                                                                        <StatusField label="Title" value={scan.snapshot?.title} fieldName="title" />
+                                                                        <StatusField label="Description" value={scan.snapshot?.description} fieldName="description" />
                                                                       </div>
-                                                                    )}
-                                                                  </div>
-                                                                )}
 
-                                                                {/* Open Graph */}
-                                                                {scan.snapshot.openGraph && (
-                                                                  <div className="rounded border bg-white p-2">
-                                                                    <span className="text-neutral-500 text-xs font-medium">Open Graph</span>
-                                                                    <div className="grid gap-1 mt-1 text-xs">
-                                                                      {scan.snapshot.openGraph.title && (
-                                                                        <p><span className="text-neutral-400">og:title:</span> {scan.snapshot.openGraph.title}</p>
-                                                                      )}
-                                                                      {scan.snapshot.openGraph.description && (
-                                                                        <p className="truncate" title={scan.snapshot.openGraph.description}>
-                                                                          <span className="text-neutral-400">og:description:</span> {scan.snapshot.openGraph.description}
-                                                                        </p>
-                                                                      )}
-                                                                      {scan.snapshot.openGraph.image && (
-                                                                        <p className="truncate" title={scan.snapshot.openGraph.image}>
-                                                                          <span className="text-neutral-400">og:image:</span> {scan.snapshot.openGraph.image}
-                                                                        </p>
-                                                                      )}
-                                                                      {scan.snapshot.openGraph.type && (
-                                                                        <p><span className="text-neutral-400">og:type:</span> {scan.snapshot.openGraph.type}</p>
-                                                                      )}
-                                                                      {!scan.snapshot.openGraph.title && !scan.snapshot.openGraph.description && !scan.snapshot.openGraph.image && (
-                                                                        <p className="text-neutral-400 italic">No OG tags set</p>
+                                                                      {/* Row 2: Canonical & Viewport */}
+                                                                      <div className="grid gap-2 md:grid-cols-2">
+                                                                        <StatusField label="Canonical" value={scan.snapshot?.canonical} fieldName="canonical" truncate />
+                                                                        <StatusField label="Viewport" value={scan.snapshot?.viewport} fieldName="viewport" truncate />
+                                                                      </div>
+
+                                                                      {/* Row 3: OG Image & Twitter Card */}
+                                                                      <div className="grid gap-2 md:grid-cols-2">
+                                                                        <StatusField label="OG Image" value={scan.snapshot?.openGraph?.image} fieldName="og image" truncate />
+                                                                        <StatusField label="Twitter Card" value={scan.snapshot?.twitter?.card} fieldName="twitter card" />
+                                                                      </div>
+
+                                                                      {/* Row 4: Technical Details */}
+                                                                      <div className="grid gap-2 md:grid-cols-3">
+                                                                        <InfoField label="Charset" value={scan.snapshot?.charset} />
+                                                                        <InfoField label="Language" value={scan.snapshot?.language} />
+                                                                        <InfoField label="Robots" value={scan.snapshot?.robots} />
+                                                                      </div>
+
+                                                                      {/* Additional OG & Twitter Details (collapsed) */}
+                                                                      {(scan.snapshot?.openGraph?.title || scan.snapshot?.twitter?.title) && (
+                                                                        <div className="grid gap-2 md:grid-cols-2">
+                                                                          {scan.snapshot?.openGraph && (
+                                                                            <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
+                                                                              <span className="text-neutral-700 font-medium text-xs">Open Graph Details</span>
+                                                                              <div className="grid gap-1 mt-1 text-[10px] font-mono">
+                                                                                {scan.snapshot.openGraph.title && (
+                                                                                  <p className="truncate"><span className="text-neutral-400">og:title:</span> {scan.snapshot.openGraph.title}</p>
+                                                                                )}
+                                                                                {scan.snapshot.openGraph.type && (
+                                                                                  <p><span className="text-neutral-400">og:type:</span> {scan.snapshot.openGraph.type}</p>
+                                                                                )}
+                                                                              </div>
+                                                                            </div>
+                                                                          )}
+                                                                          {scan.snapshot?.twitter && (
+                                                                            <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
+                                                                              <span className="text-neutral-700 font-medium text-xs">Twitter Details</span>
+                                                                              <div className="grid gap-1 mt-1 text-[10px] font-mono">
+                                                                                {scan.snapshot.twitter.title && (
+                                                                                  <p className="truncate"><span className="text-neutral-400">twitter:title:</span> {scan.snapshot.twitter.title}</p>
+                                                                                )}
+                                                                                {scan.snapshot.twitter.site && (
+                                                                                  <p><span className="text-neutral-400">twitter:site:</span> {scan.snapshot.twitter.site}</p>
+                                                                                )}
+                                                                              </div>
+                                                                            </div>
+                                                                          )}
+                                                                        </div>
                                                                       )}
                                                                     </div>
-                                                                  </div>
-                                                                )}
-
-                                                                {/* Twitter */}
-                                                                {scan.snapshot.twitter && (
-                                                                  <div className="rounded border bg-white p-2">
-                                                                    <span className="text-neutral-500 text-xs font-medium">Twitter Card</span>
-                                                                    <div className="grid gap-1 mt-1 text-xs">
-                                                                      {scan.snapshot.twitter.card && (
-                                                                        <p><span className="text-neutral-400">twitter:card:</span> {scan.snapshot.twitter.card}</p>
-                                                                      )}
-                                                                      {scan.snapshot.twitter.title && (
-                                                                        <p><span className="text-neutral-400">twitter:title:</span> {scan.snapshot.twitter.title}</p>
-                                                                      )}
-                                                                      {scan.snapshot.twitter.site && (
-                                                                        <p><span className="text-neutral-400">twitter:site:</span> {scan.snapshot.twitter.site}</p>
-                                                                      )}
-                                                                      {!scan.snapshot.twitter.card && !scan.snapshot.twitter.title && (
-                                                                        <p className="text-neutral-400 italic">No Twitter tags set</p>
-                                                                      )}
-                                                                    </div>
-                                                                  </div>
-                                                                )}
-
-                                                                {/* Issues at that time */}
-                                                                {scan.snapshot.issues && scan.snapshot.issues.length > 0 && (
-                                                                  <div className="rounded border bg-white p-2">
-                                                                    <span className="text-neutral-500 text-xs font-medium">Issues at this time ({scan.snapshot.issues.length})</span>
-                                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                                      {scan.snapshot.issues.map((issue, issueIdx) => (
-                                                                        <Badge
-                                                                          key={issueIdx}
-                                                                          variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'warning' : 'success'}
-                                                                          className="text-xs"
-                                                                          title={issue.message}
-                                                                        >
-                                                                          {issue.field}
-                                                                        </Badge>
-                                                                      ))}
-                                                                    </div>
-                                                                  </div>
-                                                                )}
+                                                                  );
+                                                                })()}
                                                               </>
                                                             ) : (
                                                               // Legacy display for old records without snapshot
-                                                              <>
-                                                                <div className="rounded border bg-white p-2">
-                                                                  <span className="text-neutral-500 text-xs">Title:</span>
-                                                                  <p className="font-mono text-xs mt-1">
+                                                              <div className="grid gap-2 md:grid-cols-2">
+                                                                <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
+                                                                  <span className="text-neutral-700 font-medium text-xs">Title</span>
+                                                                  <p className="font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1">
                                                                     {scan.previousTitle || <span className="text-neutral-400 italic">Not recorded</span>}
                                                                   </p>
                                                                 </div>
-                                                                <div className="rounded border bg-white p-2">
-                                                                  <span className="text-neutral-500 text-xs">Description:</span>
-                                                                  <p className="font-mono text-xs mt-1">
+                                                                <div className="rounded-lg border-2 border-neutral-200 bg-white p-2">
+                                                                  <span className="text-neutral-700 font-medium text-xs">Description</span>
+                                                                  <p className="font-mono text-xs bg-neutral-50 p-1.5 rounded border mt-1">
                                                                     {scan.previousDescription || <span className="text-neutral-400 italic">Not recorded</span>}
                                                                   </p>
                                                                 </div>
-                                                              </>
+                                                              </div>
                                                             )}
 
                                                             {/* Show what changed if changes detected */}
                                                             {scan.changesDetected && (
-                                                              <div className="rounded border border-amber-200 bg-amber-50 p-2">
+                                                              <div className="rounded-lg border-2 border-amber-300 bg-amber-50/50 p-2">
                                                                 <span className="text-amber-700 text-xs font-medium flex items-center gap-1">
                                                                   <AlertTriangle className="h-3 w-3" />
                                                                   Changes were detected after this scan
