@@ -10,6 +10,8 @@ import {
   LogOut,
   ChevronDown,
   Wrench,
+  Building2,
+  X,
 } from 'lucide-react';
 import {
   cn,
@@ -23,8 +25,10 @@ import {
   DropdownMenuSeparator,
   Badge,
   TDSLogo,
+  Skeleton,
 } from '@tds/ui';
 import { tools } from '@/lib/tools';
+import { useClient } from './client-context';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -39,6 +43,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin';
+  const { clients, loadingClients, selectedClientId, setSelectedClientId, selectedClient } = useClient();
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-neutral-200 bg-white">
@@ -48,6 +53,67 @@ export function Sidebar() {
           <TDSLogo variant="minimal" size="md" />
           <span className="text-lg font-semibold">TDS Toolbox</span>
         </Link>
+      </div>
+
+      {/* Client Selector */}
+      <div className="border-b border-neutral-200 p-4">
+        <div className="mb-2 flex items-center space-x-2 text-xs font-semibold uppercase text-neutral-400">
+          <Building2 className="h-4 w-4" />
+          <span>Active Client</span>
+        </div>
+        {loadingClients ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex w-full items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-left text-sm hover:bg-neutral-50">
+                <span className={cn(
+                  'truncate',
+                  selectedClient ? 'text-neutral-900 font-medium' : 'text-neutral-500'
+                )}>
+                  {selectedClient?.name || 'Select client...'}
+                </span>
+                <ChevronDown className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {selectedClientId && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => setSelectedClientId(null)}
+                    className="text-neutral-500"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Clear selection
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {clients.length === 0 ? (
+                <div className="px-2 py-1.5 text-sm text-neutral-500">
+                  No clients found
+                </div>
+              ) : (
+                clients.map((client) => (
+                  <DropdownMenuItem
+                    key={client._id}
+                    onClick={() => setSelectedClientId(client._id)}
+                    className={cn(
+                      selectedClientId === client._id && 'bg-neutral-100'
+                    )}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium">{client.name}</span>
+                      <span className="text-xs text-neutral-500 truncate">
+                        {client.website}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Navigation */}

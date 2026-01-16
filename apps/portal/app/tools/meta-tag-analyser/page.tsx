@@ -34,7 +34,6 @@ import {
   Badge,
   Textarea,
   Skeleton,
-  Select,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -46,6 +45,7 @@ import {
   TableRow,
   TableCell,
 } from '@tds/ui';
+import { useClient } from '@/components/client-context';
 
 interface HreflangEntry {
   lang: string;
@@ -91,11 +91,7 @@ interface AnalysisIssue {
   field: string;
 }
 
-interface Client {
-  _id: string;
-  name: string;
-  website: string;
-}
+// Client type is now provided by useClient() context
 
 interface SavedAnalysis {
   _id: string;
@@ -234,10 +230,8 @@ interface BulkResult {
 export default function MetaTagAnalyserPage() {
   const [activeTab, setActiveTab] = useState('single');
 
-  // Client state
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [loadingClients, setLoadingClients] = useState(true);
+  // Global client state from context
+  const { clients, selectedClientId, setSelectedClientId } = useClient();
 
   // Single analysis state
   const [url, setUrl] = useState('');
@@ -282,11 +276,6 @@ export default function MetaTagAnalyserPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
 
-  // Fetch clients on mount
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
   // Fetch saved analyses when client changes
   useEffect(() => {
     if (selectedClientId) {
@@ -300,20 +289,6 @@ export default function MetaTagAnalyserPage() {
       fetchDashboard();
     }
   }, [activeTab]);
-
-  const fetchClients = async () => {
-    try {
-      const res = await fetch('/api/clients');
-      if (res.ok) {
-        const data = await res.json();
-        setClients(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch clients:', error);
-    } finally {
-      setLoadingClients(false);
-    }
-  };
 
   const fetchSavedAnalyses = async () => {
     if (!selectedClientId) return;
@@ -641,31 +616,18 @@ export default function MetaTagAnalyserPage() {
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Meta Tag Analyser
-          </h1>
-          <p className="mt-1 text-neutral-500">
-            Analyse, plan, and track meta tags for client websites
-          </p>
-        </div>
-
-        {/* Client Selector */}
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-neutral-600">Client:</label>
-          {loadingClients ? (
-            <Skeleton className="h-10 w-48" />
-          ) : (
-            <Select
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              options={clients.map(c => ({ value: c._id, label: c.name }))}
-              placeholder="Select a client..."
-              className="w-48"
-            />
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Meta Tag Analyser
+        </h1>
+        <p className="mt-1 text-neutral-500">
+          Analyse, plan, and track meta tags for client websites
+          {selectedClientId && clients.find(c => c._id === selectedClientId) && (
+            <span className="ml-2 font-medium text-neutral-700">
+              — {clients.find(c => c._id === selectedClientId)?.name}
+            </span>
           )}
-        </div>
+        </p>
       </div>
 
       {/* Tabs */}
