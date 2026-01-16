@@ -1,17 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, RefreshCw, Pause, Play, Square } from 'lucide-react';
 import { Button } from '@tds/ui';
 import { useClient } from '@/components/client-context';
+import { useToast } from '@/components/toast-context';
 import { ScanPanel } from './components/ScanPanel';
 import { StatsCards } from './components/StatsCards';
 import { LibraryTable } from './components/LibraryTable';
+import { useQueuePolling } from './hooks/useQueuePolling';
 import type { SavedAnalysis } from './components/types';
 
 export default function MetaTagAnalyserPage() {
   // Global client state from context
   const { clients, selectedClientId } = useClient();
+  const { addToast, updateToast, removeToast } = useToast();
 
   // Panel state
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -19,7 +22,12 @@ export default function MetaTagAnalyserPage() {
   // Library state
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
-  const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
+
+  // Queue progress state (lifted from ScanPanel)
+  const [queueProgress, setQueueProgress] = useState<{ completed: number; total: number } | null>(null);
+
+  // Track toast ID for progress updates
+  const progressToastIdRef = useRef<string | null>(null);
 
   // Stats computed from saved analyses
   const stats = React.useMemo(() => {
@@ -43,6 +51,57 @@ export default function MetaTagAnalyserPage() {
   // Get selected client name
   const selectedClient = clients.find(c => c._id === selectedClientId);
   const clientName = selectedClient?.name || '';
+
+  // Queue polling hook (lifted to page level)
+  const {
+    status: queueStatus,
+    isPolling,
+    isPaused,
+    isLoading: queueLoading,
+    startPolling,
+    stopPolling,
+    pausePolling,
+    resumePolling,
+    cancelQueue,
+    refreshStatus,
+    queueUrls,
+    totalProcessed,
+  } = useQueuePolling({
+    clientId: selectedClientId,
+    onProgress: (completed, total) => {
+      setQueueProgress({ completed, total });
+
+      // Update toast when drawer is closed
+      if (!isPanelOpen && progressToastIdRef.current) {
+        updateToast(progressToastIdRef.current, {
+          progress: { current: completed, total },
+          message: `Processing URLs: ${completed}/${total}`,
+        });
+      }
+    },
+    onComplete: () => {
+      setQueueProgress(null);
+
+      // Update progress toast to success
+      if (progressToastIdRef.current) {
+        updateToast(progressToastIdRef.current, {
+          type: 'success',
+          message: `Background processing complete. ${totalProcessed} URLs processed.`,
+          progress: undefined,
+        });
+        progressToastIdRef.current = null;
+      }
+
+      // Refresh the library
+      fetchSavedAnalyses();
+    },
+    onError: (err) => {
+      addToast({
+        type: 'error',
+        message: err,
+      });
+    },
+  });
 
   // Fetch saved analyses
   const fetchSavedAnalyses = useCallback(async (markNewIds?: string[]) => {
@@ -86,6 +145,26 @@ export default function MetaTagAnalyserPage() {
     fetchSavedAnalyses();
   }, [fetchSavedAnalyses]);
 
+  // Show toast when polling starts and drawer closes
+  useEffect(() => {
+    if (isPolling && !isPanelOpen && queueProgress && !progressToastIdRef.current) {
+      // Show progress toast
+      const toastId = addToast({
+        type: 'progress',
+        message: `Processing URLs: ${queueProgress.completed}/${queueProgress.total}`,
+        progress: { current: queueProgress.completed, total: queueProgress.total },
+        persistent: true,
+      });
+      progressToastIdRef.current = toastId;
+    }
+
+    // Clean up toast when panel opens (user can see progress in panel)
+    if (isPanelOpen && progressToastIdRef.current) {
+      removeToast(progressToastIdRef.current);
+      progressToastIdRef.current = null;
+    }
+  }, [isPolling, isPanelOpen, queueProgress, addToast, removeToast]);
+
   // Handle rescan
   const handleRescan = async (id: string) => {
     try {
@@ -100,7 +179,10 @@ export default function MetaTagAnalyserPage() {
         );
         // Show feedback if changes detected
         if (data.changesDetected) {
-          // Could add a toast notification here
+          addToast({
+            type: 'info',
+            message: 'Changes detected in meta tags',
+          });
         }
       }
     } catch (error) {
@@ -151,10 +233,62 @@ export default function MetaTagAnalyserPage() {
           </p>
         </div>
 
-        <Button onClick={() => setIsPanelOpen(true)} disabled={!selectedClientId}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add URLs
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Background Processing Indicator */}
+          {isPolling && !isPanelOpen && queueProgress && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+              <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
+              <span className="text-sm text-blue-700">
+                {queueProgress.completed}/{queueProgress.total}
+              </span>
+              <div className="flex items-center gap-1 ml-1">
+                {isPaused ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={resumePolling}
+                    title="Resume"
+                  >
+                    <Play className="h-3 w-3" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={pausePolling}
+                    title="Pause"
+                  >
+                    <Pause className="h-3 w-3" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => cancelQueue()}
+                  title="Cancel"
+                >
+                  <Square className="h-3 w-3" />
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => setIsPanelOpen(true)}
+              >
+                View
+              </Button>
+            </div>
+          )}
+
+          <Button onClick={() => setIsPanelOpen(true)} disabled={!selectedClientId}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add URLs
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -181,13 +315,27 @@ export default function MetaTagAnalyserPage() {
         onAddUrls={() => setIsPanelOpen(true)}
       />
 
-      {/* Scan Panel */}
+      {/* Scan Panel - pass polling props */}
       <ScanPanel
         isOpen={isPanelOpen}
         onClose={() => setIsPanelOpen(false)}
         clientId={selectedClientId}
         clientName={clientName}
         onScanComplete={handleScanComplete}
+        // Polling props (lifted from hook)
+        queueStatus={queueStatus}
+        isPolling={isPolling}
+        isPaused={isPaused}
+        queueLoading={queueLoading}
+        queueProgress={queueProgress}
+        startPolling={startPolling}
+        stopPolling={stopPolling}
+        pausePolling={pausePolling}
+        resumePolling={resumePolling}
+        cancelQueue={cancelQueue}
+        refreshStatus={refreshStatus}
+        queueUrls={queueUrls}
+        totalProcessed={totalProcessed}
       />
     </div>
   );

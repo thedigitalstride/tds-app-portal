@@ -35,6 +35,7 @@ export { Select, type SelectProps } from './components/select';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs';
 export { TDSLogo } from './components/tds-logo';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/tooltip';
+export { ToastContainer, toastVariants, type Toast } from './components/toast';
 
 // Tool Components - Reusable components for building tools
 export {

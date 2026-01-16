@@ -246,6 +246,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid mode. Use "sitemap" or "urls"' }, { status: 400 });
     }
 
+    // Store all URLs before limiting
+    const allDiscoveredUrls = [...urlsToAnalyze];
+
     // Limit to prevent abuse
     const maxUrls = 50;
     if (urlsToAnalyze.length > maxUrls) {
@@ -287,12 +290,18 @@ export async function POST(request: NextRequest) {
       ? Math.round(successful.reduce((sum, r) => sum + r.score, 0) / successful.length)
       : 0;
 
+    // Get remaining URLs that weren't scanned
+    const remainingUrls = allDiscoveredUrls.slice(maxUrls);
+
     return NextResponse.json({
-      totalUrls: urlsToAnalyze.length,
+      totalUrls: allDiscoveredUrls.length,
+      scannedUrls: urlsToAnalyze.length,
       analyzed: successful.length,
       failed: results.filter(r => r.error).length,
       averageScore: avgScore,
       results,
+      remainingUrls,
+      hasMoreUrls: remainingUrls.length > 0,
     });
   } catch (error) {
     console.error('Bulk analysis error:', error);
