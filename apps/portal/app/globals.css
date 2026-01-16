@@ -18,3 +18,17 @@
     @apply bg-neutral-50 text-neutral-900 antialiased;
   }
 }
+
+/* Animation for newly added rows */
+@keyframes highlight-row {
+  0% {
+    background-color: rgb(219, 234, 254);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-highlight {
+  animation: highlight-row 2s ease-out;
+}

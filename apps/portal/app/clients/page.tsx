@@ -29,6 +29,7 @@ import {
   TooltipTrigger,
 } from '@tds/ui';
 import { tools, type Tool } from '@/lib/tools';
+import { useClient } from '@/components/client-context';
 
 interface ToolUsageData {
   toolId: string;
@@ -54,6 +55,7 @@ interface Client {
 }
 
 export default function ClientsPage() {
+  const { refreshClients: refreshGlobalClients } = useClient();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -116,6 +118,7 @@ export default function ClientsPage() {
 
       if (res.ok) {
         fetchClients();
+        refreshGlobalClients(); // Update the global client list for sidebar
         setDialogOpen(false);
         resetForm();
       }
@@ -130,6 +133,7 @@ export default function ClientsPage() {
       const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchClients();
+        refreshGlobalClients(); // Update the global client list for sidebar
       }
     } catch (error) {
       console.error('Failed to delete client:', error);
@@ -211,7 +215,7 @@ export default function ClientsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="flex items-center">
+                    <CardTitle className="flex items-start">
                       {client.name}
                       {client.isActive ? (
                         <Badge variant="success" className="ml-2">Active</Badge>
@@ -219,7 +223,7 @@ export default function ClientsPage() {
                         <Badge variant="secondary" className="ml-2">Inactive</Badge>
                       )}
                     </CardTitle>
-                    <CardDescription className="mt-1 flex items-center">
+                    <CardDescription className="mt-1 flex items-start">
                       <a
                         href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
                         target="_blank"
