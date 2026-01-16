@@ -1607,11 +1607,8 @@ export default function MetaTagAnalyserPage() {
                                 {analysis.url.replace(/^https?:\/\//, '').slice(0, 35)}
                               </a>
                             </TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {analysis.plannedTitle || analysis.title || 'No title'}
-                              {analysis.plannedTitle && analysis.plannedTitle !== analysis.title && (
-                                <Badge variant="secondary" className="ml-2 text-xs">Planned</Badge>
-                              )}
+                            <TableCell className="max-w-xs truncate" title={analysis.title}>
+                              {analysis.title || 'No title'}
                             </TableCell>
                             <TableCell>
                               <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
@@ -1917,7 +1914,7 @@ export default function MetaTagAnalyserPage() {
                                                         {/* Expanded view with full data snapshot */}
                                                         {isExpanded && (
                                                           <div className="border-t border-neutral-100 bg-neutral-50 p-3 space-y-3">
-                                                            <p className="text-xs font-medium text-neutral-700">Data snapshot at this point in time:</p>
+                                                            <p className="text-xs font-medium text-neutral-700">State before this rescan:</p>
 
                                                             {/* Use snapshot if available, fall back to legacy fields */}
                                                             {scan.snapshot ? (

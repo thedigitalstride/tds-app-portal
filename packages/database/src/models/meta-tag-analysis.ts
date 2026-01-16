@@ -102,6 +102,68 @@ const twitterSchema = new Schema(
   { _id: false }
 );
 
+// Issue schema for tracking problems
+const issueSchema = new Schema(
+  {
+    type: { type: String, enum: ['error', 'warning', 'success'] },
+    field: String,
+    message: String,
+  },
+  { _id: false }
+);
+
+// Snapshot schema for history entries - captures complete state at a point in time
+const snapshotSchema = new Schema(
+  {
+    title: String,
+    description: String,
+    canonical: String,
+    robots: String,
+    openGraph: {
+      type: openGraphSchema,
+      default: undefined,
+    },
+    twitter: {
+      type: twitterSchema,
+      default: undefined,
+    },
+    issues: [issueSchema],
+  },
+  { _id: false }
+);
+
+// Scan history entry schema
+const scanHistoryEntrySchema = new Schema(
+  {
+    scannedAt: {
+      type: Date,
+      required: true,
+    },
+    scannedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    score: {
+      type: Number,
+      required: true,
+    },
+    changesDetected: {
+      type: Boolean,
+      default: false,
+    },
+    // Full snapshot of all fields at this point
+    snapshot: {
+      type: snapshotSchema,
+      default: undefined,
+    },
+    // Legacy fields for backwards compatibility
+    previousTitle: String,
+    previousDescription: String,
+  },
+  { _id: false }
+);
+
 const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
   {
     clientId: {
@@ -133,21 +195,7 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
       type: twitterSchema,
       default: () => ({}),
     },
-    issues: [{
-      type: {
-        type: String,
-        enum: ['error', 'warning', 'success'],
-        required: true,
-      },
-      field: {
-        type: String,
-        required: true,
-      },
-      message: {
-        type: String,
-        required: true,
-      },
-    }],
+    issues: [issueSchema],
     plannedTitle: String,
     plannedDescription: String,
     score: {
@@ -165,55 +213,7 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
       type: Date,
       default: Date.now,
     },
-    scanHistory: [{
-      scannedAt: {
-        type: Date,
-        required: true,
-      },
-      scannedBy: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-      },
-      score: {
-        type: Number,
-        required: true,
-      },
-      changesDetected: {
-        type: Boolean,
-        default: false,
-      },
-      // Full snapshot of all fields at this point
-      snapshot: {
-        title: String,
-        description: String,
-        canonical: String,
-        robots: String,
-        openGraph: {
-          title: String,
-          description: String,
-          image: String,
-          url: String,
-          type: String,
-          siteName: String,
-        },
-        twitter: {
-          card: String,
-          title: String,
-          description: String,
-          image: String,
-          site: String,
-        },
-        issues: [{
-          type: { type: String },
-          field: String,
-          message: String,
-        }],
-      },
-      // Legacy fields for backwards compatibility
-      previousTitle: String,
-      previousDescription: String,
-    }],
+    scanHistory: [scanHistoryEntrySchema],
     scanCount: {
       type: Number,
       default: 1,

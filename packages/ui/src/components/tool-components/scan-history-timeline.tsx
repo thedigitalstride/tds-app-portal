@@ -176,7 +176,7 @@ export function ScanHistoryTimeline({
                   {isExpanded && (
                     <div className="border-t border-neutral-100 bg-neutral-50 p-3 space-y-3">
                       <p className="text-xs font-medium text-neutral-700">
-                        Data snapshot at this point in time:
+                        State before this rescan:
                       </p>
 
                       {scan.snapshot && renderSnapshot ? (
