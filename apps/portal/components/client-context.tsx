@@ -1,7 +1,21 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+// Watches URL search params and notifies parent of clientId changes
+function ClientUrlWatcher({ onClientIdChange }: { onClientIdChange: (id: string) => void }) {
+  const searchParams = useSearchParams();
+  const clientIdFromUrl = searchParams.get('clientId');
+
+  useEffect(() => {
+    if (clientIdFromUrl) {
+      onClientIdChange(clientIdFromUrl);
+    }
+  }, [clientIdFromUrl, onClientIdChange]);
+
+  return null;
+}
 
 interface Client {
   _id: string;
@@ -34,7 +48,6 @@ function getClientIdFromUrl(): string | null {
 }
 
 export function ClientProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const [clients, setClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [selectedClientId, setSelectedClientIdState] = useState<string | null>(null);
@@ -72,14 +85,11 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
     fetchClients();
   }, [fetchClients]);
 
-  // Watch for pathname changes and sync clientId from URL
-  useEffect(() => {
-    const urlClientId = getClientIdFromUrl();
-    if (urlClientId) {
-      setSelectedClientIdState(urlClientId);
-      localStorage.setItem(STORAGE_KEY, urlClientId);
-    }
-  }, [pathname]); // Re-run when pathname changes (navigation occurred)
+  // Stable callback for URL watcher to update client selection
+  const setSelectedClientIdFromUrl = useCallback((id: string) => {
+    setSelectedClientIdState(id);
+    localStorage.setItem(STORAGE_KEY, id);
+  }, []);
 
   // Wrapper to also persist to localStorage
   const setSelectedClientId = useCallback((id: string | null) => {
@@ -108,6 +118,9 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ClientContext.Provider value={value}>
+      <Suspense fallback={null}>
+        <ClientUrlWatcher onClientIdChange={setSelectedClientIdFromUrl} />
+      </Suspense>
       {children}
     </ClientContext.Provider>
   );
