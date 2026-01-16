@@ -1533,14 +1533,6 @@ export default function MetaTagAnalyserPage() {
                                             </p>
                                           </div>
                                         )}
-                                        {item.result.robots && (
-                                          <div>
-                                            <span className="text-neutral-500">Robots:</span>
-                                            <p className="font-mono text-xs bg-white p-2 rounded border mt-1">
-                                              {item.result.robots}
-                                            </p>
-                                          </div>
-                                        )}
                                       </div>
                                     </div>
 
@@ -1904,13 +1896,6 @@ export default function MetaTagAnalyserPage() {
                                           );
                                         })()}
 
-                                        {/* Robots Field */}
-                                        <div className="rounded-lg border-2 border-neutral-200 bg-neutral-50/50 p-3">
-                                          <span className="text-neutral-700 font-medium text-sm">Robots</span>
-                                          <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
-                                            {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
-                                          </p>
-                                        </div>
                                       </div>
 
                                       {/* Right Column - Open Graph & Twitter */}
@@ -2045,7 +2030,7 @@ export default function MetaTagAnalyserPage() {
                                           );
                                         })()}
 
-                                        {/* Viewport Field - with full status styling */}
+                                        {/* Technical Details - with viewport status styling */}
                                         {(() => {
                                           const viewportIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'viewport');
                                           const viewportStatus = viewportIssue?.type || 'success';
@@ -2069,49 +2054,47 @@ export default function MetaTagAnalyserPage() {
                                                   <span>{viewportStatus === 'success' ? 'Good' : viewportStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                 </div>
                                               </div>
-                                              <span className="text-neutral-700 font-medium text-sm">Viewport</span>
-                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1 truncate" title={analysis.viewport || ''}>
-                                                {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                              {viewportIssue && (
-                                                <p className="mt-1 text-xs text-neutral-600">{viewportIssue.message}</p>
-                                              )}
+                                              <span className="text-neutral-700 font-medium text-sm">Technical Details</span>
+                                              <div className="grid grid-cols-2 gap-2 mt-2">
+                                                <div className="col-span-2">
+                                                  <span className="text-neutral-500 text-xs">viewport</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.viewport || ''}>
+                                                    {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                  {viewportIssue && (
+                                                    <p className="mt-1 text-xs text-neutral-600">{viewportIssue.message}</p>
+                                                  )}
+                                                </div>
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">charset</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                    {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                                <div>
+                                                  <span className="text-neutral-500 text-xs">language</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                    {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                                <div className="col-span-2">
+                                                  <span className="text-neutral-500 text-xs">robots</span>
+                                                  <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                    {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
+                                                  </p>
+                                                </div>
+                                                {analysis.favicon && (
+                                                  <div className="col-span-2">
+                                                    <span className="text-neutral-500 text-xs">favicon</span>
+                                                    <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.favicon}>
+                                                      {analysis.favicon}
+                                                    </p>
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                           );
                                         })()}
-
-                                        {/* Technical Details - info only, neutral styling */}
-                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
-                                          <span className="text-neutral-700 font-medium text-sm">Technical Details</span>
-                                          <div className="grid grid-cols-2 gap-2 mt-2">
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">charset</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
-                                                {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div>
-                                              <span className="text-neutral-500 text-xs">language</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
-                                                {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            <div className="col-span-2">
-                                              <span className="text-neutral-500 text-xs">robots</span>
-                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
-                                                {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
-                                              </p>
-                                            </div>
-                                            {analysis.favicon && (
-                                              <div className="col-span-2">
-                                                <span className="text-neutral-500 text-xs">favicon</span>
-                                                <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.favicon}>
-                                                  {analysis.favicon}
-                                                </p>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
 
                                         {/* Planned Values */}
                                         {(analysis.plannedTitle || analysis.plannedDescription) && (
@@ -2379,13 +2362,6 @@ export default function MetaTagAnalyserPage() {
                                                                     );
                                                                   })()}
 
-                                                                  {/* Robots Field */}
-                                                                  <div className="rounded-lg border-2 border-neutral-200 bg-neutral-50/50 p-2">
-                                                                    <span className="text-neutral-700 font-medium text-xs">Robots</span>
-                                                                    <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1">
-                                                                      {scan.snapshot?.robots || <span className="text-neutral-400 italic">Not set</span>}
-                                                                    </p>
-                                                                  </div>
                                                                 </div>
 
                                                                 {/* Right Column - Open Graph & Twitter */}
@@ -2502,7 +2478,7 @@ export default function MetaTagAnalyserPage() {
                                                                     );
                                                                   })()}
 
-                                                                  {/* Viewport Field */}
+                                                                  {/* Technical Details - with viewport status styling */}
                                                                   {(() => {
                                                                     const viewportIssue = scan.snapshot?.issues?.find(i => i.field.toLowerCase() === 'viewport');
                                                                     const viewportStatus = viewportIssue?.type || 'success';
@@ -2526,35 +2502,39 @@ export default function MetaTagAnalyserPage() {
                                                                             <span>{viewportStatus === 'success' ? 'Good' : viewportStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                                           </div>
                                                                         </div>
-                                                                        <span className="text-neutral-700 font-medium text-xs">Viewport</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1.5 rounded border mt-1 truncate" title={scan.snapshot?.viewport || ''}>
-                                                                          {scan.snapshot?.viewport || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                        {viewportIssue && (
-                                                                          <p className="mt-1 text-[10px] text-neutral-600">{viewportIssue.message}</p>
-                                                                        )}
+                                                                        <span className="text-neutral-700 font-medium text-xs">Technical Details</span>
+                                                                        <div className="grid grid-cols-2 gap-1 mt-1">
+                                                                          <div className="col-span-2">
+                                                                            <span className="text-neutral-500 text-[10px]">viewport</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5 truncate" title={scan.snapshot?.viewport || ''}>
+                                                                              {scan.snapshot?.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                            {viewportIssue && (
+                                                                              <p className="mt-1 text-[10px] text-neutral-600">{viewportIssue.message}</p>
+                                                                            )}
+                                                                          </div>
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">charset</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                              {scan.snapshot?.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                          <div>
+                                                                            <span className="text-neutral-500 text-[10px]">language</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                              {scan.snapshot?.language || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                          <div className="col-span-2">
+                                                                            <span className="text-neutral-500 text-[10px]">robots</span>
+                                                                            <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
+                                                                              {scan.snapshot?.robots || <span className="text-neutral-400 italic">Not set</span>}
+                                                                            </p>
+                                                                          </div>
+                                                                        </div>
                                                                       </div>
                                                                     );
                                                                   })()}
-
-                                                                  {/* Technical Details */}
-                                                                  <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-2">
-                                                                    <span className="text-neutral-700 font-medium text-xs">Technical Details</span>
-                                                                    <div className="grid grid-cols-2 gap-1 mt-1">
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">charset</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
-                                                                          {scan.snapshot?.charset || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                      <div>
-                                                                        <span className="text-neutral-500 text-[10px]">language</span>
-                                                                        <p className="font-mono text-[10px] bg-white/80 p-1 rounded border mt-0.5">
-                                                                          {scan.snapshot?.language || <span className="text-neutral-400 italic">Not set</span>}
-                                                                        </p>
-                                                                      </div>
-                                                                    </div>
-                                                                  </div>
                                                                 </div>
                                                               </div>
                                                             ) : (
