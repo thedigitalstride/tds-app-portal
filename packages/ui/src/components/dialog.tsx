@@ -6,7 +6,7 @@ import { cn } from '../utils';
 
 interface DialogContextValue {
   open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setOpen: (open: boolean) => void;
 }
 
 const DialogContext = React.createContext<DialogContextValue | null>(null);
