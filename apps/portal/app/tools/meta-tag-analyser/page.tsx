@@ -389,7 +389,7 @@ export default function MetaTagAnalyserPage() {
     setError(null);
     setResult(null);
     setIssues([]);
-    setSaveSuccess(false);
+    setSaveSuccess(null);
 
     try {
       const res = await fetch('/api/tools/meta-tag-analyser', {
@@ -496,7 +496,7 @@ export default function MetaTagAnalyserPage() {
     setBulkResults([]);
     setBulkStats(null);
     setExpandedRows(new Set());
-    setBulkSaveSuccess(false);
+    setBulkSaveSuccess(null);
 
     try {
       const body = bulkMode === 'sitemap'
@@ -1953,267 +1953,198 @@ export default function MetaTagAnalyserPage() {
 
                                       {/* Right Column - Open Graph & Twitter */}
                                       <div className="space-y-3">
-                                        {/* Open Graph Section */}
-                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
-                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Open Graph</h5>
-                                          <div className="space-y-2">
-                                            {/* OG Image */}
-                                            {(() => {
-                                              const ogImageIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
-                                              const ogImageStatus = ogImageIssue?.type || 'success';
-                                              const statusStyles = {
-                                                error: 'border-red-200 bg-red-50/30',
-                                                warning: 'border-amber-200 bg-amber-50/30',
-                                                success: 'border-green-200 bg-green-50/30',
-                                              };
-                                              return (
-                                                <div className={`rounded border p-2 ${statusStyles[ogImageStatus as keyof typeof statusStyles]}`}>
-                                                  <span className="text-neutral-500 text-xs font-medium">og:image</span>
-                                                  {analysis.openGraph?.image ? (
-                                                    <div className="mt-1 flex items-center gap-2">
-                                                      <img
-                                                        src={analysis.openGraph.image}
-                                                        alt="OG Preview"
-                                                        className="h-12 w-20 object-cover rounded border"
-                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                      />
-                                                      <p className="font-mono text-xs truncate flex-1" title={analysis.openGraph.image}>
-                                                        {analysis.openGraph.image}
-                                                      </p>
-                                                    </div>
-                                                  ) : (
-                                                    <p className="font-mono text-xs mt-1 text-neutral-400 italic">Not set</p>
-                                                  )}
-                                                  {ogImageIssue && (
-                                                    <p className="mt-1 text-xs text-neutral-600">{ogImageIssue.message}</p>
-                                                  )}
+                                        {/* OG Image Field - with full status styling */}
+                                        {(() => {
+                                          const ogImageIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'og image');
+                                          const ogImageStatus = ogImageIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[ogImageStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[ogImageStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{ogImageStatus === 'success' ? 'Good' : ogImageStatus === 'error' ? 'Error' : 'Warning'}</span>
                                                 </div>
-                                              );
-                                            })()}
-
-                                            {/* OG Title & Type */}
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">og:title</span>
-                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.title || ''}>
-                                                  {analysis.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
-                                                </p>
                                               </div>
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">og:type</span>
-                                                <p className="font-mono text-xs mt-1">
-                                                  {analysis.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
-                                                </p>
-                                              </div>
+                                              <span className="text-neutral-700 font-medium text-sm">OG Image</span>
+                                              {analysis.openGraph?.image ? (
+                                                <div className="mt-2 flex items-center gap-2">
+                                                  <img
+                                                    src={analysis.openGraph.image}
+                                                    alt="OG Preview"
+                                                    className="h-12 w-20 object-cover rounded border"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                  />
+                                                  <p className="font-mono text-xs bg-white/80 p-2 rounded border truncate flex-1" title={analysis.openGraph.image}>
+                                                    {analysis.openGraph.image}
+                                                  </p>
+                                                </div>
+                                              ) : (
+                                                <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1 text-neutral-400 italic">Not set</p>
+                                              )}
+                                              {ogImageIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{ogImageIssue.message}</p>
+                                              )}
                                             </div>
+                                          );
+                                        })()}
 
-                                            {/* OG Description */}
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                        {/* Twitter Card Field - with full status styling */}
+                                        {(() => {
+                                          const twitterIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'twitter card');
+                                          const twitterStatus = twitterIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[twitterStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[twitterStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{twitterStatus === 'success' ? 'Good' : twitterStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                </div>
+                                              </div>
+                                              <span className="text-neutral-700 font-medium text-sm">Twitter Card</span>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1">
+                                                {analysis.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                              {twitterIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{twitterIssue.message}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Viewport Field - with full status styling */}
+                                        {(() => {
+                                          const viewportIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'viewport');
+                                          const viewportStatus = viewportIssue?.type || 'success';
+                                          const statusStyles = {
+                                            error: 'border-red-300 bg-red-50/50',
+                                            warning: 'border-amber-300 bg-amber-50/50',
+                                            success: 'border-green-300 bg-green-50/50',
+                                          };
+                                          const badgeStyles = {
+                                            error: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertCircle },
+                                            warning: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', icon: AlertTriangle },
+                                            success: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle },
+                                          };
+                                          const badge = badgeStyles[viewportStatus as keyof typeof badgeStyles];
+                                          const BadgeIcon = badge.icon;
+                                          return (
+                                            <div className={`relative rounded-lg border-2 p-3 ${statusStyles[viewportStatus as keyof typeof statusStyles]}`}>
+                                              <div className="absolute -top-2.5 right-2">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text} ${badge.border} border`}>
+                                                  <BadgeIcon className="h-3 w-3" />
+                                                  <span>{viewportStatus === 'success' ? 'Good' : viewportStatus === 'error' ? 'Error' : 'Warning'}</span>
+                                                </div>
+                                              </div>
+                                              <span className="text-neutral-700 font-medium text-sm">Viewport</span>
+                                              <p className="font-mono text-xs bg-white/80 p-2 rounded border mt-1 truncate" title={analysis.viewport || ''}>
+                                                {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                              {viewportIssue && (
+                                                <p className="mt-1 text-xs text-neutral-600">{viewportIssue.message}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Additional Open Graph fields - info only, neutral styling */}
+                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
+                                          <span className="text-neutral-700 font-medium text-sm">Open Graph Details</span>
+                                          <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div>
+                                              <span className="text-neutral-500 text-xs">og:title</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.openGraph?.title || ''}>
+                                                {analysis.openGraph?.title || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500 text-xs">og:type</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                {analysis.openGraph?.type || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div className="col-span-2">
                                               <span className="text-neutral-500 text-xs">og:description</span>
-                                              <p className="font-mono text-xs mt-1 line-clamp-2" title={analysis.openGraph?.description || ''}>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 line-clamp-2" title={analysis.openGraph?.description || ''}>
                                                 {analysis.openGraph?.description || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
                                             </div>
-
-                                            {/* OG URL & Site Name */}
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">og:url</span>
-                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.url || ''}>
-                                                  {analysis.openGraph?.url || <span className="text-neutral-400 italic">Not set</span>}
-                                                </p>
-                                              </div>
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">og:site_name</span>
-                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.openGraph?.siteName || ''}>
-                                                  {analysis.openGraph?.siteName || <span className="text-neutral-400 italic">Not set</span>}
-                                                </p>
-                                              </div>
-                                            </div>
                                           </div>
                                         </div>
 
-                                        {/* Twitter Card Section */}
-                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
-                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Twitter Card</h5>
-                                          <div className="space-y-2">
-                                            {/* Twitter Card & Site */}
-                                            {(() => {
-                                              const twitterIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'twitter card');
-                                              const twitterStatus = twitterIssue?.type || 'success';
-                                              const statusStyles = {
-                                                error: 'border-red-200 bg-red-50/30',
-                                                warning: 'border-amber-200 bg-amber-50/30',
-                                                success: 'border-green-200 bg-green-50/30',
-                                              };
-                                              return (
-                                                <div className={`grid grid-cols-2 gap-2`}>
-                                                  <div className={`rounded border p-2 ${statusStyles[twitterStatus as keyof typeof statusStyles]}`}>
-                                                    <span className="text-neutral-500 text-xs">twitter:card</span>
-                                                    <p className="font-mono text-xs mt-1">
-                                                      {analysis.twitter?.card || <span className="text-neutral-400 italic">Not set</span>}
-                                                    </p>
-                                                    {twitterIssue && (
-                                                      <p className="mt-1 text-xs text-neutral-600">{twitterIssue.message}</p>
-                                                    )}
-                                                  </div>
-                                                  <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                    <span className="text-neutral-500 text-xs">twitter:site</span>
-                                                    <p className="font-mono text-xs mt-1">
-                                                      {analysis.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
-                                                    </p>
-                                                  </div>
-                                                </div>
-                                              );
-                                            })()}
-
-                                            {/* Twitter Title */}
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
+                                        {/* Additional Twitter fields - info only, neutral styling */}
+                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
+                                          <span className="text-neutral-700 font-medium text-sm">Twitter Details</span>
+                                          <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div>
                                               <span className="text-neutral-500 text-xs">twitter:title</span>
-                                              <p className="font-mono text-xs mt-1 truncate" title={analysis.twitter?.title || ''}>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.twitter?.title || ''}>
                                                 {analysis.twitter?.title || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
                                             </div>
-
-                                            {/* Twitter Description */}
-                                            <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs">twitter:description</span>
-                                              <p className="font-mono text-xs mt-1 line-clamp-2" title={analysis.twitter?.description || ''}>
-                                                {analysis.twitter?.description || <span className="text-neutral-400 italic">Not set</span>}
+                                            <div>
+                                              <span className="text-neutral-500 text-xs">twitter:site</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                {analysis.twitter?.site || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
                                             </div>
-
-                                            {/* Twitter Image */}
-                                            {analysis.twitter?.image && (
-                                              <div className="rounded border border-neutral-100 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs">twitter:image</span>
-                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.twitter.image}>
-                                                  {analysis.twitter.image}
-                                                </p>
-                                              </div>
-                                            )}
                                           </div>
                                         </div>
 
-                                        {/* Technical Meta Tags */}
-                                        <div className="rounded-lg border border-neutral-200 p-3 bg-white">
-                                          <h5 className="text-sm font-medium text-neutral-700 mb-2">Technical</h5>
-                                          <div className="grid grid-cols-2 gap-2">
-                                            {/* Viewport - with status */}
-                                            {(() => {
-                                              const viewportIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'viewport');
-                                              const viewportStatus = viewportIssue?.type || 'success';
-                                              const statusStyles = {
-                                                error: 'border-red-200 bg-red-50/30',
-                                                warning: 'border-amber-200 bg-amber-50/30',
-                                                success: 'border-green-200 bg-green-50/30',
-                                              };
-                                              return (
-                                                <div className={`rounded border p-2 ${statusStyles[viewportStatus as keyof typeof statusStyles]}`}>
-                                                  <span className="text-neutral-500 text-xs font-medium">viewport</span>
-                                                  <p className="font-mono text-xs mt-1 truncate" title={analysis.viewport || ''}>
-                                                    {analysis.viewport || <span className="text-neutral-400 italic">Not set</span>}
-                                                  </p>
-                                                  {viewportIssue && (
-                                                    <p className="mt-1 text-xs text-neutral-600">{viewportIssue.message}</p>
-                                                  )}
-                                                </div>
-                                              );
-                                            })()}
-
-                                            {/* Charset - with status */}
-                                            {(() => {
-                                              const charsetIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'charset');
-                                              const charsetStatus = charsetIssue?.type || 'success';
-                                              const statusStyles = {
-                                                error: 'border-red-200 bg-red-50/30',
-                                                warning: 'border-amber-200 bg-amber-50/30',
-                                                success: 'border-green-200 bg-green-50/30',
-                                              };
-                                              return (
-                                                <div className={`rounded border p-2 ${statusStyles[charsetStatus as keyof typeof statusStyles]}`}>
-                                                  <span className="text-neutral-500 text-xs font-medium">charset</span>
-                                                  <p className="font-mono text-xs mt-1">
-                                                    {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
-                                                  </p>
-                                                  {charsetIssue && (
-                                                    <p className="mt-1 text-xs text-neutral-600">{charsetIssue.message}</p>
-                                                  )}
-                                                </div>
-                                              );
-                                            })()}
-
-                                            {/* Language - with status */}
-                                            {(() => {
-                                              const langIssue = analysis.issues?.find(i => i.field.toLowerCase() === 'language');
-                                              const langStatus = langIssue?.type || 'success';
-                                              const statusStyles = {
-                                                error: 'border-red-200 bg-red-50/30',
-                                                warning: 'border-amber-200 bg-amber-50/30',
-                                                success: 'border-green-200 bg-green-50/30',
-                                              };
-                                              return (
-                                                <div className={`rounded border p-2 ${statusStyles[langStatus as keyof typeof statusStyles]}`}>
-                                                  <span className="text-neutral-500 text-xs font-medium">language</span>
-                                                  <p className="font-mono text-xs mt-1">
-                                                    {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
-                                                  </p>
-                                                  {langIssue && (
-                                                    <p className="mt-1 text-xs text-neutral-600">{langIssue.message}</p>
-                                                  )}
-                                                </div>
-                                              );
-                                            })()}
-
-                                            {/* Robots - info only */}
-                                            <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs font-medium">robots</span>
-                                              <p className="font-mono text-xs mt-1">
+                                        {/* Technical Details - info only, neutral styling */}
+                                        <div className="rounded-lg border-2 border-neutral-300 bg-neutral-50/50 p-3">
+                                          <span className="text-neutral-700 font-medium text-sm">Technical Details</span>
+                                          <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div>
+                                              <span className="text-neutral-500 text-xs">charset</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                {analysis.charset || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500 text-xs">language</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
+                                                {analysis.language || <span className="text-neutral-400 italic">Not set</span>}
+                                              </p>
+                                            </div>
+                                            <div className="col-span-2">
+                                              <span className="text-neutral-500 text-xs">robots</span>
+                                              <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5">
                                                 {analysis.robots || <span className="text-neutral-400 italic">Not set</span>}
                                               </p>
                                             </div>
-
-                                            {analysis.author && (
-                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs font-medium">author</span>
-                                                <p className="font-mono text-xs mt-1">
-                                                  {analysis.author}
-                                                </p>
-                                              </div>
-                                            )}
-                                            {analysis.themeColor && (
-                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs font-medium">theme-color</span>
-                                                <div className="flex items-center gap-1 mt-1">
-                                                  <div
-                                                    className="h-4 w-4 rounded border"
-                                                    style={{ backgroundColor: analysis.themeColor }}
-                                                  />
-                                                  <span className="font-mono text-xs">{analysis.themeColor}</span>
-                                                </div>
-                                              </div>
-                                            )}
                                             {analysis.favicon && (
-                                              <div className="rounded border border-neutral-200 bg-neutral-50/50 p-2">
-                                                <span className="text-neutral-500 text-xs font-medium">favicon</span>
-                                                <p className="font-mono text-xs mt-1 truncate" title={analysis.favicon}>
+                                              <div className="col-span-2">
+                                                <span className="text-neutral-500 text-xs">favicon</span>
+                                                <p className="font-mono text-xs bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={analysis.favicon}>
                                                   {analysis.favicon}
                                                 </p>
                                               </div>
                                             )}
                                           </div>
-                                          {analysis.hreflang && analysis.hreflang.length > 0 && (
-                                            <div className="mt-2 rounded border border-neutral-200 bg-neutral-50/50 p-2">
-                                              <span className="text-neutral-500 text-xs font-medium">hreflang ({analysis.hreflang.length})</span>
-                                              <div className="flex flex-wrap gap-1 mt-1">
-                                                {analysis.hreflang.map((entry, idx) => (
-                                                  <Badge key={idx} variant="secondary" className="font-mono text-xs">
-                                                    {entry.lang}
-                                                  </Badge>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          )}
                                         </div>
 
                                         {/* Planned Values */}
