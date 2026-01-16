@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 interface HreflangEntry {
   lang: string;
@@ -182,7 +183,7 @@ function analyzeMetaTags(result: MetaTagResult): AnalysisIssue[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

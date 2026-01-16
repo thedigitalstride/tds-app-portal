@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 interface MetaTagResult {
   url: string;
@@ -175,7 +176,7 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

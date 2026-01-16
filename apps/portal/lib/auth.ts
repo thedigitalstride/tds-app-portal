@@ -1,6 +1,7 @@
-import { NextAuthOptions } from 'next-auth';
+import { NextAuthOptions, getServerSession as getServerSessionBase } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { connectDB, User, type UserRole } from '@tds/database';
+import { cookies } from 'next/headers';
 
 // Extend the session types
 declare module 'next-auth' {
@@ -84,3 +85,11 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
   },
 };
+
+// Wrapper for getServerSession that ensures request context is established
+// This fixes Next.js 15 + Turbopack "cookies/headers called outside request scope" errors
+export async function getServerSession() {
+  // Access cookies first to ensure request context is established
+  await cookies();
+  return getServerSessionBase(authOptions);
+}
