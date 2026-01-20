@@ -15,6 +15,7 @@ import {
   Wrench,
   Building2,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import {
   cn,
@@ -46,6 +47,7 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'User Management', href: '/admin/users', icon: Settings },
+  { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare },
 ];
 
 export function Sidebar() {
@@ -56,6 +58,7 @@ export function Sidebar() {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [newFeedbackCount, setNewFeedbackCount] = useState(0);
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -65,6 +68,28 @@ export function Sidebar() {
     }
     setMounted(true);
   }, []);
+
+  // Fetch new feedback count for admin badge
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const fetchCount = async () => {
+      try {
+        const res = await fetch('/api/feedback?limit=1');
+        if (res.ok) {
+          const data = await res.json();
+          setNewFeedbackCount(data.newCount || 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch feedback count:', error);
+      }
+    };
+
+    fetchCount();
+    // Refresh count every 60 seconds
+    const interval = setInterval(fetchCount, 60000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
 
   // Save collapsed state to localStorage
   const toggleCollapsed = () => {
@@ -303,20 +328,43 @@ export function Sidebar() {
               <div className="mt-1 space-y-1">
                 {adminNavigation.map((item) => {
                   const isActive = pathname.startsWith(item.href);
+                  const isFeedback = item.href === '/admin/feedback';
+                  const showBadge = isFeedback && newFeedbackCount > 0;
+
                   const linkContent = (
                     <Link
                       key={item.name}
                       href={item.href}
                       className={cn(
                         'flex items-center rounded-lg text-sm font-medium transition-colors',
-                        collapsed ? 'justify-center p-2' : 'space-x-3 px-3 py-2',
+                        collapsed ? 'justify-center p-2 relative' : 'justify-between px-3 py-2',
                         isActive
                           ? 'bg-neutral-100 text-neutral-900'
                           : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
                       )}
                     >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!collapsed && <span>{item.name}</span>}
+                      {collapsed ? (
+                        <>
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {showBadge && (
+                            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                              {newFeedbackCount > 9 ? '9+' : newFeedbackCount}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center space-x-3">
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            <span>{item.name}</span>
+                          </div>
+                          {showBadge && (
+                            <Badge variant="secondary" className="bg-red-100 text-red-600 text-xs">
+                              {newFeedbackCount}
+                            </Badge>
+                          )}
+                        </>
+                      )}
                     </Link>
                   );
 
@@ -327,7 +375,8 @@ export function Sidebar() {
                           {linkContent}
                         </TooltipTrigger>
                         <TooltipContent side="right" sideOffset={8}>
-                          {item.name}
+                          <span>{item.name}</span>
+                          {showBadge && <span className="ml-2 text-red-400">({newFeedbackCount} new)</span>}
                         </TooltipContent>
                       </Tooltip>
                     );
