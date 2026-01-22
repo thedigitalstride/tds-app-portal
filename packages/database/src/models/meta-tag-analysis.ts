@@ -42,7 +42,7 @@ export interface IStructuredData {
   found: boolean;
   isValidJson: boolean;
   types: string[];
-  errors: string[];
+  validationErrors: string[];
   rawScripts?: string[];
 }
 
@@ -340,7 +340,7 @@ const structuredDataSchema = new Schema(
     found: Boolean,
     isValidJson: Boolean,
     types: [String],
-    errors: [String],
+    validationErrors: [String],
     rawScripts: [String],
   },
   { _id: false }

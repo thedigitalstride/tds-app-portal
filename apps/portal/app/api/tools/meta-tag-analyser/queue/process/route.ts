@@ -42,7 +42,7 @@ interface StructuredData {
   found: boolean;
   isValidJson: boolean;
   types: string[];
-  errors: string[];
+  validationErrors: string[];
 }
 
 // Technical SEO interfaces
@@ -212,7 +212,7 @@ function getAllMetaContent(html: string, name: string): string[] {
 function extractStructuredData(html: string): StructuredData {
   const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   const types: string[] = [];
-  const errors: string[] = [];
+  const validationErrors: string[] = [];
   let isValidJson = true;
 
   scripts.forEach((script) => {
@@ -227,7 +227,7 @@ function extractStructuredData(html: string): StructuredData {
       }
     } catch (e) {
       isValidJson = false;
-      errors.push(e instanceof Error ? e.message : 'Invalid JSON');
+      validationErrors.push(e instanceof Error ? e.message : 'Invalid JSON');
     }
   });
 
@@ -235,7 +235,7 @@ function extractStructuredData(html: string): StructuredData {
     found: scripts.length > 0,
     isValidJson: scripts.length === 0 || isValidJson,
     types: [...new Set(types)],
-    errors,
+    validationErrors,
   };
 }
 

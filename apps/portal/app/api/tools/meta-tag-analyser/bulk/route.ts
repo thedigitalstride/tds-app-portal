@@ -40,7 +40,7 @@ interface MetaTagResult {
     found: boolean;
     isValidJson: boolean;
     types: string[];
-    errors: string[];
+    validationErrors: string[];
   };
   mobile?: {
     manifest?: string;
@@ -250,7 +250,7 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
       found: true,
       isValidJson: structuredDataValid,
       types: [...new Set(structuredDataTypes)],
-      errors: structuredDataErrors,
+      validationErrors: structuredDataErrors,
     } : undefined,
     mobile: getManifest() ? {
       manifest: getManifest(),

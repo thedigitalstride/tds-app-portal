@@ -37,8 +37,6 @@ const userPermissionsSchema = new Schema<IUserPermissions>(
   }
 );
 
-userPermissionsSchema.index({ userId: 1 });
-
 export const UserPermissions: Model<IUserPermissions> =
   mongoose.models.UserPermissions ||
   mongoose.model<IUserPermissions>('UserPermissions', userPermissionsSchema);

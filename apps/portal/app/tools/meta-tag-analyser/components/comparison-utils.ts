@@ -27,7 +27,8 @@ export function compareFields(
 
   return {
     changed,
-    currentValue: changed ? normalizedCurrent || undefined : undefined,
+    // Keep empty string when changed (don't convert to undefined) so UI can show "Now: Not set"
+    currentValue: changed ? normalizedCurrent : undefined,
   };
 }
 

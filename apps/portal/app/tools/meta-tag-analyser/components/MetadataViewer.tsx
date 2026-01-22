@@ -6,7 +6,8 @@ import {
   CheckCircle,
   AlertTriangle,
 } from 'lucide-react';
-import { Badge } from '@tds/ui';
+import { Badge, TooltipProvider } from '@tds/ui';
+import { MetaFieldLabel, SectionHeaderWithTooltip } from './MetaFieldLabel';
 import type {
   MetadataSnapshot,
   AnalysisIssue,
@@ -109,14 +110,18 @@ export function MetadataViewer({
   const diffs = compareWith ? compareSnapshots(data, compareWith) : undefined;
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className={`space-y-4 ${compact ? 'text-xs' : ''}`}>
       {/* Meta Tags Grid */}
       <div className={`grid gap-4 ${compact ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
         {/* Left Column - Basic Meta Tags */}
         <div className="space-y-3">
-          <h4 className={`font-medium text-neutral-700 ${compact ? 'text-xs' : 'text-sm'}`}>
-            Basic Meta Tags
-          </h4>
+          <SectionHeaderWithTooltip
+            title="Basic Meta Tags"
+            description="Core meta tags that define how search engines and browsers understand your page."
+            bestPractice="Ensure title, description, and canonical are set for every page."
+            compact={compact}
+          />
 
           {/* Title */}
           <MetaField
@@ -154,9 +159,12 @@ export function MetadataViewer({
 
         {/* Right Column - Social Tags */}
         <div className="space-y-3">
-          <h4 className={`font-medium text-neutral-700 ${compact ? 'text-xs' : 'text-sm'}`}>
-            Social Tags
-          </h4>
+          <SectionHeaderWithTooltip
+            title="Social Tags"
+            description="Open Graph and Twitter Card meta tags that control how your content appears when shared on social media."
+            bestPractice="Set og:title, og:description, og:image, and twitter:card for optimal social sharing."
+            compact={compact}
+          />
 
           {/* Open Graph */}
           <OpenGraphSection
@@ -178,9 +186,13 @@ export function MetadataViewer({
 
       {/* Technical Meta Tags Section */}
       <div className="border-t pt-4">
-        <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-          Technical Meta Tags
-        </h4>
+        <SectionHeaderWithTooltip
+          title="Technical Meta Tags"
+          description="Tags that control page rendering, character encoding, and browser behavior."
+          bestPractice="Always include viewport and charset. Set language for accessibility and SEO."
+          compact={compact}
+          className="mb-3"
+        />
 
         {/* Primary Technical Fields - 4 columns */}
         <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
@@ -200,7 +212,7 @@ export function MetadataViewer({
         {/* Hreflang Tags - full width if present */}
         {data.hreflang && data.hreflang.length > 0 && (
           <div className="mt-3 text-xs">
-            <span className="text-neutral-500">Hreflang Tags ({data.hreflang.length})</span>
+            <MetaFieldLabel fieldKey="hreflang" label={`Hreflang Tags (${data.hreflang.length})`} size="xs" variant="muted" />
             <div className="mt-1 space-y-1 max-h-24 overflow-y-auto bg-white/80 p-2 rounded border">
               {data.hreflang.map((entry, idx) => (
                 <div key={idx} className="flex items-center gap-2">
@@ -274,6 +286,7 @@ export function MetadataViewer({
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -313,7 +326,7 @@ function TechnicalField({
           <BadgeIcon className="h-2 w-2" />
         </div>
       </div>
-      <span className="text-neutral-600 text-[10px]">{label}</span>
+      <MetaFieldLabel fieldKey={fieldName} label={label} size="xs" variant="muted" />
       <p className={`font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
       </p>
@@ -350,7 +363,7 @@ function ThemeColorField({ value, diff }: { value?: string; diff?: FieldDiff }) 
           <BadgeIcon className="h-2 w-2" />
         </div>
       </div>
-      <span className="text-neutral-600 text-[10px]">Theme Color</span>
+      <MetaFieldLabel fieldKey="themeColor" label="Theme Color" size="xs" variant="muted" />
       {value ? (
         <div className={`flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5 ${fieldBorder}`}>
           <div
@@ -405,7 +418,7 @@ function FaviconField({ value, url, diff }: { value?: string; url: string; diff?
           <BadgeIcon className="h-2 w-2" />
         </div>
       </div>
-      <span className="text-neutral-600 text-[10px]">Favicon</span>
+      <MetaFieldLabel fieldKey="favicon" label="Favicon" size="xs" variant="muted" />
       {value ? (
         <div className={`flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5 ${fieldBorder}`}>
           <img
@@ -476,7 +489,7 @@ function MetaField({
         </div>
       </div>
       <div className="flex items-center justify-between mb-1">
-        <span className={`text-neutral-700 font-medium ${compact ? 'text-[10px]' : 'text-xs'}`}>{label}</span>
+        <MetaFieldLabel fieldKey={fieldName} label={label} size={compact ? 'xs' : 'sm'} />
         {maxLength && (
           <span className={`text-[10px] ${(value?.length || 0) > maxLength ? 'text-red-500' : 'text-neutral-400'}`}>
             {value?.length || 0}/{maxLength}
@@ -527,7 +540,7 @@ function OgField({
     <div className="text-[10px]">
       <div className="flex items-center gap-1">
         <StatusIcon className={`h-2.5 w-2.5 ${statusColors[status]}`} />
-        <span className="text-neutral-500">{label}</span>
+        <MetaFieldLabel fieldKey={fieldName} label={label} size="xs" variant="muted" />
       </div>
       <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'} ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
@@ -590,7 +603,7 @@ function OpenGraphSection({
           <span>{sectionStatus === 'success' ? 'Good' : sectionStatus === 'error' ? 'Error' : 'Warning'}</span>
         </div>
       </div>
-      <span className={`text-neutral-700 font-medium ${compact ? 'text-[10px]' : 'text-xs'}`}>Open Graph</span>
+      <MetaFieldLabel fieldKey="og:title" label="Open Graph" size={compact ? 'xs' : 'sm'} />
 
       <div className="mt-2 space-y-2">
         {/* Image preview if present */}
@@ -692,7 +705,7 @@ function TwitterField({
     <div className="text-[10px]">
       <div className="flex items-center gap-1">
         <StatusIcon className={`h-2.5 w-2.5 ${statusColors[status]}`} />
-        <span className="text-neutral-500">{label}</span>
+        <MetaFieldLabel fieldKey={fieldName} label={label} size="xs" variant="muted" />
       </div>
       <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'} ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
@@ -755,7 +768,7 @@ function TwitterCardSection({
           <span>{sectionStatus === 'success' ? 'Good' : sectionStatus === 'error' ? 'Error' : 'Warning'}</span>
         </div>
       </div>
-      <span className={`text-neutral-700 font-medium ${compact ? 'text-[10px]' : 'text-xs'}`}>Twitter Card</span>
+      <MetaFieldLabel fieldKey="twitter:card" label="Twitter Card" size={compact ? 'xs' : 'sm'} />
 
       <div className="mt-2 space-y-2">
         {/* Image preview if present */}
@@ -816,26 +829,30 @@ function StructuredDataSection({
 
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Structured Data (JSON-LD)
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Structured Data (JSON-LD)"
+        description="Machine-readable data that helps search engines understand your content and display rich results."
+        bestPractice="Use Schema.org types. Validate with Google's Rich Results Test."
+        compact={compact}
+        className="mb-3"
+      />
       <div className={`rounded-lg border-2 p-3 ${statusStyles[status]}`}>
         <div className="grid gap-2 grid-cols-2 md:grid-cols-4 text-xs">
           <div>
-            <span className="text-neutral-500">Found</span>
+            <MetaFieldLabel fieldKey="structuredData:found" label="Found" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5">
               {structuredData.found ? 'Yes' : 'No'}
             </p>
           </div>
           <div>
-            <span className="text-neutral-500">Valid JSON</span>
+            <MetaFieldLabel fieldKey="structuredData:isValidJson" label="Valid JSON" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5">
               {structuredData.isValidJson ? 'Yes' : 'No'}
             </p>
           </div>
           {structuredData.types.length > 0 && (
             <div className="col-span-2">
-              <span className="text-neutral-500">Schema Types</span>
+              <MetaFieldLabel fieldKey="structuredData:types" label="Schema Types" size="xs" variant="muted" />
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {structuredData.types.map((type, idx) => (
                   <Badge key={idx} variant="secondary" className="font-mono text-[10px]">
@@ -846,11 +863,11 @@ function StructuredDataSection({
             </div>
           )}
         </div>
-        {structuredData.errors.length > 0 && (
+        {structuredData.validationErrors.length > 0 && (
           <div className="mt-2 text-xs">
             <span className="text-red-600">Errors:</span>
             <ul className="list-disc list-inside text-red-600 mt-1">
-              {structuredData.errors.map((error, idx) => (
+              {structuredData.validationErrors.map((error, idx) => (
                 <li key={idx} className="truncate" title={error}>{error}</li>
               ))}
             </ul>
@@ -873,14 +890,18 @@ function TechnicalSeoSection({
 
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Technical SEO
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Technical SEO"
+        description="Robots directives, pagination, and other technical signals that affect search engine crawling."
+        bestPractice="Ensure robots directives match your indexing intentions."
+        compact={compact}
+        className="mb-3"
+      />
       <div className="space-y-3">
         {/* Robots Directives */}
         {directives && (
           <div className="text-xs">
-            <span className="text-neutral-500">Robots Directives</span>
+            <MetaFieldLabel fieldKey="robots" label="Robots Directives" size="xs" variant="muted" />
             <div className="flex flex-wrap gap-1.5 mt-1">
               {directives.index !== undefined && (
                 <Badge variant={directives.index ? 'default' : 'destructive'} className="text-[10px]">
@@ -913,7 +934,7 @@ function TechnicalSeoSection({
           <div className="grid grid-cols-2 gap-2 text-xs">
             {technicalSeo.prevUrl && (
               <div>
-                <span className="text-neutral-500">Previous Page</span>
+                <MetaFieldLabel fieldKey="prevUrl" label="Previous Page" size="xs" variant="muted" />
                 <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={technicalSeo.prevUrl}>
                   {technicalSeo.prevUrl}
                 </p>
@@ -921,7 +942,7 @@ function TechnicalSeoSection({
             )}
             {technicalSeo.nextUrl && (
               <div>
-                <span className="text-neutral-500">Next Page</span>
+                <MetaFieldLabel fieldKey="nextUrl" label="Next Page" size="xs" variant="muted" />
                 <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={technicalSeo.nextUrl}>
                   {technicalSeo.nextUrl}
                 </p>
@@ -934,7 +955,7 @@ function TechnicalSeoSection({
         <div className={`grid gap-2 ${compact ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {technicalSeo.keywords && (
             <div className="text-xs">
-              <span className="text-neutral-500">Keywords</span>
+              <MetaFieldLabel fieldKey="keywords" label="Keywords" size="xs" variant="muted" />
               <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 line-clamp-2" title={technicalSeo.keywords}>
                 {technicalSeo.keywords}
               </p>
@@ -942,7 +963,7 @@ function TechnicalSeoSection({
           )}
           {technicalSeo.generator && (
             <div className="text-xs">
-              <span className="text-neutral-500">Generator</span>
+              <MetaFieldLabel fieldKey="generator" label="Generator" size="xs" variant="muted" />
               <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={technicalSeo.generator}>
                 {technicalSeo.generator}
               </p>
@@ -974,9 +995,13 @@ function SiteVerificationSection({
 
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Site Verification
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Site Verification"
+        description="Verification codes for search engine and social platform webmaster tools."
+        bestPractice="Add verification codes for Google Search Console and Bing Webmaster Tools."
+        compact={compact}
+        className="mb-3"
+      />
       <div className="flex flex-wrap gap-2">
         {verifications.map(({ name }) => (
           <div key={name} className="text-xs">
@@ -1001,28 +1026,32 @@ function MobileSection({
 }) {
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Mobile / PWA
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Mobile / PWA"
+        description="Progressive Web App settings and mobile device configurations."
+        bestPractice="Include manifest.json and Apple touch icons for installable app experience."
+        compact={compact}
+        className="mb-3"
+      />
       <div className="space-y-3">
         {/* Apple Web App Settings */}
         {(mobile.appleWebAppCapable || mobile.appleWebAppTitle || mobile.appleWebAppStatusBarStyle) && (
           <div className={`grid gap-2 text-xs ${compact ? 'grid-cols-1' : 'grid-cols-3'}`}>
             {mobile.appleWebAppCapable && (
               <div>
-                <span className="text-neutral-500">Apple Web App Capable</span>
+                <MetaFieldLabel fieldKey="apple:webAppCapable" label="Apple Web App Capable" size="xs" variant="muted" />
                 <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5">{mobile.appleWebAppCapable}</p>
               </div>
             )}
             {mobile.appleWebAppTitle && (
               <div>
-                <span className="text-neutral-500">Apple Web App Title</span>
+                <MetaFieldLabel fieldKey="apple:webAppTitle" label="Apple Web App Title" size="xs" variant="muted" />
                 <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate">{mobile.appleWebAppTitle}</p>
               </div>
             )}
             {mobile.appleWebAppStatusBarStyle && (
               <div>
-                <span className="text-neutral-500">Status Bar Style</span>
+                <MetaFieldLabel fieldKey="apple:webAppStatusBarStyle" label="Status Bar Style" size="xs" variant="muted" />
                 <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5">{mobile.appleWebAppStatusBarStyle}</p>
               </div>
             )}
@@ -1032,7 +1061,7 @@ function MobileSection({
         {/* Manifest */}
         {mobile.manifest && (
           <div className="text-xs">
-            <span className="text-neutral-500">Web App Manifest</span>
+            <MetaFieldLabel fieldKey="manifest" label="Web App Manifest" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate" title={mobile.manifest}>
               {mobile.manifest}
             </p>
@@ -1042,7 +1071,7 @@ function MobileSection({
         {/* Apple Touch Icons */}
         {mobile.appleTouchIcons && mobile.appleTouchIcons.length > 0 && (
           <div className="text-xs">
-            <span className="text-neutral-500">Apple Touch Icons ({mobile.appleTouchIcons.length})</span>
+            <MetaFieldLabel fieldKey="apple:touchIcon" label={`Apple Touch Icons (${mobile.appleTouchIcons.length})`} size="xs" variant="muted" />
             <div className="flex flex-wrap gap-2 mt-1">
               {mobile.appleTouchIcons.map((icon, idx) => (
                 <div key={idx} className="flex items-center gap-1 bg-white/80 p-1 rounded border">
@@ -1073,25 +1102,29 @@ function SecuritySection({
 }) {
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Security
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Security"
+        description="Security-related meta tags that control browser behavior and content policies."
+        bestPractice="Set appropriate referrer policy and CSP for your security requirements."
+        compact={compact}
+        className="mb-3"
+      />
       <div className={`grid gap-2 text-xs ${compact ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3'}`}>
         {security.referrerPolicy && (
           <div>
-            <span className="text-neutral-500">Referrer Policy</span>
+            <MetaFieldLabel fieldKey="referrerPolicy" label="Referrer Policy" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate">{security.referrerPolicy}</p>
           </div>
         )}
         {security.xUaCompatible && (
           <div>
-            <span className="text-neutral-500">X-UA-Compatible</span>
+            <MetaFieldLabel fieldKey="xUaCompatible" label="X-UA-Compatible" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 truncate">{security.xUaCompatible}</p>
           </div>
         )}
         {security.contentSecurityPolicy && (
           <div className="col-span-full">
-            <span className="text-neutral-500">Content Security Policy</span>
+            <MetaFieldLabel fieldKey="contentSecurityPolicy" label="Content Security Policy" size="xs" variant="muted" />
             <p className="font-mono bg-white/80 p-1.5 rounded border mt-0.5 line-clamp-2" title={security.contentSecurityPolicy}>
               {security.contentSecurityPolicy}
             </p>
@@ -1112,9 +1145,13 @@ function ImageValidationSection({
 }) {
   return (
     <div className="border-t pt-4">
-      <h4 className={`font-medium text-neutral-700 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
-        Image Validation
-      </h4>
+      <SectionHeaderWithTooltip
+        title="Image Validation"
+        description="Verification that social sharing images are accessible and properly served."
+        bestPractice="Ensure images return 200 status and correct MIME types."
+        compact={compact}
+        className="mb-3"
+      />
       <div className={`grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-2'}`}>
         {imageValidation.ogImage && (
           <div className={`rounded-lg border-2 p-2 ${imageValidation.ogImage.exists ? 'border-green-300 bg-green-50/50' : 'border-red-300 bg-red-50/50'}`}>
@@ -1124,7 +1161,7 @@ function ImageValidationSection({
               ) : (
                 <AlertCircle className="h-4 w-4 text-red-600" />
               )}
-              <span className="font-medium">OG Image</span>
+              <MetaFieldLabel fieldKey="imageValidation:ogImage" label="OG Image" size="xs" />
               {imageValidation.ogImage.statusCode && (
                 <Badge variant={imageValidation.ogImage.exists ? 'default' : 'destructive'} className="text-[10px]">
                   {imageValidation.ogImage.statusCode}
@@ -1149,7 +1186,7 @@ function ImageValidationSection({
               ) : (
                 <AlertCircle className="h-4 w-4 text-red-600" />
               )}
-              <span className="font-medium">Twitter Image</span>
+              <MetaFieldLabel fieldKey="imageValidation:twitterImage" label="Twitter Image" size="xs" />
               {imageValidation.twitterImage.statusCode && (
                 <Badge variant={imageValidation.twitterImage.exists ? 'default' : 'destructive'} className="text-[10px]">
                   {imageValidation.twitterImage.statusCode}

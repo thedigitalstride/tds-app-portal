@@ -47,7 +47,7 @@ interface StructuredData {
   found: boolean;
   isValidJson: boolean;
   types: string[];
-  errors: string[];
+  validationErrors: string[];
 }
 
 // Technical SEO interfaces

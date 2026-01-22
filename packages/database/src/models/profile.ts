@@ -43,7 +43,6 @@ const profileSchema = new Schema<IProfile>(
   }
 );
 
-profileSchema.index({ name: 1 });
 profileSchema.index({ isDefault: 1 });
 
 export const Profile: Model<IProfile> =
