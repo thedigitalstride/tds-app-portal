@@ -1,8 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { connectDB, PendingScan, MetaTagAnalysis } from '@tds/database';
+import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
 
 export const dynamic = 'force-dynamic';
+
+// Extended Open Graph interfaces
+interface OpenGraphImage {
+  alt?: string;
+  width?: number;
+  height?: number;
+  type?: string;
+}
+
+interface OpenGraphArticle {
+  publishedTime?: string;
+  modifiedTime?: string;
+  author?: string;
+  section?: string;
+  tags?: string[];
+}
+
+// Extended Twitter interfaces
+interface TwitterPlayer {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface TwitterApp {
+  nameIphone?: string;
+  idIphone?: string;
+  urlIphone?: string;
+  nameAndroid?: string;
+  idAndroid?: string;
+  urlAndroid?: string;
+}
+
+// Structured Data interface
+interface StructuredData {
+  found: boolean;
+  isValidJson: boolean;
+  types: string[];
+  errors: string[];
+}
+
+// Technical SEO interfaces
+interface RobotsDirectives {
+  index?: boolean;
+  follow?: boolean;
+  noarchive?: boolean;
+  nosnippet?: boolean;
+  maxSnippet?: number;
+  maxImagePreview?: string;
+  maxVideoPreview?: number;
+}
+
+interface TechnicalSeo {
+  robotsDirectives?: RobotsDirectives;
+  prevUrl?: string;
+  nextUrl?: string;
+  keywords?: string;
+  generator?: string;
+}
+
+// Site Verification interface
+interface SiteVerification {
+  google?: string;
+  bing?: string;
+  pinterest?: string;
+  facebook?: string;
+  yandex?: string;
+}
+
+// Mobile/PWA interfaces
+interface AppleTouchIcon {
+  href: string;
+  sizes?: string;
+}
+
+interface Mobile {
+  appleWebAppCapable?: string;
+  appleWebAppStatusBarStyle?: string;
+  appleWebAppTitle?: string;
+  appleTouchIcons?: AppleTouchIcon[];
+  manifest?: string;
+  formatDetection?: string;
+}
+
+// Security interface
+interface Security {
+  referrerPolicy?: string;
+  contentSecurityPolicy?: string;
+  xUaCompatible?: string;
+}
+
+// Image Validation interface
+interface ImageValidation {
+  url: string;
+  exists: boolean;
+  statusCode?: number;
+  contentType?: string;
+  error?: string;
+}
 
 interface MetaTagResult {
   url: string;
@@ -24,6 +124,11 @@ interface MetaTagResult {
     url?: string;
     type?: string;
     siteName?: string;
+    imageDetails?: OpenGraphImage;
+    locale?: string;
+    localeAlternate?: string[];
+    article?: OpenGraphArticle;
+    fbAppId?: string;
   };
   twitter: {
     card?: string;
@@ -31,6 +136,19 @@ interface MetaTagResult {
     description?: string;
     image?: string;
     site?: string;
+    creator?: string;
+    imageAlt?: string;
+    player?: TwitterPlayer;
+    app?: TwitterApp;
+  };
+  structuredData?: StructuredData;
+  technicalSeo?: TechnicalSeo;
+  siteVerification?: SiteVerification;
+  mobile?: Mobile;
+  security?: Security;
+  imageValidation?: {
+    ogImage?: ImageValidation;
+    twitterImage?: ImageValidation;
   };
 }
 
@@ -75,6 +193,110 @@ function decodeHtmlEntities(text: string): string {
   return decoded;
 }
 
+// Helper to get all values for a meta tag
+function getAllMetaContent(html: string, name: string): string[] {
+  const values: string[] = [];
+  const regex = new RegExp(
+    `<meta[^>]*(?:name|property)=["']${name}["'][^>]*content=["']([^"']*)["']|<meta[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["']${name}["']`,
+    'gi'
+  );
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    const value = match[1] || match[2];
+    if (value) values.push(decodeHtmlEntities(value));
+  }
+  return values;
+}
+
+// Extract JSON-LD structured data
+function extractStructuredData(html: string): StructuredData {
+  const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  const types: string[] = [];
+  const errors: string[] = [];
+  let isValidJson = true;
+
+  scripts.forEach((script) => {
+    const content = script.replace(/<script[^>]*>|<\/script>/gi, '').trim();
+    try {
+      const json = JSON.parse(content);
+      if (json['@type']) types.push(json['@type']);
+      if (Array.isArray(json['@graph'])) {
+        json['@graph'].forEach((item: { '@type'?: string }) => {
+          if (item['@type']) types.push(item['@type']);
+        });
+      }
+    } catch (e) {
+      isValidJson = false;
+      errors.push(e instanceof Error ? e.message : 'Invalid JSON');
+    }
+  });
+
+  return {
+    found: scripts.length > 0,
+    isValidJson: scripts.length === 0 || isValidJson,
+    types: [...new Set(types)],
+    errors,
+  };
+}
+
+// Parse robots meta tag into individual directives
+function parseRobotsDirectives(robotsContent: string): RobotsDirectives | undefined {
+  if (!robotsContent) return undefined;
+
+  const directives: RobotsDirectives = {};
+  const lower = robotsContent.toLowerCase();
+
+  if (lower.includes('noindex')) directives.index = false;
+  else if (lower.includes('index')) directives.index = true;
+
+  if (lower.includes('nofollow')) directives.follow = false;
+  else if (lower.includes('follow')) directives.follow = true;
+
+  if (lower.includes('noarchive')) directives.noarchive = true;
+  if (lower.includes('nosnippet')) directives.nosnippet = true;
+
+  const maxSnippetMatch = robotsContent.match(/max-snippet:\s*(-?\d+)/i);
+  if (maxSnippetMatch) directives.maxSnippet = parseInt(maxSnippetMatch[1], 10);
+
+  const maxImageMatch = robotsContent.match(/max-image-preview:\s*(\w+)/i);
+  if (maxImageMatch) directives.maxImagePreview = maxImageMatch[1];
+
+  return Object.keys(directives).length > 0 ? directives : undefined;
+}
+
+// Validate an image URL
+async function validateImageUrl(imageUrl: string): Promise<ImageValidation> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(imageUrl, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'TDS Meta Tag Analyser/1.0' },
+    });
+
+    clearTimeout(timeoutId);
+
+    return {
+      url: imageUrl,
+      exists: response.ok,
+      statusCode: response.status,
+      contentType: response.headers.get('content-type') || undefined,
+    };
+  } catch (e) {
+    return {
+      url: imageUrl,
+      exists: false,
+      error: e instanceof Error ? e.message : 'Failed to validate',
+    };
+  }
+}
+
+// Check if object has any values
+const hasValue = <T extends object>(obj: T): boolean =>
+  Object.values(obj).some(v => v !== undefined);
+
 // Analyze a single URL
 async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues: AnalysisIssue[] }> {
   const response = await fetch(url, {
@@ -117,30 +339,180 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
     return match ? match[1] : '';
   };
 
+  const getCharset = (): string => {
+    const charsetMatch = html.match(/<meta[^>]*charset=["']([^"']*)["']/i);
+    if (charsetMatch) return charsetMatch[1];
+    const httpEquivMatch = html.match(/<meta[^>]*http-equiv=["']Content-Type["'][^>]*content=["'][^"']*charset=([^"'\s;]+)/i);
+    return httpEquivMatch ? httpEquivMatch[1] : '';
+  };
+
+  const getLanguage = (): string => {
+    const match = html.match(/<html[^>]*lang=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  const getFavicon = (): string => {
+    const iconMatch = html.match(/<link[^>]*rel=["'](?:icon|shortcut icon)["'][^>]*href=["']([^"']*)["']/i) ||
+      html.match(/<link[^>]*href=["']([^"']*)["'][^>]*rel=["'](?:icon|shortcut icon)["']/i);
+    return iconMatch ? iconMatch[1] : '';
+  };
+
+  const getHreflang = (): Array<{ lang: string; url: string }> => {
+    const entries: Array<{ lang: string; url: string }> = [];
+    const regex = /<link[^>]*rel=["']alternate["'][^>]*hreflang=["']([^"']*)["'][^>]*href=["']([^"']*)["']/gi;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      entries.push({ lang: match[1], url: match[2] });
+    }
+    return entries;
+  };
+
+  const getPrevUrl = (): string => {
+    const match = html.match(/<link[^>]*rel=["']prev["'][^>]*href=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  const getNextUrl = (): string => {
+    const match = html.match(/<link[^>]*rel=["']next["'][^>]*href=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  const getManifest = (): string => {
+    const match = html.match(/<link[^>]*rel=["']manifest["'][^>]*href=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  const getAppleTouchIcons = (): AppleTouchIcon[] => {
+    const icons: AppleTouchIcon[] = [];
+    const regex = /<link[^>]*rel=["']apple-touch-icon[^"']*["'][^>]*href=["']([^"']*)["'](?:[^>]*sizes=["']([^"']*)["'])?/gi;
+    let iconMatch;
+    while ((iconMatch = regex.exec(html)) !== null) {
+      icons.push({ href: iconMatch[1], sizes: iconMatch[2] || undefined });
+    }
+    return icons;
+  };
+
+  const robotsContent = getMetaContent('robots');
+  const ogImage = getMetaContent('og:image');
+  const twitterImage = getMetaContent('twitter:image');
+  const hreflangEntries = getHreflang();
+
+  // Validate images in parallel
+  const [ogImageValidation, twitterImageValidation] = await Promise.all([
+    ogImage ? validateImageUrl(ogImage) : Promise.resolve(undefined),
+    twitterImage && twitterImage !== ogImage ? validateImageUrl(twitterImage) : Promise.resolve(undefined),
+  ]);
+
+  // Build extended data
+  const structuredData = extractStructuredData(html);
+
+  const ogImageWidth = getMetaContent('og:image:width');
+  const ogImageHeight = getMetaContent('og:image:height');
+  const ogImageDetails: OpenGraphImage | undefined = (
+    getMetaContent('og:image:alt') || ogImageWidth || ogImageHeight
+  ) ? {
+    alt: getMetaContent('og:image:alt') || undefined,
+    width: ogImageWidth ? parseInt(ogImageWidth, 10) : undefined,
+    height: ogImageHeight ? parseInt(ogImageHeight, 10) : undefined,
+    type: getMetaContent('og:image:type') || undefined,
+  } : undefined;
+
+  const articleTags = getAllMetaContent(html, 'og:article:tag');
+  const ogArticle: OpenGraphArticle | undefined = (
+    getMetaContent('og:article:published_time') || getMetaContent('og:article:author')
+  ) ? {
+    publishedTime: getMetaContent('og:article:published_time') || undefined,
+    modifiedTime: getMetaContent('og:article:modified_time') || undefined,
+    author: getMetaContent('og:article:author') || undefined,
+    section: getMetaContent('og:article:section') || undefined,
+    tags: articleTags.length > 0 ? articleTags : undefined,
+  } : undefined;
+
+  const twitterPlayerUrl = getMetaContent('twitter:player');
+  const twitterPlayer: TwitterPlayer | undefined = twitterPlayerUrl ? {
+    url: twitterPlayerUrl,
+    width: parseInt(getMetaContent('twitter:player:width'), 10) || undefined,
+    height: parseInt(getMetaContent('twitter:player:height'), 10) || undefined,
+  } : undefined;
+
+  const technicalSeo: TechnicalSeo = {
+    robotsDirectives: parseRobotsDirectives(robotsContent),
+    prevUrl: getPrevUrl() || undefined,
+    nextUrl: getNextUrl() || undefined,
+    keywords: getMetaContent('keywords') || undefined,
+    generator: getMetaContent('generator') || undefined,
+  };
+
+  const siteVerification: SiteVerification = {
+    google: getMetaContent('google-site-verification') || undefined,
+    bing: getMetaContent('msvalidate.01') || undefined,
+    pinterest: getMetaContent('p:domain_verify') || undefined,
+    facebook: getMetaContent('facebook-domain-verification') || undefined,
+    yandex: getMetaContent('yandex-verification') || undefined,
+  };
+
+  const appleTouchIcons = getAppleTouchIcons();
+  const mobile: Mobile = {
+    appleWebAppCapable: getMetaContent('apple-mobile-web-app-capable') || undefined,
+    appleWebAppStatusBarStyle: getMetaContent('apple-mobile-web-app-status-bar-style') || undefined,
+    appleWebAppTitle: getMetaContent('apple-mobile-web-app-title') || undefined,
+    appleTouchIcons: appleTouchIcons.length > 0 ? appleTouchIcons : undefined,
+    manifest: getManifest() || undefined,
+    formatDetection: getMetaContent('format-detection') || undefined,
+  };
+
+  const security: Security = {
+    referrerPolicy: getMetaContent('referrer') || undefined,
+    contentSecurityPolicy: getMetaContent('content-security-policy') || undefined,
+    xUaCompatible: getMetaContent('x-ua-compatible') || undefined,
+  };
+
   const result: MetaTagResult = {
     url,
     title: getTitle(),
     description: getMetaContent('description'),
     canonical: getCanonical(),
-    robots: getMetaContent('robots'),
+    robots: robotsContent,
     viewport: getMetaContent('viewport'),
-    charset: getMetaContent('charset'),
+    charset: getCharset(),
     author: getMetaContent('author'),
+    themeColor: getMetaContent('theme-color'),
+    language: getLanguage(),
+    favicon: getFavicon(),
+    hreflang: hreflangEntries.length > 0 ? hreflangEntries : undefined,
     openGraph: {
       title: getMetaContent('og:title'),
       description: getMetaContent('og:description'),
-      image: getMetaContent('og:image'),
+      image: ogImage,
       url: getMetaContent('og:url'),
       type: getMetaContent('og:type'),
       siteName: getMetaContent('og:site_name'),
+      imageDetails: ogImageDetails,
+      locale: getMetaContent('og:locale') || undefined,
+      localeAlternate: getAllMetaContent(html, 'og:locale:alternate').length > 0
+        ? getAllMetaContent(html, 'og:locale:alternate') : undefined,
+      article: ogArticle,
+      fbAppId: getMetaContent('fb:app_id') || undefined,
     },
     twitter: {
       card: getMetaContent('twitter:card'),
       title: getMetaContent('twitter:title'),
       description: getMetaContent('twitter:description'),
-      image: getMetaContent('twitter:image'),
+      image: twitterImage,
       site: getMetaContent('twitter:site'),
+      creator: getMetaContent('twitter:creator') || undefined,
+      imageAlt: getMetaContent('twitter:image:alt') || undefined,
+      player: twitterPlayer,
     },
+    structuredData: structuredData.found ? structuredData : undefined,
+    technicalSeo: hasValue(technicalSeo) ? technicalSeo : undefined,
+    siteVerification: hasValue(siteVerification) ? siteVerification : undefined,
+    mobile: hasValue(mobile) ? mobile : undefined,
+    security: hasValue(security) ? security : undefined,
+    imageValidation: (ogImageValidation || twitterImageValidation) ? {
+      ogImage: ogImageValidation,
+      twitterImage: twitterImageValidation,
+    } : undefined,
   };
 
   // Analyze for issues
@@ -173,22 +545,16 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
   return { result, issues };
 }
 
-// Calculate score from issues
-function calculateScore(issues: AnalysisIssue[]): number {
-  const errorCount = issues?.filter(i => i.type === 'error').length || 0;
-  const warningCount = issues?.filter(i => i.type === 'warning').length || 0;
-  return Math.max(0, 100 - (errorCount * 20) - (warningCount * 10));
-}
-
 // Upsert analysis result
 async function upsertAnalysis(
   clientId: string,
   result: MetaTagResult,
   issues: AnalysisIssue[],
   userId: string
-): Promise<{ isUpdate: boolean }> {
+): Promise<{ isUpdate: boolean; score: number }> {
   const now = new Date();
-  const score = calculateScore(issues);
+  // Use new severity-based scoring algorithm
+  const { score, categoryScores } = calculateScore(result, issues);
 
   const existingAnalysis = await MetaTagAnalysis.findOne({
     clientId,
@@ -206,6 +572,7 @@ async function upsertAnalysis(
       scannedAt: now,
       scannedBy: userId,
       score: existingAnalysis.score,
+      categoryScores: existingAnalysis.categoryScores,
       changesDetected,
       snapshot: {
         title: existingAnalysis.title || '',
@@ -219,21 +586,14 @@ async function upsertAnalysis(
         language: existingAnalysis.language,
         favicon: existingAnalysis.favicon,
         hreflang: existingAnalysis.hreflang,
-        openGraph: existingAnalysis.openGraph ? {
-          title: existingAnalysis.openGraph.title,
-          description: existingAnalysis.openGraph.description,
-          image: existingAnalysis.openGraph.image,
-          url: existingAnalysis.openGraph.url,
-          type: existingAnalysis.openGraph.type,
-          siteName: existingAnalysis.openGraph.siteName,
-        } : undefined,
-        twitter: existingAnalysis.twitter ? {
-          card: existingAnalysis.twitter.card,
-          title: existingAnalysis.twitter.title,
-          description: existingAnalysis.twitter.description,
-          image: existingAnalysis.twitter.image,
-          site: existingAnalysis.twitter.site,
-        } : undefined,
+        openGraph: existingAnalysis.openGraph,
+        twitter: existingAnalysis.twitter,
+        structuredData: existingAnalysis.structuredData,
+        technicalSeo: existingAnalysis.technicalSeo,
+        siteVerification: existingAnalysis.siteVerification,
+        mobile: existingAnalysis.mobile,
+        security: existingAnalysis.security,
+        imageValidation: existingAnalysis.imageValidation,
         issues: existingAnalysis.issues || [],
       },
       previousTitle: existingAnalysis.title,
@@ -251,10 +611,21 @@ async function upsertAnalysis(
           viewport: result.viewport,
           charset: result.charset,
           author: result.author,
+          themeColor: result.themeColor,
+          language: result.language,
+          favicon: result.favicon,
+          hreflang: result.hreflang,
           openGraph: result.openGraph,
           twitter: result.twitter,
+          structuredData: result.structuredData,
+          technicalSeo: result.technicalSeo,
+          siteVerification: result.siteVerification,
+          mobile: result.mobile,
+          security: result.security,
+          imageValidation: result.imageValidation,
           issues,
           score,
+          categoryScores,
           lastScannedAt: now,
           lastScannedBy: userId,
         },
@@ -269,7 +640,7 @@ async function upsertAnalysis(
       { new: true }
     );
 
-    return { isUpdate: true };
+    return { isUpdate: true, score };
   }
 
   await MetaTagAnalysis.create({
@@ -282,10 +653,21 @@ async function upsertAnalysis(
     viewport: result.viewport,
     charset: result.charset,
     author: result.author,
+    themeColor: result.themeColor,
+    language: result.language,
+    favicon: result.favicon,
+    hreflang: result.hreflang,
     openGraph: result.openGraph,
     twitter: result.twitter,
+    structuredData: result.structuredData,
+    technicalSeo: result.technicalSeo,
+    siteVerification: result.siteVerification,
+    mobile: result.mobile,
+    security: result.security,
+    imageValidation: result.imageValidation,
     issues,
     score,
+    categoryScores,
     analyzedBy: userId,
     analyzedAt: now,
     scanCount: 1,
@@ -294,7 +676,7 @@ async function upsertAnalysis(
     scanHistory: [],
   });
 
-  return { isUpdate: false };
+  return { isUpdate: false, score };
 }
 
 const MAX_RETRIES = 3;
@@ -355,10 +737,9 @@ export async function POST(request: NextRequest) {
     for (const pendingUrl of pendingUrls) {
       try {
         const { result, issues } = await analyzeUrl(pendingUrl.url);
-        const score = calculateScore(issues);
 
-        // Auto-save to MetaTagAnalysis
-        await upsertAnalysis(clientId, result, issues, session.user.id);
+        // Auto-save to MetaTagAnalysis (score is calculated by upsertAnalysis)
+        const { score } = await upsertAnalysis(clientId, result, issues, session.user.id);
 
         // Mark as completed
         await PendingScan.findByIdAndUpdate(pendingUrl._id, {

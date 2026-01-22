@@ -25,16 +25,12 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get or create user permissions
-    let permissions = await UserPermissions.findOne({ userId });
-    if (!permissions) {
-      permissions = await UserPermissions.create({
-        userId,
-        profileIds: [],
-        grantedTools: [],
-        revokedTools: [],
-      });
-    }
+    // Get or create user permissions (atomic upsert to avoid race conditions)
+    const permissions = await UserPermissions.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { profileIds: [], grantedTools: [], revokedTools: [] } },
+      { new: true, upsert: true }
+    );
 
     // Get assigned profiles
     const profiles = await Profile.find({ _id: { $in: permissions.profileIds } });

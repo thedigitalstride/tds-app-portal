@@ -1,12 +1,112 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { connectDB, MetaTagAnalysis } from '@tds/database';
+import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
 
 export const dynamic = 'force-dynamic';
 
 interface HreflangEntry {
   lang: string;
   url: string;
+}
+
+// Extended Open Graph interfaces
+interface OpenGraphImage {
+  alt?: string;
+  width?: number;
+  height?: number;
+  type?: string;
+}
+
+interface OpenGraphArticle {
+  publishedTime?: string;
+  modifiedTime?: string;
+  author?: string;
+  section?: string;
+  tags?: string[];
+}
+
+// Extended Twitter interfaces
+interface TwitterPlayer {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface TwitterApp {
+  nameIphone?: string;
+  idIphone?: string;
+  urlIphone?: string;
+  nameAndroid?: string;
+  idAndroid?: string;
+  urlAndroid?: string;
+}
+
+// Structured Data interface
+interface StructuredData {
+  found: boolean;
+  isValidJson: boolean;
+  types: string[];
+  errors: string[];
+}
+
+// Technical SEO interfaces
+interface RobotsDirectives {
+  index?: boolean;
+  follow?: boolean;
+  noarchive?: boolean;
+  nosnippet?: boolean;
+  maxSnippet?: number;
+  maxImagePreview?: string;
+  maxVideoPreview?: number;
+}
+
+interface TechnicalSeo {
+  robotsDirectives?: RobotsDirectives;
+  prevUrl?: string;
+  nextUrl?: string;
+  keywords?: string;
+  generator?: string;
+}
+
+// Site Verification interface
+interface SiteVerification {
+  google?: string;
+  bing?: string;
+  pinterest?: string;
+  facebook?: string;
+  yandex?: string;
+}
+
+// Mobile/PWA interfaces
+interface AppleTouchIcon {
+  href: string;
+  sizes?: string;
+}
+
+interface Mobile {
+  appleWebAppCapable?: string;
+  appleWebAppStatusBarStyle?: string;
+  appleWebAppTitle?: string;
+  appleTouchIcons?: AppleTouchIcon[];
+  manifest?: string;
+  formatDetection?: string;
+}
+
+// Security interface
+interface Security {
+  referrerPolicy?: string;
+  contentSecurityPolicy?: string;
+  xUaCompatible?: string;
+}
+
+// Image Validation interface
+interface ImageValidation {
+  url: string;
+  exists: boolean;
+  statusCode?: number;
+  contentType?: string;
+  error?: string;
 }
 
 interface ScanResult {
@@ -31,6 +131,11 @@ interface ScanResult {
     url?: string;
     type?: string;
     siteName?: string;
+    imageDetails?: OpenGraphImage;
+    locale?: string;
+    localeAlternate?: string[];
+    article?: OpenGraphArticle;
+    fbAppId?: string;
   };
   twitter: {
     card?: string;
@@ -38,6 +143,20 @@ interface ScanResult {
     description?: string;
     image?: string;
     site?: string;
+    creator?: string;
+    imageAlt?: string;
+    player?: TwitterPlayer;
+    app?: TwitterApp;
+  };
+  // New categories
+  structuredData?: StructuredData;
+  technicalSeo?: TechnicalSeo;
+  siteVerification?: SiteVerification;
+  mobile?: Mobile;
+  security?: Security;
+  imageValidation?: {
+    ogImage?: ImageValidation;
+    twitterImage?: ImageValidation;
   };
 }
 
@@ -45,13 +164,6 @@ interface AnalysisIssue {
   type: 'error' | 'warning' | 'success';
   field: string;
   message: string;
-}
-
-// Helper to calculate score from issues
-function calculateScore(issues: AnalysisIssue[]): number {
-  const errorCount = issues?.filter(i => i.type === 'error').length || 0;
-  const warningCount = issues?.filter(i => i.type === 'warning').length || 0;
-  return Math.max(0, 100 - (errorCount * 20) - (warningCount * 10));
 }
 
 // Helper to upsert a single URL analysis
@@ -65,7 +177,8 @@ async function upsertAnalysis(
   plannedDescription?: string
 ): Promise<{ analysis: unknown; isUpdate: boolean }> {
   const now = new Date();
-  const score = calculateScore(issues);
+  // Use new severity-based scoring algorithm
+  const { score, categoryScores } = calculateScore(result, issues);
 
   // Check if this URL already exists for this client
   const existingAnalysis = await MetaTagAnalysis.findOne({
@@ -86,6 +199,7 @@ async function upsertAnalysis(
       scannedAt: now,
       scannedBy: userId,
       score: existingAnalysis.score,
+      categoryScores: existingAnalysis.categoryScores,
       changesDetected,
       // Full snapshot of all fields at this point in time
       snapshot: {
@@ -109,6 +223,11 @@ async function upsertAnalysis(
           url: existingAnalysis.openGraph.url,
           type: existingAnalysis.openGraph.type,
           siteName: existingAnalysis.openGraph.siteName,
+          imageDetails: existingAnalysis.openGraph.imageDetails,
+          locale: existingAnalysis.openGraph.locale,
+          localeAlternate: existingAnalysis.openGraph.localeAlternate,
+          article: existingAnalysis.openGraph.article,
+          fbAppId: existingAnalysis.openGraph.fbAppId,
         } : undefined,
         twitter: existingAnalysis.twitter ? {
           card: existingAnalysis.twitter.card,
@@ -116,7 +235,18 @@ async function upsertAnalysis(
           description: existingAnalysis.twitter.description,
           image: existingAnalysis.twitter.image,
           site: existingAnalysis.twitter.site,
+          creator: existingAnalysis.twitter.creator,
+          imageAlt: existingAnalysis.twitter.imageAlt,
+          player: existingAnalysis.twitter.player,
+          app: existingAnalysis.twitter.app,
         } : undefined,
+        // New categories
+        structuredData: existingAnalysis.structuredData,
+        technicalSeo: existingAnalysis.technicalSeo,
+        siteVerification: existingAnalysis.siteVerification,
+        mobile: existingAnalysis.mobile,
+        security: existingAnalysis.security,
+        imageValidation: existingAnalysis.imageValidation,
         issues: existingAnalysis.issues || [],
       },
       // Legacy fields for backwards compatibility
@@ -143,8 +273,16 @@ async function upsertAnalysis(
           // Social tags
           openGraph: result.openGraph,
           twitter: result.twitter,
+          // New categories
+          structuredData: result.structuredData,
+          technicalSeo: result.technicalSeo,
+          siteVerification: result.siteVerification,
+          mobile: result.mobile,
+          security: result.security,
+          imageValidation: result.imageValidation,
           issues,
           score,
+          categoryScores,
           lastScannedAt: now,
           lastScannedBy: userId,
           // Update planned values if provided
@@ -184,10 +322,18 @@ async function upsertAnalysis(
     // Social tags
     openGraph: result.openGraph,
     twitter: result.twitter,
+    // New categories
+    structuredData: result.structuredData,
+    technicalSeo: result.technicalSeo,
+    siteVerification: result.siteVerification,
+    mobile: result.mobile,
+    security: result.security,
+    imageValidation: result.imageValidation,
     issues,
     plannedTitle,
     plannedDescription,
     score,
+    categoryScores,
     analyzedBy: userId,
     analyzedAt: now,
     scanCount: 1,

@@ -1,12 +1,112 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { connectDB, MetaTagAnalysis } from '@tds/database';
+import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
 
 export const dynamic = 'force-dynamic';
 
 interface HreflangEntry {
   lang: string;
   url: string;
+}
+
+// Extended Open Graph interfaces
+interface OpenGraphImage {
+  alt?: string;
+  width?: number;
+  height?: number;
+  type?: string;
+}
+
+interface OpenGraphArticle {
+  publishedTime?: string;
+  modifiedTime?: string;
+  author?: string;
+  section?: string;
+  tags?: string[];
+}
+
+// Extended Twitter interfaces
+interface TwitterPlayer {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface TwitterApp {
+  nameIphone?: string;
+  idIphone?: string;
+  urlIphone?: string;
+  nameAndroid?: string;
+  idAndroid?: string;
+  urlAndroid?: string;
+}
+
+// Structured Data interface
+interface StructuredData {
+  found: boolean;
+  isValidJson: boolean;
+  types: string[];
+  errors: string[];
+}
+
+// Technical SEO interfaces
+interface RobotsDirectives {
+  index?: boolean;
+  follow?: boolean;
+  noarchive?: boolean;
+  nosnippet?: boolean;
+  maxSnippet?: number;
+  maxImagePreview?: string;
+  maxVideoPreview?: number;
+}
+
+interface TechnicalSeo {
+  robotsDirectives?: RobotsDirectives;
+  prevUrl?: string;
+  nextUrl?: string;
+  keywords?: string;
+  generator?: string;
+}
+
+// Site Verification interface
+interface SiteVerification {
+  google?: string;
+  bing?: string;
+  pinterest?: string;
+  facebook?: string;
+  yandex?: string;
+}
+
+// Mobile/PWA interfaces
+interface AppleTouchIcon {
+  href: string;
+  sizes?: string;
+}
+
+interface Mobile {
+  appleWebAppCapable?: string;
+  appleWebAppStatusBarStyle?: string;
+  appleWebAppTitle?: string;
+  appleTouchIcons?: AppleTouchIcon[];
+  manifest?: string;
+  formatDetection?: string;
+}
+
+// Security interface
+interface Security {
+  referrerPolicy?: string;
+  contentSecurityPolicy?: string;
+  xUaCompatible?: string;
+}
+
+// Image Validation interface
+interface ImageValidation {
+  url: string;
+  exists: boolean;
+  statusCode?: number;
+  contentType?: string;
+  error?: string;
 }
 
 interface MetaTagResult {
@@ -31,6 +131,11 @@ interface MetaTagResult {
     url?: string;
     type?: string;
     siteName?: string;
+    imageDetails?: OpenGraphImage;
+    locale?: string;
+    localeAlternate?: string[];
+    article?: OpenGraphArticle;
+    fbAppId?: string;
   };
   twitter: {
     card?: string;
@@ -38,6 +143,19 @@ interface MetaTagResult {
     description?: string;
     image?: string;
     site?: string;
+    creator?: string;
+    imageAlt?: string;
+    player?: TwitterPlayer;
+    app?: TwitterApp;
+  };
+  structuredData?: StructuredData;
+  technicalSeo?: TechnicalSeo;
+  siteVerification?: SiteVerification;
+  mobile?: Mobile;
+  security?: Security;
+  imageValidation?: {
+    ogImage?: ImageValidation;
+    twitterImage?: ImageValidation;
   };
 }
 
@@ -84,6 +202,110 @@ function decodeHtmlEntities(text: string): string {
 
   return decoded;
 }
+
+// Helper to get all values for a meta tag
+function getAllMetaContent(html: string, name: string): string[] {
+  const values: string[] = [];
+  const regex = new RegExp(
+    `<meta[^>]*(?:name|property)=["']${name}["'][^>]*content=["']([^"']*)["']|<meta[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["']${name}["']`,
+    'gi'
+  );
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    const value = match[1] || match[2];
+    if (value) values.push(decodeHtmlEntities(value));
+  }
+  return values;
+}
+
+// Extract JSON-LD structured data
+function extractStructuredData(html: string): StructuredData {
+  const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  const types: string[] = [];
+  const errors: string[] = [];
+  let isValidJson = true;
+
+  scripts.forEach((script) => {
+    const content = script.replace(/<script[^>]*>|<\/script>/gi, '').trim();
+    try {
+      const json = JSON.parse(content);
+      if (json['@type']) types.push(json['@type']);
+      if (Array.isArray(json['@graph'])) {
+        json['@graph'].forEach((item: { '@type'?: string }) => {
+          if (item['@type']) types.push(item['@type']);
+        });
+      }
+    } catch (e) {
+      isValidJson = false;
+      errors.push(e instanceof Error ? e.message : 'Invalid JSON');
+    }
+  });
+
+  return {
+    found: scripts.length > 0,
+    isValidJson: scripts.length === 0 || isValidJson,
+    types: [...new Set(types)],
+    errors,
+  };
+}
+
+// Parse robots meta tag into individual directives
+function parseRobotsDirectives(robotsContent: string): RobotsDirectives | undefined {
+  if (!robotsContent) return undefined;
+
+  const directives: RobotsDirectives = {};
+  const lower = robotsContent.toLowerCase();
+
+  if (lower.includes('noindex')) directives.index = false;
+  else if (lower.includes('index')) directives.index = true;
+
+  if (lower.includes('nofollow')) directives.follow = false;
+  else if (lower.includes('follow')) directives.follow = true;
+
+  if (lower.includes('noarchive')) directives.noarchive = true;
+  if (lower.includes('nosnippet')) directives.nosnippet = true;
+
+  const maxSnippetMatch = robotsContent.match(/max-snippet:\s*(-?\d+)/i);
+  if (maxSnippetMatch) directives.maxSnippet = parseInt(maxSnippetMatch[1], 10);
+
+  const maxImageMatch = robotsContent.match(/max-image-preview:\s*(\w+)/i);
+  if (maxImageMatch) directives.maxImagePreview = maxImageMatch[1];
+
+  return Object.keys(directives).length > 0 ? directives : undefined;
+}
+
+// Validate an image URL
+async function validateImageUrl(imageUrl: string): Promise<ImageValidation> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(imageUrl, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'TDS Meta Tag Analyser/1.0' },
+    });
+
+    clearTimeout(timeoutId);
+
+    return {
+      url: imageUrl,
+      exists: response.ok,
+      statusCode: response.status,
+      contentType: response.headers.get('content-type') || undefined,
+    };
+  } catch (e) {
+    return {
+      url: imageUrl,
+      exists: false,
+      error: e instanceof Error ? e.message : 'Failed to validate',
+    };
+  }
+}
+
+// Check if object has any values
+const hasValue = <T extends object>(obj: T): boolean =>
+  Object.values(obj).some(v => v !== undefined);
 
 function analyzeMetaTags(result: MetaTagResult): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
@@ -216,6 +438,89 @@ function analyzeMetaTags(result: MetaTagResult): AnalysisIssue[] {
     });
   }
 
+  // OG Image Alt
+  if (result.openGraph.image && !result.openGraph.imageDetails?.alt) {
+    issues.push({
+      type: 'warning',
+      field: 'OG Image Alt',
+      message: 'Open Graph image has no alt text. Add og:image:alt for accessibility.',
+    });
+  }
+
+  // OG Image Dimensions
+  if (result.openGraph.image && (!result.openGraph.imageDetails?.width || !result.openGraph.imageDetails?.height)) {
+    issues.push({
+      type: 'warning',
+      field: 'OG Image Dimensions',
+      message: 'Open Graph image dimensions not specified. Add og:image:width and og:image:height.',
+    });
+  }
+
+  // Twitter Creator
+  if (result.twitter.site && !result.twitter.creator) {
+    issues.push({
+      type: 'warning',
+      field: 'Twitter Creator',
+      message: 'Twitter site is set but no creator specified. Consider adding twitter:creator.',
+    });
+  }
+
+  // Twitter Image Alt
+  if (result.twitter.image && !result.twitter.imageAlt) {
+    issues.push({
+      type: 'warning',
+      field: 'Twitter Image Alt',
+      message: 'Twitter image has no alt text. Add twitter:image:alt for accessibility.',
+    });
+  }
+
+  // Structured Data
+  if (!result.structuredData?.found) {
+    issues.push({
+      type: 'warning',
+      field: 'Structured Data',
+      message: 'No JSON-LD structured data found. Consider adding schema.org markup.',
+    });
+  } else if (!result.structuredData.isValidJson) {
+    issues.push({
+      type: 'error',
+      field: 'Structured Data',
+      message: `JSON-LD contains invalid JSON: ${result.structuredData.errors.join(', ')}`,
+    });
+  } else {
+    issues.push({
+      type: 'success',
+      field: 'Structured Data',
+      message: `Found valid JSON-LD with types: ${result.structuredData.types.join(', ') || 'none'}`,
+    });
+  }
+
+  // Image Validation
+  if (result.imageValidation?.ogImage && !result.imageValidation.ogImage.exists) {
+    issues.push({
+      type: 'error',
+      field: 'OG Image',
+      message: `Open Graph image is broken (${result.imageValidation.ogImage.statusCode || 'unreachable'}).`,
+    });
+  }
+
+  if (result.imageValidation?.twitterImage && !result.imageValidation.twitterImage.exists) {
+    issues.push({
+      type: 'error',
+      field: 'Twitter Image',
+      message: `Twitter image is broken (${result.imageValidation.twitterImage.statusCode || 'unreachable'}).`,
+    });
+  }
+
+  // Web Manifest
+  if (!result.mobile?.manifest) {
+    issues.push({
+      type: 'warning',
+      field: 'Web Manifest',
+      message: 'No web app manifest found. Consider adding one for PWA support.',
+    });
+  }
+
   return issues;
 }
 
@@ -337,12 +642,144 @@ export async function POST(
 
     const hreflangEntries = getHreflang();
 
+    // Extract robots for directive parsing
+    const robotsContent = getMetaContent('robots');
+
+    // Extract structured data
+    const structuredData = extractStructuredData(html);
+
+    // Extract OG and Twitter images for validation
+    const ogImage = getMetaContent('og:image');
+    const twitterImage = getMetaContent('twitter:image');
+
+    // Validate images in parallel
+    const [ogImageValidation, twitterImageValidation] = await Promise.all([
+      ogImage ? validateImageUrl(ogImage) : Promise.resolve(undefined),
+      twitterImage && twitterImage !== ogImage ? validateImageUrl(twitterImage) : Promise.resolve(undefined),
+    ]);
+
+    // Extract extended Open Graph image details
+    const ogImageDetails: OpenGraphImage = {};
+    const ogImageAlt = getMetaContent('og:image:alt');
+    const ogImageWidth = getMetaContent('og:image:width');
+    const ogImageHeight = getMetaContent('og:image:height');
+    const ogImageType = getMetaContent('og:image:type');
+    if (ogImageAlt) ogImageDetails.alt = ogImageAlt;
+    if (ogImageWidth) ogImageDetails.width = parseInt(ogImageWidth, 10);
+    if (ogImageHeight) ogImageDetails.height = parseInt(ogImageHeight, 10);
+    if (ogImageType) ogImageDetails.type = ogImageType;
+
+    // Extract Open Graph article metadata
+    const ogArticle: OpenGraphArticle = {};
+    const articlePublished = getMetaContent('article:published_time') || getMetaContent('og:article:published_time');
+    const articleModified = getMetaContent('article:modified_time') || getMetaContent('og:article:modified_time');
+    const articleAuthor = getMetaContent('article:author') || getMetaContent('og:article:author');
+    const articleSection = getMetaContent('article:section') || getMetaContent('og:article:section');
+    const articleTags = getAllMetaContent(html, 'article:tag');
+    if (articlePublished) ogArticle.publishedTime = articlePublished;
+    if (articleModified) ogArticle.modifiedTime = articleModified;
+    if (articleAuthor) ogArticle.author = articleAuthor;
+    if (articleSection) ogArticle.section = articleSection;
+    if (articleTags.length > 0) ogArticle.tags = articleTags;
+
+    // Extract Twitter player metadata
+    const twitterPlayer: TwitterPlayer = {};
+    const playerUrl = getMetaContent('twitter:player');
+    const playerWidth = getMetaContent('twitter:player:width');
+    const playerHeight = getMetaContent('twitter:player:height');
+    if (playerUrl) twitterPlayer.url = playerUrl;
+    if (playerWidth) twitterPlayer.width = parseInt(playerWidth, 10);
+    if (playerHeight) twitterPlayer.height = parseInt(playerHeight, 10);
+
+    // Extract Twitter app metadata
+    const twitterApp: TwitterApp = {};
+    const appNameIphone = getMetaContent('twitter:app:name:iphone');
+    const appIdIphone = getMetaContent('twitter:app:id:iphone');
+    const appUrlIphone = getMetaContent('twitter:app:url:iphone');
+    const appNameAndroid = getMetaContent('twitter:app:name:googleplay');
+    const appIdAndroid = getMetaContent('twitter:app:id:googleplay');
+    const appUrlAndroid = getMetaContent('twitter:app:url:googleplay');
+    if (appNameIphone) twitterApp.nameIphone = appNameIphone;
+    if (appIdIphone) twitterApp.idIphone = appIdIphone;
+    if (appUrlIphone) twitterApp.urlIphone = appUrlIphone;
+    if (appNameAndroid) twitterApp.nameAndroid = appNameAndroid;
+    if (appIdAndroid) twitterApp.idAndroid = appIdAndroid;
+    if (appUrlAndroid) twitterApp.urlAndroid = appUrlAndroid;
+
+    // Extract Technical SEO
+    const technicalSeo: TechnicalSeo = {};
+    const robotsDirectives = parseRobotsDirectives(robotsContent);
+    if (robotsDirectives) technicalSeo.robotsDirectives = robotsDirectives;
+
+    const prevMatch = html.match(/<link[^>]*rel=["']prev["'][^>]*href=["']([^"']*)["']/i);
+    const nextMatch = html.match(/<link[^>]*rel=["']next["'][^>]*href=["']([^"']*)["']/i);
+    if (prevMatch) technicalSeo.prevUrl = prevMatch[1];
+    if (nextMatch) technicalSeo.nextUrl = nextMatch[1];
+
+    const keywords = getMetaContent('keywords');
+    const generator = getMetaContent('generator');
+    if (keywords) technicalSeo.keywords = keywords;
+    if (generator) technicalSeo.generator = generator;
+
+    // Extract Site Verification tags
+    const siteVerification: SiteVerification = {};
+    const googleVerify = getMetaContent('google-site-verification');
+    const bingVerify = getMetaContent('msvalidate.01');
+    const pinterestVerify = getMetaContent('p:domain_verify');
+    const facebookVerify = getMetaContent('facebook-domain-verification');
+    const yandexVerify = getMetaContent('yandex-verification');
+    if (googleVerify) siteVerification.google = googleVerify;
+    if (bingVerify) siteVerification.bing = bingVerify;
+    if (pinterestVerify) siteVerification.pinterest = pinterestVerify;
+    if (facebookVerify) siteVerification.facebook = facebookVerify;
+    if (yandexVerify) siteVerification.yandex = yandexVerify;
+
+    // Extract Mobile/PWA metadata
+    const mobile: Mobile = {};
+    const appleCapable = getMetaContent('apple-mobile-web-app-capable');
+    const appleStatusBar = getMetaContent('apple-mobile-web-app-status-bar-style');
+    const appleTitle = getMetaContent('apple-mobile-web-app-title');
+    const formatDetection = getMetaContent('format-detection');
+    if (appleCapable) mobile.appleWebAppCapable = appleCapable;
+    if (appleStatusBar) mobile.appleWebAppStatusBarStyle = appleStatusBar;
+    if (appleTitle) mobile.appleWebAppTitle = appleTitle;
+    if (formatDetection) mobile.formatDetection = formatDetection;
+
+    // Extract apple-touch-icons
+    const appleTouchIcons: AppleTouchIcon[] = [];
+    const touchIconRegex = /<link[^>]*rel=["']apple-touch-icon(?:-precomposed)?["'][^>]*>/gi;
+    let touchIconMatch;
+    while ((touchIconMatch = touchIconRegex.exec(html)) !== null) {
+      const hrefMatch = touchIconMatch[0].match(/href=["']([^"']*)["']/i);
+      const sizesMatch = touchIconMatch[0].match(/sizes=["']([^"']*)["']/i);
+      if (hrefMatch) {
+        appleTouchIcons.push({
+          href: hrefMatch[1],
+          sizes: sizesMatch ? sizesMatch[1] : undefined,
+        });
+      }
+    }
+    if (appleTouchIcons.length > 0) mobile.appleTouchIcons = appleTouchIcons;
+
+    // Extract manifest link
+    const manifestMatch = html.match(/<link[^>]*rel=["']manifest["'][^>]*href=["']([^"']*)["']/i);
+    if (manifestMatch) mobile.manifest = manifestMatch[1];
+
+    // Extract Security meta tags
+    const security: Security = {};
+    const referrerPolicy = getMetaContent('referrer');
+    const csp = getMetaContent('Content-Security-Policy');
+    const xUaCompatible = getMetaContent('X-UA-Compatible');
+    if (referrerPolicy) security.referrerPolicy = referrerPolicy;
+    if (csp) security.contentSecurityPolicy = csp;
+    if (xUaCompatible) security.xUaCompatible = xUaCompatible;
+
     const result: MetaTagResult = {
       url: existingAnalysis.url,
       title: getTitle(),
       description: getMetaContent('description'),
       canonical: getCanonical(),
-      robots: getMetaContent('robots'),
+      robots: robotsContent,
       // Additional meta tags
       viewport: getMetaContent('viewport'),
       charset: getCharset(),
@@ -355,26 +792,44 @@ export async function POST(
       openGraph: {
         title: getMetaContent('og:title'),
         description: getMetaContent('og:description'),
-        image: getMetaContent('og:image'),
+        image: ogImage,
         url: getMetaContent('og:url'),
         type: getMetaContent('og:type'),
         siteName: getMetaContent('og:site_name'),
+        ...(hasValue(ogImageDetails) && { imageDetails: ogImageDetails }),
+        locale: getMetaContent('og:locale') || undefined,
+        localeAlternate: getAllMetaContent(html, 'og:locale:alternate').length > 0
+          ? getAllMetaContent(html, 'og:locale:alternate') : undefined,
+        ...(hasValue(ogArticle) && { article: ogArticle }),
+        fbAppId: getMetaContent('fb:app_id') || undefined,
       },
       twitter: {
         card: getMetaContent('twitter:card'),
         title: getMetaContent('twitter:title'),
         description: getMetaContent('twitter:description'),
-        image: getMetaContent('twitter:image'),
+        image: twitterImage,
         site: getMetaContent('twitter:site'),
+        creator: getMetaContent('twitter:creator') || undefined,
+        imageAlt: getMetaContent('twitter:image:alt') || undefined,
+        ...(hasValue(twitterPlayer) && { player: twitterPlayer }),
+        ...(hasValue(twitterApp) && { app: twitterApp }),
       },
+      // New categories
+      structuredData,
+      ...(hasValue(technicalSeo) && { technicalSeo }),
+      ...(hasValue(siteVerification) && { siteVerification }),
+      ...(hasValue(mobile) && { mobile }),
+      ...(hasValue(security) && { security }),
+      imageValidation: (ogImageValidation || twitterImageValidation) ? {
+        ...(ogImageValidation && { ogImage: ogImageValidation }),
+        ...(twitterImageValidation && { twitterImage: twitterImageValidation }),
+      } : undefined,
     };
 
     const issues = analyzeMetaTags(result);
 
-    // Calculate new score
-    const errorCount = issues.filter(i => i.type === 'error').length;
-    const warningCount = issues.filter(i => i.type === 'warning').length;
-    const newScore = Math.max(0, 100 - (errorCount * 20) - (warningCount * 10));
+    // Calculate new score using severity-based algorithm
+    const { score: newScore, categoryScores: newCategoryScores } = calculateScore(result, issues);
 
     // Detect if changes were made
     const changesDetected =
@@ -388,6 +843,7 @@ export async function POST(
       scannedAt: new Date(),
       scannedBy: session.user.id,
       score: previousScore,
+      categoryScores: existingAnalysis.categoryScores,
       changesDetected,
       // Full snapshot of all fields at this point in time
       snapshot: {
@@ -409,6 +865,11 @@ export async function POST(
           url: existingAnalysis.openGraph.url,
           type: existingAnalysis.openGraph.type,
           siteName: existingAnalysis.openGraph.siteName,
+          imageDetails: existingAnalysis.openGraph.imageDetails,
+          locale: existingAnalysis.openGraph.locale,
+          localeAlternate: existingAnalysis.openGraph.localeAlternate,
+          article: existingAnalysis.openGraph.article,
+          fbAppId: existingAnalysis.openGraph.fbAppId,
         } : undefined,
         twitter: existingAnalysis.twitter ? {
           card: existingAnalysis.twitter.card,
@@ -416,7 +877,17 @@ export async function POST(
           description: existingAnalysis.twitter.description,
           image: existingAnalysis.twitter.image,
           site: existingAnalysis.twitter.site,
+          creator: existingAnalysis.twitter.creator,
+          imageAlt: existingAnalysis.twitter.imageAlt,
+          player: existingAnalysis.twitter.player,
+          app: existingAnalysis.twitter.app,
         } : undefined,
+        structuredData: existingAnalysis.structuredData,
+        technicalSeo: existingAnalysis.technicalSeo,
+        siteVerification: existingAnalysis.siteVerification,
+        mobile: existingAnalysis.mobile,
+        security: existingAnalysis.security,
+        imageValidation: existingAnalysis.imageValidation,
         issues: existingAnalysis.issues || [],
       },
       // Legacy fields for backwards compatibility
@@ -442,8 +913,15 @@ export async function POST(
           hreflang: result.hreflang,
           openGraph: result.openGraph,
           twitter: result.twitter,
+          structuredData: result.structuredData,
+          technicalSeo: result.technicalSeo,
+          siteVerification: result.siteVerification,
+          mobile: result.mobile,
+          security: result.security,
+          imageValidation: result.imageValidation,
           issues,
           score: newScore,
+          categoryScores: newCategoryScores,
           lastScannedAt: new Date(),
           lastScannedBy: session.user.id,
         },

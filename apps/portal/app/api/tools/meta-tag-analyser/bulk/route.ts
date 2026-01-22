@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { calculateScore, type CategoryScores } from '@/app/tools/meta-tag-analyser/lib/scoring';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,9 @@ interface MetaTagResult {
   description: string;
   canonical?: string;
   robots?: string;
+  viewport?: string;
+  charset?: string;
+  language?: string;
   openGraph: {
     title?: string;
     description?: string;
@@ -16,6 +20,12 @@ interface MetaTagResult {
     url?: string;
     type?: string;
     siteName?: string;
+    locale?: string;
+    imageDetails?: {
+      alt?: string;
+      width?: number;
+      height?: number;
+    };
   };
   twitter: {
     card?: string;
@@ -23,6 +33,17 @@ interface MetaTagResult {
     description?: string;
     image?: string;
     site?: string;
+    creator?: string;
+    imageAlt?: string;
+  };
+  structuredData?: {
+    found: boolean;
+    isValidJson: boolean;
+    types: string[];
+    errors: string[];
+  };
+  mobile?: {
+    manifest?: string;
   };
 }
 
@@ -159,12 +180,49 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
     return match ? match[1] : '';
   };
 
+  const getCharset = (): string => {
+    const charsetMatch = html.match(/<meta[^>]*charset=["']([^"']*)["']/i);
+    if (charsetMatch) return charsetMatch[1];
+    const httpEquivMatch = html.match(/<meta[^>]*http-equiv=["']Content-Type["'][^>]*content=["'][^"']*charset=([^"'\s;]+)/i);
+    return httpEquivMatch ? httpEquivMatch[1] : '';
+  };
+
+  const getLanguage = (): string => {
+    const match = html.match(/<html[^>]*lang=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  const getManifest = (): string => {
+    const match = html.match(/<link[^>]*rel=["']manifest["'][^>]*href=["']([^"']*)["']/i);
+    return match ? match[1] : '';
+  };
+
+  // Extract structured data
+  const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  let structuredDataFound = scripts.length > 0;
+  let structuredDataValid = true;
+  const structuredDataTypes: string[] = [];
+  const structuredDataErrors: string[] = [];
+  scripts.forEach((script) => {
+    const content = script.replace(/<script[^>]*>|<\/script>/gi, '').trim();
+    try {
+      const json = JSON.parse(content);
+      if (json['@type']) structuredDataTypes.push(json['@type']);
+    } catch (e) {
+      structuredDataValid = false;
+      structuredDataErrors.push(e instanceof Error ? e.message : 'Invalid JSON');
+    }
+  });
+
   const result: MetaTagResult = {
     url,
     title: getTitle(),
     description: getMetaContent('description'),
     canonical: getCanonical(),
     robots: getMetaContent('robots'),
+    viewport: getMetaContent('viewport'),
+    charset: getCharset(),
+    language: getLanguage(),
     openGraph: {
       title: getMetaContent('og:title'),
       description: getMetaContent('og:description'),
@@ -172,6 +230,12 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
       url: getMetaContent('og:url'),
       type: getMetaContent('og:type'),
       siteName: getMetaContent('og:site_name'),
+      locale: getMetaContent('og:locale') || undefined,
+      imageDetails: getMetaContent('og:image:alt') || getMetaContent('og:image:width') ? {
+        alt: getMetaContent('og:image:alt') || undefined,
+        width: getMetaContent('og:image:width') ? parseInt(getMetaContent('og:image:width'), 10) : undefined,
+        height: getMetaContent('og:image:height') ? parseInt(getMetaContent('og:image:height'), 10) : undefined,
+      } : undefined,
     },
     twitter: {
       card: getMetaContent('twitter:card'),
@@ -179,7 +243,18 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
       description: getMetaContent('twitter:description'),
       image: getMetaContent('twitter:image'),
       site: getMetaContent('twitter:site'),
+      creator: getMetaContent('twitter:creator') || undefined,
+      imageAlt: getMetaContent('twitter:image:alt') || undefined,
     },
+    structuredData: structuredDataFound ? {
+      found: true,
+      isValidJson: structuredDataValid,
+      types: [...new Set(structuredDataTypes)],
+      errors: structuredDataErrors,
+    } : undefined,
+    mobile: getManifest() ? {
+      manifest: getManifest(),
+    } : undefined,
   };
 
   // Analyze for issues
@@ -262,16 +337,16 @@ export async function POST(request: NextRequest) {
       issues?: AnalysisIssue[];
       error?: string;
       score: number;
+      categoryScores?: CategoryScores;
     }> = [];
 
     for (const url of urlsToAnalyze) {
       try {
         const { result, issues } = await analyzeUrl(url);
-        const errorCount = issues.filter(i => i.type === 'error').length;
-        const warningCount = issues.filter(i => i.type === 'warning').length;
-        const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 10));
+        // Use new severity-based scoring algorithm
+        const { score, categoryScores } = calculateScore(result, issues);
 
-        results.push({ url, result, issues, score });
+        results.push({ url, result, issues, score, categoryScores });
 
         // Small delay to be respectful to servers
         await new Promise(resolve => setTimeout(resolve, 200));
