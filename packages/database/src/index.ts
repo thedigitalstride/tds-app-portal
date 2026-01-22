@@ -4,3 +4,6 @@ export { Client, type IClient } from './models/client';
 export { MetaTagAnalysis, type IMetaTagAnalysis, type IScanHistoryEntry } from './models/meta-tag-analysis';
 export { PendingScan, type IPendingScan } from './models/pending-scan';
 export { Feedback, type IFeedback, type IFeedbackNote, type FeedbackType, type FeedbackUrgency, type FeedbackStatus } from './models/feedback';
+export { Profile, type IProfile } from './models/profile';
+export { UserPermissions, type IUserPermissions } from './models/user-permissions';
+export { ClientAssignment, type IClientAssignment } from './models/client-assignment';

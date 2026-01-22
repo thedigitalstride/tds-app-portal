@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth';
+import mongoose from 'mongoose';
 import { connectDB, Client } from '@tds/database';
+import {
+  requireClientAccess,
+  requireAdmin,
+  UnauthorizedError,
+  ForbiddenError,
+} from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +19,14 @@ export async function GET(
   { params }: RouteContext
 ) {
   try {
-    const session = await getServerSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid client ID' }, { status: 400 });
     }
 
-    const { id } = await params;
+    await requireClientAccess(id);
+
     await connectDB();
     const client = await Client.findById(id);
 
@@ -28,11 +36,14 @@ export async function GET(
 
     return NextResponse.json(client);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Failed to fetch client:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch client' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch client' }, { status: 500 });
   }
 }
 
@@ -41,18 +52,28 @@ export async function PUT(
   { params }: RouteContext
 ) {
   try {
-    const session = await getServerSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid client ID' }, { status: 400 });
     }
 
-    const { id } = await params;
+    await requireAdmin();
     const body = await request.json();
-    await connectDB();
 
+    // Whitelist only editable fields
+    const updateData: Record<string, unknown> = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.website !== undefined) updateData.website = body.website;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
+    if (body.contactName !== undefined) updateData.contactName = body.contactName;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    await connectDB();
     const client = await Client.findByIdAndUpdate(
       id,
-      { $set: body },
+      { $set: updateData },
       { new: true }
     );
 
@@ -62,11 +83,14 @@ export async function PUT(
 
     return NextResponse.json(client);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Failed to update client:', error);
-    return NextResponse.json(
-      { error: 'Failed to update client' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to update client' }, { status: 500 });
   }
 }
 
@@ -75,12 +99,14 @@ export async function DELETE(
   { params }: RouteContext
 ) {
   try {
-    const session = await getServerSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid client ID' }, { status: 400 });
     }
 
-    const { id } = await params;
+    await requireAdmin();
+
     await connectDB();
 
     // Soft delete - set isActive to false
@@ -96,10 +122,13 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Failed to delete client:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete client' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 });
   }
 }

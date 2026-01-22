@@ -1,6 +1,7 @@
 export { cn } from './utils';
 export { Button, type ButtonProps } from './components/button';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/card';
+export { Checkbox, type CheckboxProps } from './components/checkbox';
 export { Input } from './components/input';
 export { Badge, type BadgeProps } from './components/badge';
 export { Avatar, AvatarImage, AvatarFallback } from './components/avatar';
