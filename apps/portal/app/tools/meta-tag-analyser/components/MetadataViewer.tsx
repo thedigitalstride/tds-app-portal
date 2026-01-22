@@ -19,6 +19,11 @@ import type {
   Security,
   ImageValidations,
 } from './types';
+import {
+  compareSnapshots,
+  getChangedFieldBorder,
+  type FieldDiff,
+} from './comparison-utils';
 
 // Field criticality levels for SEO guidance
 type FieldCriticality = 'critical' | 'important' | 'optional';
@@ -72,20 +77,36 @@ interface MetadataViewerProps {
   data: MetadataSnapshot;
   url: string;
   showIssues?: boolean;
+  /**
+   * When true, uses single-column layout. When false/omitted, uses two-column layout.
+   * IMPORTANT: History snapshots should use the SAME layout as current analysis
+   * (i.e., do NOT set compact=true for history snapshots).
+   */
   compact?: boolean;
+  /** When provided, fields that differ from current will be highlighted with amber border */
+  compareWith?: MetadataSnapshot;
 }
 
 /**
  * Reusable component for displaying full meta tag analysis data.
  * Used in both the main expanded row view and history snapshot details.
+ *
+ * LAYOUT CONSISTENCY RULE:
+ * - Current analysis and history snapshots MUST use the same layout (two columns)
+ * - Do NOT pass compact={true} to history snapshots
+ * - The compareWith prop adds diff highlighting without changing layout
  */
 export function MetadataViewer({
   data,
   url,
   showIssues = true,
   compact = false,
+  compareWith,
 }: MetadataViewerProps) {
   const issues = data.issues || [];
+
+  // Compute field diffs if comparing with current data
+  const diffs = compareWith ? compareSnapshots(data, compareWith) : undefined;
 
   return (
     <div className={`space-y-4 ${compact ? 'text-xs' : ''}`}>
@@ -105,6 +126,7 @@ export function MetadataViewer({
             maxLength={60}
             issue={issues.find(i => i.field.toLowerCase() === 'title')}
             compact={compact}
+            diff={diffs?.title}
           />
 
           {/* Description */}
@@ -116,6 +138,7 @@ export function MetadataViewer({
             issue={issues.find(i => i.field.toLowerCase() === 'description')}
             multiline
             compact={compact}
+            diff={diffs?.description}
           />
 
           {/* Canonical */}
@@ -125,6 +148,7 @@ export function MetadataViewer({
             fieldName="canonical"
             issue={issues.find(i => i.field.toLowerCase() === 'canonical')}
             compact={compact}
+            diff={diffs?.canonical}
           />
         </div>
 
@@ -139,6 +163,7 @@ export function MetadataViewer({
             openGraph={data.openGraph}
             issues={issues}
             compact={compact}
+            diffs={diffs}
           />
 
           {/* Twitter */}
@@ -146,6 +171,7 @@ export function MetadataViewer({
             twitter={data.twitter}
             issues={issues}
             compact={compact}
+            diffs={diffs}
           />
         </div>
       </div>
@@ -158,17 +184,17 @@ export function MetadataViewer({
 
         {/* Primary Technical Fields - 4 columns */}
         <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
-          <TechnicalField label="Viewport" value={data.viewport} fieldName="viewport" issue={issues.find(i => i.field.toLowerCase() === 'viewport')} />
-          <TechnicalField label="Charset" value={data.charset} fieldName="charset" issue={issues.find(i => i.field.toLowerCase() === 'charset')} />
-          <TechnicalField label="Language" value={data.language} fieldName="language" issue={issues.find(i => i.field.toLowerCase() === 'language')} />
-          <TechnicalField label="Robots" value={data.robots} fieldName="robots" issue={issues.find(i => i.field.toLowerCase() === 'robots')} />
+          <TechnicalField label="Viewport" value={data.viewport} fieldName="viewport" issue={issues.find(i => i.field.toLowerCase() === 'viewport')} diff={diffs?.viewport} />
+          <TechnicalField label="Charset" value={data.charset} fieldName="charset" issue={issues.find(i => i.field.toLowerCase() === 'charset')} diff={diffs?.charset} />
+          <TechnicalField label="Language" value={data.language} fieldName="language" issue={issues.find(i => i.field.toLowerCase() === 'language')} diff={diffs?.language} />
+          <TechnicalField label="Robots" value={data.robots} fieldName="robots" issue={issues.find(i => i.field.toLowerCase() === 'robots')} diff={diffs?.robots} />
         </div>
 
         {/* Secondary Technical Fields - always show */}
         <div className={`grid gap-3 mt-3 ${compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'}`}>
-          <TechnicalField label="Author" value={data.author} fieldName="author" issue={issues.find(i => i.field.toLowerCase() === 'author')} />
-          <ThemeColorField value={data.themeColor} />
-          <FaviconField value={data.favicon} url={url} />
+          <TechnicalField label="Author" value={data.author} fieldName="author" issue={issues.find(i => i.field.toLowerCase() === 'author')} diff={diffs?.author} />
+          <ThemeColorField value={data.themeColor} diff={diffs?.themeColor} />
+          <FaviconField value={data.favicon} url={url} diff={diffs?.favicon} />
         </div>
 
         {/* Hreflang Tags - full width if present */}
@@ -256,12 +282,14 @@ function TechnicalField({
   label,
   value,
   fieldName,
-  issue
+  issue,
+  diff,
 }: {
   label: string;
   value?: string;
   fieldName: string;
   issue?: AnalysisIssue;
+  diff?: FieldDiff;
 }) {
   const status = getFieldStatus(fieldName, value, issue);
   const statusStyles = {
@@ -276,6 +304,7 @@ function TechnicalField({
   };
   const badge = badgeStyles[status];
   const BadgeIcon = badge.icon;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   return (
     <div className={`relative rounded-lg border p-2 ${statusStyles[status]}`}>
@@ -285,15 +314,20 @@ function TechnicalField({
         </div>
       </div>
       <span className="text-neutral-600 text-[10px]">{label}</span>
-      <p className="font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate" title={value}>
+      <p className={`font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
       </p>
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
+        </p>
+      )}
     </div>
   );
 }
 
 // Helper component for Theme Color field with status
-function ThemeColorField({ value }: { value?: string }) {
+function ThemeColorField({ value, diff }: { value?: string; diff?: FieldDiff }) {
   const status = getFieldStatus('themeColor', value);
   const statusStyles = {
     error: 'border-red-300 bg-red-50/50',
@@ -307,6 +341,7 @@ function ThemeColorField({ value }: { value?: string }) {
   };
   const badge = badgeStyles[status];
   const BadgeIcon = badge.icon;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   return (
     <div className={`relative rounded-lg border p-2 ${statusStyles[status]}`}>
@@ -317,7 +352,7 @@ function ThemeColorField({ value }: { value?: string }) {
       </div>
       <span className="text-neutral-600 text-[10px]">Theme Color</span>
       {value ? (
-        <div className="flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5">
+        <div className={`flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5 ${fieldBorder}`}>
           <div
             className="h-4 w-4 rounded border flex-shrink-0"
             style={{ backgroundColor: value }}
@@ -325,8 +360,13 @@ function ThemeColorField({ value }: { value?: string }) {
           <span className="font-mono text-xs truncate">{value}</span>
         </div>
       ) : (
-        <p className="font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate">
+        <p className={`font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate ${fieldBorder}`}>
           <span className="text-neutral-400 italic">Not set</span>
+        </p>
+      )}
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
         </p>
       )}
     </div>
@@ -334,7 +374,7 @@ function ThemeColorField({ value }: { value?: string }) {
 }
 
 // Helper component for Favicon field with status
-function FaviconField({ value, url }: { value?: string; url: string }) {
+function FaviconField({ value, url, diff }: { value?: string; url: string; diff?: FieldDiff }) {
   const status = getFieldStatus('favicon', value);
   const statusStyles = {
     error: 'border-red-300 bg-red-50/50',
@@ -348,6 +388,7 @@ function FaviconField({ value, url }: { value?: string; url: string }) {
   };
   const badge = badgeStyles[status];
   const BadgeIcon = badge.icon;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   const faviconSrc = value?.startsWith('http') ? value : (() => {
     try {
@@ -366,7 +407,7 @@ function FaviconField({ value, url }: { value?: string; url: string }) {
       </div>
       <span className="text-neutral-600 text-[10px]">Favicon</span>
       {value ? (
-        <div className="flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5">
+        <div className={`flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5 ${fieldBorder}`}>
           <img
             src={faviconSrc}
             alt="Favicon"
@@ -378,8 +419,13 @@ function FaviconField({ value, url }: { value?: string; url: string }) {
           </span>
         </div>
       ) : (
-        <p className="font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate">
+        <p className={`font-mono text-xs bg-white/80 p-1 rounded border mt-0.5 truncate ${fieldBorder}`}>
           <span className="text-neutral-400 italic">Not set</span>
+        </p>
+      )}
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
         </p>
       )}
     </div>
@@ -395,6 +441,7 @@ function MetaField({
   issue,
   multiline = false,
   compact = false,
+  diff,
 }: {
   label: string;
   value?: string;
@@ -403,6 +450,7 @@ function MetaField({
   issue?: AnalysisIssue;
   multiline?: boolean;
   compact?: boolean;
+  diff?: FieldDiff;
 }) {
   const status = getFieldStatus(fieldName, value, issue);
   const statusStyles = {
@@ -417,6 +465,7 @@ function MetaField({
   };
   const badge = badgeStyles[status as keyof typeof badgeStyles];
   const BadgeIcon = badge.icon;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   return (
     <div className={`relative rounded-lg border-2 p-2 ${statusStyles[status as keyof typeof statusStyles]}`}>
@@ -434,11 +483,16 @@ function MetaField({
           </span>
         )}
       </div>
-      <p className={`font-mono text-xs bg-white/80 p-1.5 rounded border ${multiline ? 'line-clamp-2' : 'truncate'}`} title={value}>
+      <p className={`font-mono text-xs bg-white/80 p-1.5 rounded border ${multiline ? 'line-clamp-2' : 'truncate'} ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
       </p>
       {issue && (
         <p className="mt-1 text-[10px] text-neutral-600">{issue.message}</p>
+      )}
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
+        </p>
       )}
     </div>
   );
@@ -451,12 +505,14 @@ function OgField({
   fieldName,
   issue,
   multiline = false,
+  diff,
 }: {
   label: string;
   value?: string;
   fieldName: string;
   issue?: AnalysisIssue;
   multiline?: boolean;
+  diff?: FieldDiff;
 }) {
   const status = getFieldStatus(fieldName, value, issue);
   const statusColors = {
@@ -465,6 +521,7 @@ function OgField({
     success: 'text-green-600',
   };
   const StatusIcon = status === 'error' ? AlertCircle : status === 'warning' ? AlertTriangle : CheckCircle;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   return (
     <div className="text-[10px]">
@@ -472,10 +529,15 @@ function OgField({
         <StatusIcon className={`h-2.5 w-2.5 ${statusColors[status]}`} />
         <span className="text-neutral-500">{label}</span>
       </div>
-      <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'}`} title={value}>
+      <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'} ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
       </p>
       {issue && <p className="text-neutral-500 mt-0.5">{issue.message}</p>}
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
+        </p>
+      )}
     </div>
   );
 }
@@ -485,10 +547,12 @@ function OpenGraphSection({
   openGraph,
   issues,
   compact = false,
+  diffs,
 }: {
   openGraph?: OpenGraphData;
   issues: AnalysisIssue[];
   compact?: boolean;
+  diffs?: Record<string, FieldDiff>;
 }) {
   // Find issues for OG fields
   const findIssue = (field: string) => issues.find(i => i.field.toLowerCase() === field.toLowerCase());
@@ -542,21 +606,21 @@ function OpenGraphSection({
         )}
 
         {/* Critical fields - always show */}
-        <OgField label="og:title" value={openGraph?.title} fieldName="og:title" issue={findIssue('og:title')} />
-        <OgField label="og:description" value={openGraph?.description} fieldName="og:description" issue={findIssue('og:description')} multiline />
-        <OgField label="og:image" value={openGraph?.image} fieldName="og:image" issue={findIssue('og:image') || findIssue('og image')} />
-        <OgField label="og:url" value={openGraph?.url} fieldName="og:url" issue={findIssue('og:url')} />
+        <OgField label="og:title" value={openGraph?.title} fieldName="og:title" issue={findIssue('og:title')} diff={diffs?.['og:title']} />
+        <OgField label="og:description" value={openGraph?.description} fieldName="og:description" issue={findIssue('og:description')} multiline diff={diffs?.['og:description']} />
+        <OgField label="og:image" value={openGraph?.image} fieldName="og:image" issue={findIssue('og:image') || findIssue('og image')} diff={diffs?.['og:image']} />
+        <OgField label="og:url" value={openGraph?.url} fieldName="og:url" issue={findIssue('og:url')} diff={diffs?.['og:url']} />
 
         {/* Important fields */}
         <div className="grid grid-cols-2 gap-1.5">
-          <OgField label="og:type" value={openGraph?.type} fieldName="og:type" issue={findIssue('og:type')} />
-          <OgField label="og:site_name" value={openGraph?.siteName} fieldName="og:site_name" issue={findIssue('og:site_name')} />
+          <OgField label="og:type" value={openGraph?.type} fieldName="og:type" issue={findIssue('og:type')} diff={diffs?.['og:type']} />
+          <OgField label="og:site_name" value={openGraph?.siteName} fieldName="og:site_name" issue={findIssue('og:site_name')} diff={diffs?.['og:siteName']} />
         </div>
 
         {/* Optional fields */}
         <div className="grid grid-cols-2 gap-1.5">
-          <OgField label="og:locale" value={openGraph?.locale} fieldName="og:locale" issue={findIssue('og:locale')} />
-          <OgField label="og:image:alt" value={openGraph?.imageDetails?.alt} fieldName="og:image:alt" issue={findIssue('og:image:alt')} />
+          <OgField label="og:locale" value={openGraph?.locale} fieldName="og:locale" issue={findIssue('og:locale')} diff={diffs?.['og:locale']} />
+          <OgField label="og:image:alt" value={openGraph?.imageDetails?.alt} fieldName="og:image:alt" issue={findIssue('og:image:alt')} diff={diffs?.['og:image:alt']} />
         </div>
 
         {/* Image details if present */}
@@ -606,12 +670,14 @@ function TwitterField({
   fieldName,
   issue,
   multiline = false,
+  diff,
 }: {
   label: string;
   value?: string;
   fieldName: string;
   issue?: AnalysisIssue;
   multiline?: boolean;
+  diff?: FieldDiff;
 }) {
   const status = getFieldStatus(fieldName, value, issue);
   const statusColors = {
@@ -620,6 +686,7 @@ function TwitterField({
     success: 'text-green-600',
   };
   const StatusIcon = status === 'error' ? AlertCircle : status === 'warning' ? AlertTriangle : CheckCircle;
+  const fieldBorder = getChangedFieldBorder(diff?.changed || false);
 
   return (
     <div className="text-[10px]">
@@ -627,10 +694,15 @@ function TwitterField({
         <StatusIcon className={`h-2.5 w-2.5 ${statusColors[status]}`} />
         <span className="text-neutral-500">{label}</span>
       </div>
-      <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'}`} title={value}>
+      <p className={`font-mono bg-white/80 p-1 rounded border ${multiline ? 'line-clamp-2' : 'truncate'} ${fieldBorder}`} title={value}>
         {value || <span className="text-neutral-400 italic">Not set</span>}
       </p>
       {issue && <p className="text-neutral-500 mt-0.5">{issue.message}</p>}
+      {diff?.changed && diff.currentValue !== undefined && (
+        <p className="font-mono text-xs font-medium text-neutral-700 mt-1 break-words" title={diff.currentValue}>
+          Now: {diff.currentValue || <span className="italic">Not set</span>}
+        </p>
+      )}
     </div>
   );
 }
@@ -640,10 +712,12 @@ function TwitterCardSection({
   twitter,
   issues,
   compact = false,
+  diffs,
 }: {
   twitter?: TwitterData;
   issues: AnalysisIssue[];
   compact?: boolean;
+  diffs?: Record<string, FieldDiff>;
 }) {
   // Find issues for Twitter fields
   const findIssue = (field: string) => issues.find(i => i.field.toLowerCase() === field.toLowerCase());
@@ -698,17 +772,17 @@ function TwitterCardSection({
 
         {/* Critical fields - always show */}
         <div className="grid grid-cols-2 gap-1.5">
-          <TwitterField label="twitter:card" value={twitter?.card} fieldName="twitter:card" issue={findIssue('twitter:card') || findIssue('twitter card')} />
-          <TwitterField label="twitter:site" value={twitter?.site} fieldName="twitter:site" issue={findIssue('twitter:site')} />
+          <TwitterField label="twitter:card" value={twitter?.card} fieldName="twitter:card" issue={findIssue('twitter:card') || findIssue('twitter card')} diff={diffs?.['twitter:card']} />
+          <TwitterField label="twitter:site" value={twitter?.site} fieldName="twitter:site" issue={findIssue('twitter:site')} diff={diffs?.['twitter:site']} />
         </div>
-        <TwitterField label="twitter:title" value={twitter?.title} fieldName="twitter:title" issue={findIssue('twitter:title')} />
-        <TwitterField label="twitter:description" value={twitter?.description} fieldName="twitter:description" issue={findIssue('twitter:description')} multiline />
-        <TwitterField label="twitter:image" value={twitter?.image} fieldName="twitter:image" issue={findIssue('twitter:image')} />
+        <TwitterField label="twitter:title" value={twitter?.title} fieldName="twitter:title" issue={findIssue('twitter:title')} diff={diffs?.['twitter:title']} />
+        <TwitterField label="twitter:description" value={twitter?.description} fieldName="twitter:description" issue={findIssue('twitter:description')} multiline diff={diffs?.['twitter:description']} />
+        <TwitterField label="twitter:image" value={twitter?.image} fieldName="twitter:image" issue={findIssue('twitter:image')} diff={diffs?.['twitter:image']} />
 
         {/* Optional fields */}
         <div className="grid grid-cols-2 gap-1.5">
-          <TwitterField label="twitter:creator" value={twitter?.creator} fieldName="twitter:creator" issue={findIssue('twitter:creator')} />
-          <TwitterField label="twitter:image:alt" value={twitter?.imageAlt} fieldName="twitter:image:alt" issue={findIssue('twitter:image:alt')} />
+          <TwitterField label="twitter:creator" value={twitter?.creator} fieldName="twitter:creator" issue={findIssue('twitter:creator')} diff={diffs?.['twitter:creator']} />
+          <TwitterField label="twitter:image:alt" value={twitter?.imageAlt} fieldName="twitter:image:alt" issue={findIssue('twitter:image:alt')} diff={diffs?.['twitter:imageAlt']} />
         </div>
 
         {/* Player card if present */}

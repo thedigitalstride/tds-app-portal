@@ -556,14 +556,14 @@ export function LibraryTable({
                                               )}
                                             </div>
 
-                                            {/* Expanded Snapshot View */}
+                                            {/* Expanded Snapshot View - layout matches current analysis (two columns) */}
                                             {expandedSnapshots.has(snapshotKey) && hasSnapshot && (
                                               <div className="border-t bg-neutral-50/50 p-3">
                                                 <MetadataViewer
                                                   data={scan.snapshot as MetadataSnapshot}
                                                   url={analysis.url}
                                                   showIssues={true}
-                                                  compact={true}
+                                                  compareWith={analysis}
                                                 />
                                               </div>
                                             )}
