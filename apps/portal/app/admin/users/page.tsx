@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { Shield, User as UserIcon } from 'lucide-react';
+import Link from 'next/link';
+import { Shield, User as UserIcon, Settings2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -154,15 +155,24 @@ export default function UserManagementPage() {
                       })}
                     </TableCell>
                     <TableCell className="text-right">
-                      {user._id !== session?.user?.id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleRole(user._id, user.role)}
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/users/${user._id}`}
+                          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 border border-neutral-200 bg-white hover:bg-neutral-100 hover:text-neutral-900 h-8 px-3"
                         >
-                          Make {user.role === 'admin' ? 'User' : 'Admin'}
-                        </Button>
-                      )}
+                          <Settings2 className="mr-1 h-3 w-3" />
+                          Permissions
+                        </Link>
+                        {user._id !== session?.user?.id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleRole(user._id, user.role)}
+                          >
+                            Make {user.role === 'admin' ? 'User' : 'Admin'}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
