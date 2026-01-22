@@ -44,6 +44,8 @@ export interface IStructuredData {
   types: string[];
   validationErrors: string[];
   rawScripts?: string[];
+  /** @deprecated Use validationErrors instead. Kept for backwards compatibility with existing data. */
+  errors?: string[];
 }
 
 // Technical SEO interfaces

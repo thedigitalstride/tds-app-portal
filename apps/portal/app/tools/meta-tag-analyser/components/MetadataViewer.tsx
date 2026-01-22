@@ -827,6 +827,9 @@ function StructuredDataSection({
     success: 'border-green-300 bg-green-50/50',
   };
 
+  // Backwards compatibility: use validationErrors if available, fall back to errors for old data
+  const errorsList = structuredData.validationErrors ?? structuredData.errors ?? [];
+
   return (
     <div className="border-t pt-4">
       <SectionHeaderWithTooltip
@@ -863,11 +866,11 @@ function StructuredDataSection({
             </div>
           )}
         </div>
-        {structuredData.validationErrors.length > 0 && (
+        {errorsList.length > 0 && (
           <div className="mt-2 text-xs">
             <span className="text-red-600">Errors:</span>
             <ul className="list-disc list-inside text-red-600 mt-1">
-              {structuredData.validationErrors.map((error, idx) => (
+              {errorsList.map((error, idx) => (
                 <li key={idx} className="truncate" title={error}>{error}</li>
               ))}
             </ul>
