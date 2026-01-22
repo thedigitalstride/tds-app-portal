@@ -16,6 +16,7 @@ import {
   Building2,
   X,
   MessageSquare,
+  Shield,
 } from 'lucide-react';
 import {
   cn,
@@ -47,6 +48,7 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'User Management', href: '/admin/users', icon: Settings },
+  { name: 'Profiles', href: '/admin/profiles', icon: Shield },
   { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare },
 ];
 
