@@ -264,17 +264,33 @@ function parseRobotsDirectives(robotsContent: string): RobotsDirectives | undefi
   return Object.keys(directives).length > 0 ? directives : undefined;
 }
 
-// Validate an image URL
+// Validate an image URL with GET fallback
 async function validateImageUrl(imageUrl: string): Promise<ImageValidation> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(imageUrl, {
+    // Try HEAD first (faster, no body download)
+    let response = await fetch(imageUrl, {
       method: 'HEAD',
       signal: controller.signal,
       headers: { 'User-Agent': 'TDS Meta Tag Analyser/1.0' },
     });
+
+    // Fallback to GET if HEAD returns 404 or 405 (Method Not Allowed)
+    // Many CDNs and image services don't support HEAD requests properly
+    if (response.status === 404 || response.status === 405) {
+      const getController = new AbortController();
+      const getTimeoutId = setTimeout(() => getController.abort(), 5000);
+
+      response = await fetch(imageUrl, {
+        method: 'GET',
+        signal: getController.signal,
+        headers: { 'User-Agent': 'TDS Meta Tag Analyser/1.0' },
+      });
+
+      clearTimeout(getTimeoutId);
+    }
 
     clearTimeout(timeoutId);
 
