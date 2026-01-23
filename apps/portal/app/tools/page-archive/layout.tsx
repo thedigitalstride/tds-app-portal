@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { Sidebar } from '@/components/sidebar';
 
 export default async function PageArchiveLayout({
   children,
@@ -18,5 +19,10 @@ export default async function PageArchiveLayout({
     redirect('/tools');
   }
 
-  return <>{children}</>;
+  return (
+    <div className="flex h-screen bg-neutral-50">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto">{children}</main>
+    </div>
+  );
 }
