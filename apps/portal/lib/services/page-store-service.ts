@@ -38,27 +38,35 @@ interface FetchResult {
  * Fetch a page from the web.
  */
 async function fetchFromWeb(url: string): Promise<FetchResult> {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'TDS Page Store/1.0',
-      'Accept': 'text/html,application/xhtml+xml',
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'TDS Page Store/1.0',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+    }
+
+    const html = await response.text();
+
+    return {
+      html,
+      httpStatus: response.status,
+      contentType: response.headers.get('content-type') || undefined,
+      lastModified: response.headers.get('last-modified') || undefined,
+      cacheControl: response.headers.get('cache-control') || undefined,
+      xRobotsTag: response.headers.get('x-robots-tag') || undefined,
+    };
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const html = await response.text();
-
-  return {
-    html,
-    httpStatus: response.status,
-    contentType: response.headers.get('content-type') || undefined,
-    lastModified: response.headers.get('last-modified') || undefined,
-    cacheControl: response.headers.get('cache-control') || undefined,
-    xRobotsTag: response.headers.get('x-robots-tag') || undefined,
-  };
 }
 
 /**
@@ -145,17 +153,19 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     xRobotsTag: fetchResult.xRobotsTag,
   });
 
-  // Update or create page store entry
+  // Update or create page store entry using atomic operations
   if (pageStore) {
-    pageStore.latestSnapshotId = snapshot._id;
-    pageStore.latestFetchedAt = fetchedAt;
-    pageStore.snapshotCount += 1;
-
-    if (!pageStore.clientsWithAccess.some(id => id.toString() === clientId)) {
-      pageStore.clientsWithAccess.push(clientId as unknown as typeof pageStore.clientsWithAccess[0]);
-    }
-
-    await pageStore.save();
+    await PageStore.updateOne(
+      { urlHash },
+      {
+        $set: {
+          latestSnapshotId: snapshot._id,
+          latestFetchedAt: fetchedAt,
+        },
+        $inc: { snapshotCount: 1 },
+        $addToSet: { clientsWithAccess: clientId },
+      }
+    );
   } else {
     pageStore = await PageStore.create({
       url: normalisedUrl,
@@ -255,18 +265,26 @@ async function enforceRetentionLimit(
 
   // Delete old snapshots beyond the limit
   const toDelete = snapshots.slice(maxSnapshots);
+  let deletedCount = 0;
 
   for (const snapshot of toDelete) {
-    // Delete from Vercel Blob
-    await deletePageHtml(snapshot.blobUrl);
-
-    // Delete from MongoDB
-    await PageSnapshot.findByIdAndDelete(snapshot._id);
+    try {
+      // Delete from Vercel Blob
+      await deletePageHtml(snapshot.blobUrl);
+      // Delete from MongoDB
+      await PageSnapshot.findByIdAndDelete(snapshot._id);
+      deletedCount++;
+    } catch (error) {
+      // Log but continue with other deletions
+      console.error(`Failed to delete snapshot ${snapshot._id}:`, error);
+    }
   }
 
-  // Update count
-  await PageStore.updateOne(
-    { urlHash },
-    { snapshotCount: maxSnapshots }
-  );
+  // Update count based on actual deletions
+  if (deletedCount > 0) {
+    await PageStore.updateOne(
+      { urlHash },
+      { $inc: { snapshotCount: -deletedCount } }
+    );
+  }
 }
