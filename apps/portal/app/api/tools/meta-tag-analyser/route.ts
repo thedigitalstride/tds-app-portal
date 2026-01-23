@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
 import { getPage } from '@/lib/services/page-store-service';
+import { UnauthorizedError, ForbiddenError } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
