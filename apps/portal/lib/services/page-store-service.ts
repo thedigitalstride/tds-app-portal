@@ -250,6 +250,60 @@ export async function getClientUrls(clientId: string): Promise<IPageStore[]> {
 }
 
 /**
+ * Delete URLs and all associated snapshots for a client.
+ */
+export async function deleteUrls(
+  urlHashes: string[],
+  clientId: string
+): Promise<{ deleted: number; errors: string[] }> {
+  await connectDB();
+
+  const errors: string[] = [];
+  let deleted = 0;
+
+  for (const urlHash of urlHashes) {
+    try {
+      // Verify client has access
+      const pageStore = await PageStore.findOne({ urlHash });
+      if (!pageStore || !pageStore.clientsWithAccess.some(id => id.toString() === clientId)) {
+        errors.push(`No access to URL with hash ${urlHash}`);
+        continue;
+      }
+
+      // If this client is the only one with access, delete everything
+      if (pageStore.clientsWithAccess.length === 1) {
+        // Delete all snapshots and their blob storage
+        const snapshots = await PageSnapshot.find({ urlHash });
+        for (const snapshot of snapshots) {
+          try {
+            await deletePageHtml(snapshot.blobUrl);
+          } catch (blobError) {
+            console.error(`Failed to delete blob for snapshot ${snapshot._id}:`, blobError);
+          }
+          await PageSnapshot.findByIdAndDelete(snapshot._id);
+        }
+
+        // Delete the page store entry
+        await PageStore.findByIdAndDelete(pageStore._id);
+      } else {
+        // Remove this client from the access list
+        await PageStore.updateOne(
+          { urlHash },
+          { $pull: { clientsWithAccess: clientId } }
+        );
+      }
+
+      deleted++;
+    } catch (error) {
+      console.error(`Failed to delete URL with hash ${urlHash}:`, error);
+      errors.push(`Failed to delete URL with hash ${urlHash}`);
+    }
+  }
+
+  return { deleted, errors };
+}
+
+/**
  * Enforce rolling window retention limit.
  */
 async function enforceRetentionLimit(

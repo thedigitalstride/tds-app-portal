@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@tds/ui';
-import { Archive, RefreshCw, ExternalLink, Clock, Database } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent, Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@tds/ui';
+import { Archive, RefreshCw, ExternalLink, Clock, Database, Trash2, AlertTriangle } from 'lucide-react';
 
 interface PageStoreEntry {
   _id: string;
   url: string;
+  urlHash: string;
   latestFetchedAt: string;
   snapshotCount: number;
 }
@@ -27,6 +28,9 @@ export default function PageArchivePage() {
   const [selectedUrl, setSelectedUrl] = useState<string>('');
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedUrlHashes, setSelectedUrlHashes] = useState<Set<string>>(new Set());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch clients on mount
   useEffect(() => {
@@ -51,6 +55,7 @@ export default function PageArchivePage() {
         setUrls(data.urls || []);
         setSelectedUrl('');
         setSnapshots([]);
+        setSelectedUrlHashes(new Set());
       })
       .finally(() => setLoading(false));
   }, [selectedClientId]);
@@ -76,6 +81,60 @@ export default function PageArchivePage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  const toggleUrlSelection = (urlHash: string) => {
+    setSelectedUrlHashes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(urlHash)) {
+        newSet.delete(urlHash);
+      } else {
+        newSet.add(urlHash);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUrlHashes.size === urls.length) {
+      setSelectedUrlHashes(new Set());
+    } else {
+      setSelectedUrlHashes(new Set(urls.map(u => u.urlHash)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedUrlHashes.size === 0) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch('/api/page-store/urls', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          urlHashes: Array.from(selectedUrlHashes),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete URLs');
+      }
+
+      // Refresh the URL list
+      const urlsResponse = await fetch(`/api/page-store/urls?clientId=${selectedClientId}`);
+      const data = await urlsResponse.json();
+      setUrls(data.urls || []);
+      setSelectedUrl('');
+      setSnapshots([]);
+      setSelectedUrlHashes(new Set());
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete URLs. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -112,10 +171,36 @@ export default function PageArchivePage() {
         {/* URL List */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              Stored URLs ({urls.length})
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Stored URLs ({urls.length})
+              </CardTitle>
+              {urls.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={urls.length > 0 && selectedUrlHashes.size === urls.length}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300"
+                    />
+                    Select All
+                  </label>
+                  {selectedUrlHashes.size > 0 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowDeleteModal(true)}
+                      className="flex items-center gap-1"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete ({selectedUrlHashes.size})
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {loading && !urls.length ? (
@@ -129,25 +214,36 @@ export default function PageArchivePage() {
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {urls.map(entry => (
-                  <button
+                  <div
                     key={entry._id}
-                    onClick={() => setSelectedUrl(entry.url)}
-                    className={`w-full text-left p-3 rounded-md border transition-colors ${
+                    className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
                       selectedUrl === entry.url
                         ? 'bg-primary/10 border-primary'
                         : 'hover:bg-muted'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm truncate flex-1">
-                        {entry.url}
-                      </span>
-                      <ExternalLink className="h-4 w-4 ml-2 flex-shrink-0" />
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {entry.snapshotCount} snapshots · Last: {formatDate(entry.latestFetchedAt)}
-                    </div>
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={selectedUrlHashes.has(entry.urlHash)}
+                      onChange={() => toggleUrlSelection(entry.urlHash)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 rounded border-gray-300"
+                    />
+                    <button
+                      onClick={() => setSelectedUrl(entry.url)}
+                      className="flex-1 text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-sm truncate flex-1">
+                          {entry.url}
+                        </span>
+                        <ExternalLink className="h-4 w-4 ml-2 flex-shrink-0" />
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {entry.snapshotCount} snapshots · Last: {formatDate(entry.latestFetchedAt)}
+                      </div>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -200,6 +296,55 @@ export default function PageArchivePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete URLs
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedUrlHashes.size} URL{selectedUrlHashes.size !== 1 ? 's' : ''} and all their snapshots? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm">
+            <strong>Warning:</strong> This will permanently delete:
+            <ul className="list-disc ml-5 mt-1">
+              <li>{selectedUrlHashes.size} stored URL{selectedUrlHashes.size !== 1 ? 's' : ''}</li>
+              <li>All associated page snapshots</li>
+              <li>All stored HTML content</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSelected}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete URLs
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
