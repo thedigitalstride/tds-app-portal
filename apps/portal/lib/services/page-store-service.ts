@@ -98,7 +98,7 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     throw new Error('Client not found');
   }
 
-  const freshnessHours = maxAgeOverride ?? client.pageFreshnessHours;
+  const freshnessHours = maxAgeOverride ?? client.pageFreshnessHours ?? 24;
 
   // Check for existing page store entry
   let pageStore = await PageStore.findOne({ urlHash });
@@ -178,7 +178,7 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
   }
 
   // Enforce retention limit
-  await enforceRetentionLimit(urlHash, client.maxSnapshotsPerUrl);
+  await enforceRetentionLimit(urlHash, client.maxSnapshotsPerUrl ?? 10);
 
   return {
     html: fetchResult.html,
