@@ -1,8 +1,40 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@tds/ui';
-import { Archive, RefreshCw, ExternalLink, Clock, Database, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  CardContent,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@tds/ui';
+import {
+  Archive,
+  RefreshCw,
+  ExternalLink,
+  Clock,
+  Database,
+  Trash2,
+  AlertTriangle,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Square,
+  CheckSquare,
+  FileText,
+  History,
+} from 'lucide-react';
 
 interface PageStoreEntry {
   _id: string;
@@ -25,10 +57,18 @@ export default function PageArchivePage() {
   const [clients, setClients] = useState<Array<{ _id: string; name: string }>>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [urls, setUrls] = useState<PageStoreEntry[]>([]);
-  const [selectedUrl, setSelectedUrl] = useState<string>('');
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Table state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedUrlHashes, setSelectedUrlHashes] = useState<Set<string>>(new Set());
+
+  // Snapshot data for expanded rows
+  const [snapshotsCache, setSnapshotsCache] = useState<Record<string, Snapshot[]>>({});
+  const [loadingSnapshots, setLoadingSnapshots] = useState<Set<string>>(new Set());
+
+  // Delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -49,29 +89,38 @@ export default function PageArchivePage() {
     if (!selectedClientId) return;
 
     setLoading(true);
+    setExpandedRows(new Set());
+    setSelectedUrlHashes(new Set());
+    setSnapshotsCache({});
+
     fetch(`/api/page-store/urls?clientId=${selectedClientId}`)
       .then(res => res.json())
       .then(data => {
         setUrls(data.urls || []);
-        setSelectedUrl('');
-        setSnapshots([]);
-        setSelectedUrlHashes(new Set());
       })
       .finally(() => setLoading(false));
   }, [selectedClientId]);
 
-  // Fetch snapshots when URL changes
-  useEffect(() => {
-    if (!selectedUrl || !selectedClientId) return;
+  // Fetch snapshots when a row is expanded
+  const fetchSnapshots = async (url: string, urlHash: string) => {
+    if (snapshotsCache[urlHash]) return;
 
-    setLoading(true);
-    fetch(`/api/page-store/snapshots?url=${encodeURIComponent(selectedUrl)}&clientId=${selectedClientId}`)
-      .then(res => res.json())
-      .then(data => {
-        setSnapshots(data.snapshots || []);
-      })
-      .finally(() => setLoading(false));
-  }, [selectedUrl, selectedClientId]);
+    setLoadingSnapshots(prev => new Set(prev).add(urlHash));
+
+    try {
+      const res = await fetch(`/api/page-store/snapshots?url=${encodeURIComponent(url)}&clientId=${selectedClientId}`);
+      const data = await res.json();
+      setSnapshotsCache(prev => ({ ...prev, [urlHash]: data.snapshots || [] }));
+    } catch (error) {
+      console.error('Failed to fetch snapshots:', error);
+    } finally {
+      setLoadingSnapshots(prev => {
+        const next = new Set(prev);
+        next.delete(urlHash);
+        return next;
+      });
+    }
+  };
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -80,26 +129,55 @@ export default function PageArchivePage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+    });
   };
 
-  const toggleUrlSelection = (urlHash: string) => {
-    setSelectedUrlHashes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(urlHash)) {
-        newSet.delete(urlHash);
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const toggleRowExpand = (entry: PageStoreEntry) => {
+    const urlHash = entry.urlHash;
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(urlHash)) {
+        next.delete(urlHash);
       } else {
-        newSet.add(urlHash);
+        next.add(urlHash);
+        // Fetch snapshots when expanding
+        fetchSnapshots(entry.url, urlHash);
       }
-      return newSet;
+      return next;
+    });
+  };
+
+  const toggleRowSelection = (urlHash: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedUrlHashes(prev => {
+      const next = new Set(prev);
+      if (next.has(urlHash)) {
+        next.delete(urlHash);
+      } else {
+        next.add(urlHash);
+      }
+      return next;
     });
   };
 
   const toggleSelectAll = () => {
-    if (selectedUrlHashes.size === urls.length) {
+    if (selectedUrlHashes.size === filteredUrls.length) {
       setSelectedUrlHashes(new Set());
     } else {
-      setSelectedUrlHashes(new Set(urls.map(u => u.urlHash)));
+      setSelectedUrlHashes(new Set(filteredUrls.map(u => u.urlHash)));
     }
   };
 
@@ -125,8 +203,7 @@ export default function PageArchivePage() {
       const urlsResponse = await fetch(`/api/page-store/urls?clientId=${selectedClientId}`);
       const data = await urlsResponse.json();
       setUrls(data.urls || []);
-      setSelectedUrl('');
-      setSnapshots([]);
+      setExpandedRows(new Set());
       setSelectedUrlHashes(new Set());
       setShowDeleteModal(false);
     } catch (error) {
@@ -137,20 +214,39 @@ export default function PageArchivePage() {
     }
   };
 
+  // Filter URLs by search query
+  const filteredUrls = urls.filter(entry =>
+    searchQuery === '' || entry.url.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const allSelected = filteredUrls.length > 0 && selectedUrlHashes.size === filteredUrls.length;
+  const someSelected = selectedUrlHashes.size > 0 && selectedUrlHashes.size < filteredUrls.length;
+
+  // Get selected client name
+  const selectedClient = clients.find(c => c._id === selectedClientId);
+  const clientName = selectedClient?.name || '';
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center gap-3 mb-8">
-        <Archive className="h-8 w-8 text-primary" />
+    <div className="p-6 lg:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Page Archive</h1>
-          <p className="text-muted-foreground">
-            View and manage stored page snapshots
+          <div className="flex items-center gap-3">
+            <Archive className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl font-semibold text-neutral-900">Page Archive</h1>
+          </div>
+          <p className="mt-1 text-neutral-500">
+            {selectedClientId && clientName ? (
+              <>View stored page snapshots for <span className="font-medium text-neutral-700">{clientName}</span></>
+            ) : (
+              'Select a client to view stored pages'
+            )}
           </p>
         </div>
       </div>
 
       {/* Client Selector */}
-      <Card className="mb-6">
+      <Card>
         <CardContent className="pt-6">
           <label className="block text-sm font-medium mb-2">Select Client</label>
           <select
@@ -167,135 +263,244 @@ export default function PageArchivePage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* URL List */}
+      {/* Loading State */}
+      {loading && (
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-                Stored URLs ({urls.length})
-              </CardTitle>
-              {urls.length > 0 && (
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={urls.length > 0 && selectedUrlHashes.size === urls.length}
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-300"
-                    />
-                    Select All
-                  </label>
-                  {selectedUrlHashes.size > 0 && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowDeleteModal(true)}
-                      className="flex items-center gap-1"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete ({selectedUrlHashes.size})
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading && !urls.length ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="h-6 w-6 animate-spin" />
-              </div>
-            ) : urls.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                No stored pages for this client
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {urls.map(entry => (
-                  <div
-                    key={entry._id}
-                    className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
-                      selectedUrl === entry.url
-                        ? 'bg-primary/10 border-primary'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedUrlHashes.has(entry.urlHash)}
-                      onChange={() => toggleUrlSelection(entry.urlHash)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1 rounded border-gray-300"
-                    />
-                    <button
-                      onClick={() => setSelectedUrl(entry.url)}
-                      className="flex-1 text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm truncate flex-1">
-                          {entry.url}
-                        </span>
-                        <ExternalLink className="h-4 w-4 ml-2 flex-shrink-0" />
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {entry.snapshotCount} snapshots · Last: {formatDate(entry.latestFetchedAt)}
-                      </div>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          <CardContent className="flex items-center justify-center py-16">
+            <RefreshCw className="h-8 w-8 animate-spin text-neutral-300" />
           </CardContent>
         </Card>
+      )}
 
-        {/* Snapshot History */}
+      {/* Empty State - No Client */}
+      {!loading && !selectedClientId && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Snapshot History
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!selectedUrl ? (
-              <p className="text-muted-foreground text-center py-8">
-                Select a URL to view snapshots
-              </p>
-            ) : snapshots.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                No snapshots found
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {snapshots.map(snapshot => (
-                  <div
-                    key={snapshot._id}
-                    className="p-3 rounded-md border"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        {formatDate(snapshot.fetchedAt)}
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        snapshot.httpStatus === 200
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {snapshot.httpStatus}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {snapshot.triggeredByTool} · {formatBytes(snapshot.contentSize)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <FileText className="h-16 w-16 text-neutral-200 mb-4" />
+            <p className="text-lg font-medium text-neutral-600">Select a client to view URLs</p>
+            <p className="text-sm text-neutral-400 mt-1">Choose a client from the dropdown to get started</p>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Empty State - No URLs */}
+      {!loading && selectedClientId && urls.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
+              <Database className="h-8 w-8 text-neutral-400" />
+            </div>
+            <p className="text-lg font-medium text-neutral-700">No stored pages yet</p>
+            <p className="text-sm text-neutral-500 mt-1 text-center max-w-sm">
+              Pages will appear here automatically when scanned by other tools.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* URL Table */}
+      {!loading && selectedClientId && urls.length > 0 && (
+        <div className="space-y-4">
+          {/* Search & Bulk Actions */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <Input
+                placeholder="Search URLs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Bulk Delete */}
+            {selectedUrlHashes.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete {selectedUrlHashes.size} Selected
+              </Button>
+            )}
+          </div>
+
+          {/* Results count */}
+          <p className="text-sm text-neutral-500">
+            {filteredUrls.length} of {urls.length} URLs
+            {searchQuery && ` matching "${searchQuery}"`}
+            {selectedUrlHashes.size > 0 && ` (${selectedUrlHashes.size} selected)`}
+          </p>
+
+          {/* Table */}
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="p-1 hover:bg-neutral-100 rounded"
+                        title={allSelected ? 'Deselect all' : 'Select all'}
+                      >
+                        {allSelected ? (
+                          <CheckSquare className="h-4 w-4 text-blue-600" />
+                        ) : someSelected ? (
+                          <div className="h-4 w-4 border-2 border-blue-600 rounded bg-blue-600/20" />
+                        ) : (
+                          <Square className="h-4 w-4 text-neutral-400" />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>URL</TableHead>
+                    <TableHead className="w-24">Snapshots</TableHead>
+                    <TableHead className="w-32">Last Fetched</TableHead>
+                    <TableHead className="w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUrls.map((entry) => (
+                    <React.Fragment key={entry._id}>
+                      <TableRow
+                        className={`cursor-pointer hover:bg-neutral-50 ${selectedUrlHashes.has(entry.urlHash) ? 'bg-blue-50/50' : ''}`}
+                        onClick={() => toggleRowExpand(entry)}
+                      >
+                        <TableCell onClick={(e) => toggleRowSelection(entry.urlHash, e)}>
+                          <div className="p-1">
+                            {selectedUrlHashes.has(entry.urlHash) ? (
+                              <CheckSquare className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <Square className="h-4 w-4 text-neutral-400" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {expandedRows.has(entry.urlHash) ? (
+                            <ChevronUp className="h-4 w-4 text-neutral-400" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-neutral-400" />
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-md">
+                          <span
+                            className="font-mono text-xs text-neutral-700 truncate block"
+                            title={entry.url}
+                          >
+                            {entry.url.replace(/^https?:\/\//, '').slice(0, 60)}
+                            {entry.url.length > 68 && '...'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-neutral-500 text-sm">
+                            <History className="h-3 w-3" />
+                            {entry.snapshotCount}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-neutral-500 text-xs">
+                          {formatDate(entry.latestFetchedAt)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => window.open(entry.url, '_blank')}
+                              title="Open URL"
+                            >
+                              <ExternalLink className="h-4 w-4 text-neutral-400 hover:text-blue-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Expanded Row - Snapshot History */}
+                      {expandedRows.has(entry.urlHash) && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-neutral-50/50 p-0">
+                            <div className="p-4 space-y-4">
+                              {/* URL Header with Open Link */}
+                              <div className="flex items-center gap-2 pb-2 border-b">
+                                <a
+                                  href={entry.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-sm text-blue-600 hover:underline flex items-center gap-2"
+                                >
+                                  {entry.url}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </div>
+
+                              {/* Snapshot History */}
+                              <div>
+                                <h4 className="text-sm font-medium text-neutral-700 mb-3 flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  Snapshot History
+                                </h4>
+
+                                {loadingSnapshots.has(entry.urlHash) ? (
+                                  <div className="flex items-center gap-2 text-neutral-500 text-sm">
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Loading snapshots...
+                                  </div>
+                                ) : snapshotsCache[entry.urlHash]?.length === 0 ? (
+                                  <p className="text-sm text-neutral-500">No snapshots found</p>
+                                ) : (
+                                  <div className="relative pl-4">
+                                    <div className="absolute left-1.5 top-2 bottom-2 w-0.5 bg-neutral-200" />
+                                    <div className="space-y-2">
+                                      {snapshotsCache[entry.urlHash]?.map((snapshot) => (
+                                        <div key={snapshot._id} className="relative">
+                                          <div className={`absolute -left-2.5 top-2 w-2 h-2 rounded-full ${
+                                            snapshot.httpStatus === 200 ? 'bg-green-500' : 'bg-amber-500'
+                                          }`} />
+                                          <div className="rounded border bg-white p-3">
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex items-center gap-2 text-xs">
+                                                <Clock className="h-3 w-3 text-neutral-400" />
+                                                <span>{formatDateTime(snapshot.fetchedAt)}</span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                                  snapshot.httpStatus === 200
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                  {snapshot.httpStatus}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500">
+                                              <span className="flex items-center gap-1">
+                                                <Database className="h-3 w-3" />
+                                                {formatBytes(snapshot.contentSize)}
+                                              </span>
+                                              <span>
+                                                via <span className="font-medium">{snapshot.triggeredByTool}</span>
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
