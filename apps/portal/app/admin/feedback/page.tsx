@@ -430,6 +430,7 @@ export default function FeedbackDashboardPage() {
                       rel="noopener noreferrer"
                       className="block"
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- External blob URL, can't use Next.js Image */}
                       <img
                         src={selectedFeedback.screenshotUrl}
                         alt="Feedback screenshot"

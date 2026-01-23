@@ -421,6 +421,7 @@ function FaviconField({ value, url, diff }: { value?: string; url: string; diff?
       <MetaFieldLabel fieldKey="favicon" label="Favicon" size="xs" variant="muted" />
       {value ? (
         <div className={`flex items-center gap-2 bg-white/80 p-1 rounded border mt-0.5 ${fieldBorder}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- External favicon URL from scanned site */}
           <img
             src={faviconSrc}
             alt="Favicon"
@@ -609,6 +610,7 @@ function OpenGraphSection({
         {/* Image preview if present */}
         {openGraph?.image && (
           <div className="flex items-center gap-2 mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- External og:image URL from scanned site */}
             <img
               src={openGraph.image}
               alt="OG preview"
@@ -774,6 +776,7 @@ function TwitterCardSection({
         {/* Image preview if present */}
         {twitter?.image && (
           <div className="flex items-center gap-2 mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- External twitter:image URL from scanned site */}
             <img
               src={twitter.image}
               alt="Twitter preview"
@@ -1078,6 +1081,7 @@ function MobileSection({
             <div className="flex flex-wrap gap-2 mt-1">
               {mobile.appleTouchIcons.map((icon, idx) => (
                 <div key={idx} className="flex items-center gap-1 bg-white/80 p-1 rounded border">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- External apple-touch-icon URL from scanned site */}
                   <img
                     src={icon.href}
                     alt={`Touch icon ${icon.sizes || 'default'}`}

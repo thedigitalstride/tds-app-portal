@@ -269,6 +269,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                 </label>
                 {screenshotPreview ? (
                   <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Data URL preview, can't use Next.js Image */}
                     <img
                       src={screenshotPreview}
                       alt="Screenshot preview"
