@@ -1,4 +1,4 @@
-import { LucideIcon, Search, Users, Settings, FolderOpen } from 'lucide-react';
+import { LucideIcon, Search, Users, Settings, FolderOpen, Archive } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -21,6 +21,16 @@ export const tools: Tool[] = [
     href: '/tools/meta-tag-analyser',
     category: 'seo',
     isNew: true,
+    hasClientData: true,
+  },
+  {
+    id: 'page-archive',
+    name: 'Page Archive',
+    description: 'View and manage stored page snapshots across all tools.',
+    icon: Archive,
+    href: '/tools/page-archive',
+    category: 'utility',
+    requiredRole: 'admin',
     hasClientData: true,
   },
   // Add more tools here as they are built
