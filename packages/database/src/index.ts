@@ -7,3 +7,5 @@ export { Feedback, type IFeedback, type IFeedbackNote, type FeedbackType, type F
 export { Profile, type IProfile } from './models/profile';
 export { UserPermissions, type IUserPermissions } from './models/user-permissions';
 export { ClientAssignment, type IClientAssignment } from './models/client-assignment';
+export { PageSnapshot, type IPageSnapshot } from './models/page-snapshot';
+export { PageStore, type IPageStore } from './models/page-store';
