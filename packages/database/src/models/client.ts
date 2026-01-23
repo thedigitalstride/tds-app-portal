@@ -9,6 +9,9 @@ export interface IClient extends Document {
   contactName?: string;
   isActive: boolean;
   createdBy: mongoose.Types.ObjectId;
+  // Page store settings
+  pageFreshnessHours: number;
+  maxSnapshotsPerUrl: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +49,19 @@ const clientSchema = new Schema<IClient>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    // Page store settings
+    pageFreshnessHours: {
+      type: Number,
+      default: 24,
+      min: 1,
+      max: 168, // 1 week max
+    },
+    maxSnapshotsPerUrl: {
+      type: Number,
+      default: 10,
+      min: 1,
+      max: 100,
     },
   },
   {
