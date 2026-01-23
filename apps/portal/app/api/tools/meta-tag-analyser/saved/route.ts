@@ -483,11 +483,6 @@ export async function POST(request: NextRequest) {
 // DELETE - Bulk delete analyses
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
     const { clientId, ids } = body;
 
@@ -505,6 +500,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Verify user has access to this client
+    await requireClientAccess(clientId);
+
     await connectDB();
 
     // Delete all analyses matching the IDs and clientId (security check)
@@ -518,6 +516,12 @@ export async function DELETE(request: NextRequest) {
       message: `${result.deletedCount} URL${result.deletedCount !== 1 ? 's' : ''} deleted`,
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.error('Failed to delete analyses:', error);
     return NextResponse.json(
       { error: 'Failed to delete analyses' },

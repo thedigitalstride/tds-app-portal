@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { getServerSession } from '@/lib/auth';
-import { connectDB, Feedback, User } from '@tds/database';
+import { connectDB, Feedback } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
 

@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@tds/ui';
-import { tools, type Tool } from '@/lib/tools';
+import { tools } from '@/lib/tools';
 import { useClient } from '@/components/client-context';
 
 interface ToolUsageData {

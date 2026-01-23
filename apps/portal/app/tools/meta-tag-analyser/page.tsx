@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, RefreshCw, Pause, Play, Square } from 'lucide-react';
 import { Button } from '@tds/ui';
 import { useClient } from '@/components/client-context';

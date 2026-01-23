@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button, Card, Badge, Checkbox } from '@tds/ui';
 import { ArrowLeft, Plus, X, Check, Ban } from 'lucide-react';
 import { tools } from '@/lib/tools';
@@ -227,9 +228,9 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
               {allProfiles.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No profiles created yet.{' '}
-                  <a href="/admin/profiles" className="underline">
+                  <Link href="/admin/profiles" className="underline">
                     Create one
-                  </a>
+                  </Link>
                 </p>
               )}
             </div>

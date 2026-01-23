@@ -33,18 +33,6 @@ export function compareFields(
 }
 
 /**
- * Flattens nested object values into comparable strings
- */
-function flattenValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return value.map(flattenValue).join(', ');
-  if (typeof value === 'object') return JSON.stringify(value);
-  return '';
-}
-
-/**
  * Compares two metadata snapshots and returns a map of field diffs
  */
 export function compareSnapshots(

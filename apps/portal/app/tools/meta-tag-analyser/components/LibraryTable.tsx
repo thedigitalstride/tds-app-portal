@@ -57,7 +57,7 @@ export function LibraryTable({
   analyses,
   isLoading,
   clientId,
-  clientName,
+  clientName: _clientName,
   onRescan,
   onDelete,
   onBulkDelete,
@@ -508,7 +508,11 @@ export function LibraryTable({
                                     e.stopPropagation();
                                     setExpandedHistories(prev => {
                                       const next = new Set(prev);
-                                      next.has(analysis._id) ? next.delete(analysis._id) : next.add(analysis._id);
+                                      if (next.has(analysis._id)) {
+                                        next.delete(analysis._id);
+                                      } else {
+                                        next.add(analysis._id);
+                                      }
                                       return next;
                                     });
                                   }}

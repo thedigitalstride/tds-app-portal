@@ -199,7 +199,7 @@ async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues:
 
   // Extract structured data
   const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
-  let structuredDataFound = scripts.length > 0;
+  const structuredDataFound = scripts.length > 0;
   let structuredDataValid = true;
   const structuredDataTypes: string[] = [];
   const structuredDataErrors: string[] = [];

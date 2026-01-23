@@ -117,16 +117,16 @@ export function ScanPanel({
   queueStatus,
   isPolling,
   isPaused,
-  queueLoading,
+  queueLoading: _queueLoading,
   queueProgress,
   startPolling,
-  stopPolling,
+  stopPolling: _stopPolling,
   pausePolling,
   resumePolling,
   cancelQueue,
   refreshStatus,
   queueUrls,
-  totalProcessed,
+  totalProcessed: _totalProcessed,
 }: ScanPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
 
@@ -379,7 +379,7 @@ export function ScanPanel({
         const data = await res.json();
         setBulkError(data.error || 'Failed to save results');
       }
-    } catch (err) {
+    } catch (_err) {
       setBulkError('Failed to save bulk results');
     } finally {
       setBulkSaving(false);
