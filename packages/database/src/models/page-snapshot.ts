@@ -64,10 +64,13 @@ const pageSnapshotSchema = new Schema<IPageSnapshot>(
     contentSize: {
       type: Number,
       required: true,
+      min: 0,
     },
     httpStatus: {
       type: Number,
       required: true,
+      min: 100,
+      max: 599,
     },
     contentType: String,
     lastModified: String,
