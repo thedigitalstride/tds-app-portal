@@ -236,6 +236,32 @@ export default function MetaTagAnalyserPage() {
     }
   };
 
+  // Handle bulk delete
+  const handleBulkDelete = async (ids: string[]) => {
+    if (!selectedClientId) return;
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/saved', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId, ids }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedAnalyses(prev => prev.filter(a => !ids.includes(a._id)));
+        addToast({
+          type: 'success',
+          message: data.message,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to bulk delete:', error);
+      addToast({
+        type: 'error',
+        message: 'Failed to delete URLs',
+      });
+    }
+  };
+
   // Handle export
   const handleExport = (format: 'csv' | 'json') => {
     if (!selectedClientId) return;
@@ -342,6 +368,7 @@ export default function MetaTagAnalyserPage() {
         clientName={clientName}
         onRescan={handleRescan}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onExport={handleExport}
         onAddUrls={() => setIsPanelOpen(true)}
       />

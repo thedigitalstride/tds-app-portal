@@ -17,6 +17,7 @@ import {
   Plus,
   Square,
   CheckSquare,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Button,
@@ -30,6 +31,12 @@ import {
   TableHead,
   TableRow,
   TableCell,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@tds/ui';
 import { MetadataViewer } from './MetadataViewer';
 import type { SavedAnalysis, MetadataSnapshot } from './types';
@@ -41,6 +48,7 @@ interface LibraryTableProps {
   clientName: string;
   onRescan: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onBulkDelete?: (ids: string[]) => Promise<void>;
   onExport: (format: 'csv' | 'json') => void;
   onAddUrls: () => void;
 }
@@ -52,6 +60,7 @@ export function LibraryTable({
   clientName,
   onRescan,
   onDelete,
+  onBulkDelete,
   onExport,
   onAddUrls,
 }: LibraryTableProps) {
@@ -63,6 +72,8 @@ export function LibraryTable({
   const [scoreFilter, setScoreFilter] = useState<'all' | 'good' | 'warning' | 'error'>('all');
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkRescanning, setBulkRescanning] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600 bg-green-50';
@@ -152,6 +163,21 @@ export function LibraryTable({
 
   const handleRescanAll = () => {
     handleBulkRescan(filteredAnalyses.map(a => a._id));
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRows.size === 0 || !onBulkDelete) return;
+
+    setBulkDeleting(true);
+    try {
+      await onBulkDelete(Array.from(selectedRows));
+      setSelectedRows(new Set());
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error('Failed to delete:', error);
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   // Filter and search
@@ -266,19 +292,32 @@ export function LibraryTable({
         <div className="flex gap-2">
           {/* Bulk Rescan Buttons */}
           {selectedRows.size > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRescanSelected}
-              disabled={bulkRescanning}
-            >
-              {bulkRescanning ? (
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCcw className="mr-2 h-4 w-4" />
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRescanSelected}
+                disabled={bulkRescanning || bulkDeleting}
+              >
+                {bulkRescanning ? (
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                )}
+                Rescan {selectedRows.size} Selected
+              </Button>
+              {onBulkDelete && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteModal(true)}
+                  disabled={bulkRescanning || bulkDeleting}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete {selectedRows.size} Selected
+                </Button>
               )}
-              Rescan {selectedRows.size} Selected
-            </Button>
+            </>
           ) : (
             <Button
               variant="outline"
@@ -586,6 +625,55 @@ export function LibraryTable({
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete URLs
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedRows.size} URL{selectedRows.size !== 1 ? 's' : ''}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm">
+            <strong>Warning:</strong> This will permanently delete:
+            <ul className="list-disc ml-5 mt-1">
+              <li>{selectedRows.size} saved URL{selectedRows.size !== 1 ? 's' : ''}</li>
+              <li>All scan history for these URLs</li>
+              <li>All metadata snapshots</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={bulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete URLs
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -479,3 +479,49 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Bulk delete analyses
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { clientId, ids } = body;
+
+    if (!clientId) {
+      return NextResponse.json(
+        { error: 'clientId is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: 'ids array is required' },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+
+    // Delete all analyses matching the IDs and clientId (security check)
+    const result = await MetaTagAnalysis.deleteMany({
+      _id: { $in: ids },
+      clientId,
+    });
+
+    return NextResponse.json({
+      deleted: result.deletedCount,
+      message: `${result.deletedCount} URL${result.deletedCount !== 1 ? 's' : ''} deleted`,
+    });
+  } catch (error) {
+    console.error('Failed to delete analyses:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete analyses' },
+      { status: 500 }
+    );
+  }
+}
