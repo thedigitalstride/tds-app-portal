@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Card, Badge, Checkbox } from '@tds/ui';
@@ -44,11 +44,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [id]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [userRes, permRes, profilesRes, clientsRes, assignedRes] = await Promise.all([
         fetch(`/api/admin/users/${id}`),
@@ -72,7 +68,11 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const savePermissions = async (updates: Partial<UserPermissions>) => {
     setSaving(true);

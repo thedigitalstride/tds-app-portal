@@ -172,6 +172,14 @@ export function useQueuePolling({
     }
   }, [isPolling, poll]);
 
+  // Refresh status without processing
+  const refreshStatus = useCallback(async () => {
+    const newStatus = await fetchStatus();
+    if (newStatus && mountedRef.current) {
+      setStatus(newStatus);
+    }
+  }, [fetchStatus]);
+
   // Cancel queue
   const cancelQueue = useCallback(async (batchId?: string) => {
     if (!clientId) return;
@@ -196,15 +204,7 @@ export function useQueuePolling({
       console.error('Error cancelling queue:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to cancel queue');
     }
-  }, [clientId, stopPolling, onError]);
-
-  // Refresh status without processing
-  const refreshStatus = useCallback(async () => {
-    const newStatus = await fetchStatus();
-    if (newStatus && mountedRef.current) {
-      setStatus(newStatus);
-    }
-  }, [fetchStatus]);
+  }, [clientId, stopPolling, refreshStatus, onError]);
 
   // Queue URLs
   const queueUrls = useCallback(async (urls: string[]): Promise<{ queued: number; batchId: string }> => {
