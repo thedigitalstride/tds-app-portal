@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { connectDB, MetaTagAnalysis } from '@tds/database';
 import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
+import {
+  requireClientAccess,
+  UnauthorizedError,
+  ForbiddenError,
+} from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
