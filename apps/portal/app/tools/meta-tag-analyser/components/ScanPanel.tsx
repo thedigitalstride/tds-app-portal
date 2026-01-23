@@ -16,6 +16,7 @@ import {
   Play,
   Square,
   Clock,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Button,
@@ -99,9 +100,10 @@ interface ScanPanelProps {
   stopPolling: () => void;
   pausePolling: () => void;
   resumePolling: () => void;
-  cancelQueue: (batchId?: string) => Promise<void>;
+  cancelQueue: (batchId?: string, clearAll?: boolean) => Promise<void>;
   refreshStatus: () => Promise<void>;
-  queueUrls: (urls: string[]) => Promise<{ queued: number; batchId: string }>;
+  queueUrls: (urls: string[], clearExisting?: boolean) => Promise<{ queued: number; batchId: string }>;
+  retryFailed: () => Promise<{ reset: number }>;
   totalProcessed: number;
 }
 
@@ -126,6 +128,7 @@ export function ScanPanel({
   cancelQueue,
   refreshStatus,
   queueUrls,
+  retryFailed,
   totalProcessed: _totalProcessed,
 }: ScanPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
@@ -147,10 +150,18 @@ export function ScanPanel({
     analyzed: number;
     failed: number;
     averageScore: number;
+    filteredUrls?: {
+      nestedSitemaps: number;
+      duplicates: number;
+      total: number;
+    };
   } | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [retryLoading, setRetryLoading] = useState(false);
+  // Track total URLs discovered (may be more than queued after filtering)
+  const [_totalDiscovered, setTotalDiscovered] = useState<number | null>(null);
 
   // Show resume prompt if there are pending URLs and not already polling
   const showResumePrompt = queueStatus?.hasQueuedUrls && !isPolling;
@@ -220,6 +231,7 @@ export function ScanPanel({
     setBulkResults([]);
     setBulkStats(null);
     setExpandedRows(new Set());
+    setTotalDiscovered(null);
 
     try {
       let urlsToScan: string[] = [];
@@ -229,7 +241,7 @@ export function ScanPanel({
         const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'sitemap', sitemapUrl }),
+          body: JSON.stringify({ mode: 'sitemap', sitemapUrl, clientId }),
         });
 
         const data = await res.json();
@@ -250,6 +262,7 @@ export function ScanPanel({
           analyzed: data.analyzed,
           failed: data.failed,
           averageScore: data.averageScore,
+          filteredUrls: data.filteredUrls,
         });
 
         // Queue remaining URLs if there are more than 50
@@ -275,7 +288,7 @@ export function ScanPanel({
         const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls: urlsToScan }),
+          body: JSON.stringify({ mode: 'urls', urls: urlsToScan, clientId }),
         });
 
         const data = await res.json();
@@ -305,7 +318,7 @@ export function ScanPanel({
         const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls: immediateUrls }),
+          body: JSON.stringify({ mode: 'urls', urls: immediateUrls, clientId }),
         });
 
         const data = await res.json();
@@ -340,6 +353,23 @@ export function ScanPanel({
       setBulkError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  // Handle retry failed URLs
+  const handleRetryFailed = async () => {
+    setRetryLoading(true);
+    try {
+      const result = await retryFailed();
+      if (result.reset > 0) {
+        setSuccess(`${result.reset} URLs reset for retry.`);
+        startPolling();
+        setTimeout(() => setSuccess(null), 3000);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'Failed to retry');
+    } finally {
+      setRetryLoading(false);
     }
   };
 
@@ -678,6 +708,66 @@ export function ScanPanel({
                 </div>
               )}
 
+              {/* Failed URLs Section */}
+              {queueStatus && queueStatus.failedUrls && queueStatus.failedUrls.length > 0 && !isPolling && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-red-800">
+                        {queueStatus.failedUrls.length} URL{queueStatus.failedUrls.length !== 1 ? 's' : ''} failed
+                      </p>
+                      <p className="text-sm text-red-700 mt-1">
+                        These URLs could not be scanned after multiple attempts.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Failed URLs List */}
+                  <div className="max-h-32 overflow-y-auto bg-white/50 rounded border border-red-200">
+                    {queueStatus.failedUrls.slice(0, 10).map((f, i) => (
+                      <div key={i} className="px-2 py-1 border-b border-red-100 last:border-b-0">
+                        <p className="font-mono text-xs text-red-800 truncate" title={f.url}>
+                          {f.url.replace(/^https?:\/\//, '')}
+                        </p>
+                        <p className="text-xs text-red-600">{f.error}</p>
+                      </div>
+                    ))}
+                    {queueStatus.failedUrls.length > 10 && (
+                      <div className="px-2 py-1 text-xs text-red-600 italic">
+                        ...and {queueStatus.failedUrls.length - 10} more
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRetryFailed}
+                      disabled={retryLoading}
+                      className="border-red-300 text-red-700 hover:bg-red-100"
+                    >
+                      {retryLoading ? (
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                      )}
+                      Retry Failed
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => cancelQueue(undefined, true)}
+                      className="border-red-300 text-red-700 hover:bg-red-100"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Error */}
               {bulkError && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
@@ -718,6 +808,26 @@ export function ScanPanel({
                       </p>
                     </div>
                   </div>
+
+                  {/* Filtered URLs Info */}
+                  {bulkStats.filteredUrls && bulkStats.filteredUrls.total > 0 && (
+                    <div className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-2">
+                      <span className="font-medium">{bulkStats.filteredUrls.total} URLs filtered:</span>
+                      {bulkStats.filteredUrls.nestedSitemaps > 0 && (
+                        <span className="ml-1">
+                          {bulkStats.filteredUrls.nestedSitemaps} nested sitemap{bulkStats.filteredUrls.nestedSitemaps !== 1 ? 's' : ''} (processed recursively)
+                        </span>
+                      )}
+                      {bulkStats.filteredUrls.nestedSitemaps > 0 && bulkStats.filteredUrls.duplicates > 0 && (
+                        <span>, </span>
+                      )}
+                      {bulkStats.filteredUrls.duplicates > 0 && (
+                        <span>
+                          {bulkStats.filteredUrls.duplicates} duplicate{bulkStats.filteredUrls.duplicates !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Results List with Checkboxes */}
                   <div className="border rounded-lg overflow-hidden">

@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { calculateScore, type CategoryScores } from '@/app/tools/meta-tag-analyser/lib/scoring';
+import { getPage } from '@/lib/services/page-store-service';
 
 export const dynamic = 'force-dynamic';
+
+interface FilteredUrl {
+  url: string;
+  reason: 'nested_sitemap' | 'duplicate';
+}
+
+interface ParseSitemapResult {
+  urls: string[];
+  filteredUrls: FilteredUrl[];
+}
 
 interface MetaTagResult {
   url: string;
@@ -91,8 +102,18 @@ function decodeHtmlEntities(text: string): string {
   return decoded;
 }
 
-// Parse sitemap XML and extract URLs
-async function parseSitemap(sitemapUrl: string): Promise<string[]> {
+// Parse sitemap XML and extract URLs with filtered URL tracking
+async function parseSitemap(
+  sitemapUrl: string,
+  seenUrls: Set<string> = new Set(),
+  filteredUrls: FilteredUrl[] = [],
+  depth: number = 0
+): Promise<ParseSitemapResult> {
+  // Prevent infinite recursion
+  if (depth > 3) {
+    return { urls: [], filteredUrls };
+  }
+
   const response = await fetch(sitemapUrl, {
     headers: {
       'User-Agent': 'TDS Meta Tag Analyser/1.0',
@@ -106,6 +127,7 @@ async function parseSitemap(sitemapUrl: string): Promise<string[]> {
 
   const xml = await response.text();
   const urls: string[] = [];
+  const nestedSitemapUrls: string[] = [];
 
   // Extract URLs from <loc> tags
   const locRegex = /<loc>([^<]+)<\/loc>/gi;
@@ -113,45 +135,75 @@ async function parseSitemap(sitemapUrl: string): Promise<string[]> {
 
   while ((match = locRegex.exec(xml)) !== null) {
     const url = match[1].trim();
-    // Skip XML files entirely - they're either nested sitemaps or non-webpage files
-    // Nested sitemaps are handled separately below
+
+    // Check for nested sitemaps (XML files)
     if (url.endsWith('.xml')) {
+      // Track as filtered URL and collect for recursive fetch
+      filteredUrls.push({ url, reason: 'nested_sitemap' });
+      nestedSitemapUrls.push(url);
       continue;
     }
-    // Add all non-XML URLs as pages to analyse
+
+    // Check for duplicates
+    if (seenUrls.has(url)) {
+      filteredUrls.push({ url, reason: 'duplicate' });
+      continue;
+    }
+
+    // Add to seen set and URLs list
+    seenUrls.add(url);
     urls.push(url);
   }
 
-  // If we found sitemap index entries, try to fetch them
-  const sitemapUrls = Array.from(xml.matchAll(/<loc>([^<]*sitemap[^<]*\.xml)<\/loc>/gi))
-    .map(m => m[1].trim());
-
-  for (const nestedSitemapUrl of sitemapUrls.slice(0, 5)) { // Limit nested sitemaps
+  // Recursively fetch nested sitemaps (limit to 5 per level)
+  for (const nestedSitemapUrl of nestedSitemapUrls.slice(0, 5)) {
     try {
-      const nestedUrls = await parseSitemap(nestedSitemapUrl);
-      urls.push(...nestedUrls);
+      const nestedResult = await parseSitemap(nestedSitemapUrl, seenUrls, filteredUrls, depth + 1);
+      urls.push(...nestedResult.urls);
     } catch {
       // Skip failed nested sitemaps
     }
   }
 
-  return [...new Set(urls)]; // Remove duplicates
+  return { urls, filteredUrls };
 }
 
-// Analyze a single URL
-async function analyzeUrl(url: string): Promise<{ result: MetaTagResult; issues: AnalysisIssue[] }> {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'TDS Meta Tag Analyser/1.0',
-      'Accept': 'text/html,application/xhtml+xml',
-    },
-  });
+interface AnalyzeOptions {
+  clientId?: string;
+  userId?: string;
+}
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.status}`);
+// Analyze a single URL - uses page store if clientId provided
+async function analyzeUrl(
+  url: string,
+  options?: AnalyzeOptions
+): Promise<{ result: MetaTagResult; issues: AnalysisIssue[] }> {
+  let html: string;
+
+  if (options?.clientId && options?.userId) {
+    // Use page store service for caching and versioning
+    const pageResult = await getPage({
+      url,
+      clientId: options.clientId,
+      userId: options.userId,
+      toolId: 'meta-tag-analyser',
+    });
+    html = pageResult.html;
+  } else {
+    // Direct fetch (backwards compatibility)
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'TDS Meta Tag Analyser/1.0',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+
+    html = await response.text();
   }
-
-  const html = await response.text();
 
   const getMetaContent = (name: string): string => {
     const nameMatch = html.match(
@@ -295,9 +347,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { mode, sitemapUrl, urls } = body;
+    const { mode, sitemapUrl, urls, clientId, parseOnly } = body;
 
     let urlsToAnalyze: string[] = [];
+    let filteredUrlsInfo: FilteredUrl[] = [];
 
     if (mode === 'sitemap') {
       if (!sitemapUrl) {
@@ -305,7 +358,9 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        urlsToAnalyze = await parseSitemap(sitemapUrl);
+        const parseResult = await parseSitemap(sitemapUrl);
+        urlsToAnalyze = parseResult.urls;
+        filteredUrlsInfo = parseResult.filteredUrls;
       } catch (error) {
         return NextResponse.json(
           { error: `Failed to parse sitemap: ${error instanceof Error ? error.message : 'Unknown error'}` },
@@ -320,6 +375,28 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ error: 'Invalid mode. Use "sitemap" or "urls"' }, { status: 400 });
     }
+
+    // If parseOnly mode, return URLs without analyzing
+    // This allows frontend to queue ALL URLs for consistent progress tracking
+    if (parseOnly) {
+      const filteredSummary = {
+        nestedSitemaps: filteredUrlsInfo.filter(f => f.reason === 'nested_sitemap').length,
+        duplicates: filteredUrlsInfo.filter(f => f.reason === 'duplicate').length,
+        total: filteredUrlsInfo.length,
+      };
+
+      return NextResponse.json({
+        urls: urlsToAnalyze,
+        totalUrls: urlsToAnalyze.length,
+        filteredUrls: filteredSummary,
+      });
+    }
+
+    // Prepare options for analyzeUrl if clientId is provided
+    const analyzeOptions: AnalyzeOptions | undefined = clientId ? {
+      clientId,
+      userId: session.user.id,
+    } : undefined;
 
     // Store all URLs before limiting
     const allDiscoveredUrls = [...urlsToAnalyze];
@@ -342,7 +419,7 @@ export async function POST(request: NextRequest) {
 
     for (const url of urlsToAnalyze) {
       try {
-        const { result, issues } = await analyzeUrl(url);
+        const { result, issues } = await analyzeUrl(url, analyzeOptions);
         // Use new severity-based scoring algorithm
         const { score, categoryScores } = calculateScore(result, issues);
 
@@ -368,6 +445,13 @@ export async function POST(request: NextRequest) {
     // Get remaining URLs that weren't scanned
     const remainingUrls = allDiscoveredUrls.slice(maxUrls);
 
+    // Summarize filtered URLs by reason
+    const filteredSummary = {
+      nestedSitemaps: filteredUrlsInfo.filter(f => f.reason === 'nested_sitemap').length,
+      duplicates: filteredUrlsInfo.filter(f => f.reason === 'duplicate').length,
+      total: filteredUrlsInfo.length,
+    };
+
     return NextResponse.json({
       totalUrls: allDiscoveredUrls.length,
       scannedUrls: urlsToAnalyze.length,
@@ -377,6 +461,7 @@ export async function POST(request: NextRequest) {
       results,
       remainingUrls,
       hasMoreUrls: remainingUrls.length > 0,
+      filteredUrls: filteredSummary,
     });
   } catch (error) {
     console.error('Bulk analysis error:', error);

@@ -72,6 +72,7 @@ export default function MetaTagAnalyserPage() {
     cancelQueue,
     refreshStatus,
     queueUrls,
+    retryFailed,
     totalProcessed,
   } = useQueuePolling({
     clientId: selectedClientId,
@@ -393,6 +394,7 @@ export default function MetaTagAnalyserPage() {
         cancelQueue={cancelQueue}
         refreshStatus={refreshStatus}
         queueUrls={queueUrls}
+        retryFailed={retryFailed}
         totalProcessed={totalProcessed}
       />
     </div>

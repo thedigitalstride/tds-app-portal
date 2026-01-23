@@ -39,9 +39,10 @@ interface UseQueuePollingReturn {
   stopPolling: () => void;
   pausePolling: () => void;
   resumePolling: () => void;
-  cancelQueue: (batchId?: string) => Promise<void>;
+  cancelQueue: (batchId?: string, clearAll?: boolean) => Promise<void>;
   refreshStatus: () => Promise<void>;
-  queueUrls: (urls: string[]) => Promise<{ queued: number; batchId: string }>;
+  queueUrls: (urls: string[], clearExisting?: boolean) => Promise<{ queued: number; batchId: string }>;
+  retryFailed: () => Promise<{ reset: number }>;
   totalProcessed: number;
   totalQueued: number;
 }
@@ -118,10 +119,15 @@ export function useQueuePolling({
       if (newStatus) {
         setStatus(newStatus);
 
-        // Calculate progress
-        const total = totalQueued || (newStatus.completed + newStatus.remainingToProcess + newStatus.permanentlyFailed);
+        // Calculate progress - ALWAYS use status.total from database which is accurate
+        // Don't use totalQueued as it can accumulate incorrectly across sessions
+        const total = newStatus.total;
         const completed = newStatus.completed;
-        onProgress?.(completed, total);
+
+        // Ensure total >= completed to prevent nonsensical display like "76/26"
+        if (total >= completed && total > 0) {
+          onProgress?.(completed, total);
+        }
 
         // Check if done
         if (newStatus.remainingToProcess === 0 && newStatus.processing === 0) {
@@ -132,7 +138,7 @@ export function useQueuePolling({
     }
 
     setIsLoading(false);
-  }, [clientId, isPaused, processNextBatch, fetchStatus, onProgress, onComplete, totalQueued]);
+  }, [clientId, isPaused, processNextBatch, fetchStatus, onProgress, onComplete]);
 
   // Start polling
   const startPolling = useCallback(() => {
@@ -141,6 +147,7 @@ export function useQueuePolling({
     setIsPolling(true);
     setIsPaused(false);
     setTotalProcessed(0);
+    // Note: Don't reset totalQueued here - it's set by queueUrls which is called BEFORE startPolling
 
     // Initial poll
     poll();
@@ -180,8 +187,8 @@ export function useQueuePolling({
     }
   }, [fetchStatus]);
 
-  // Cancel queue
-  const cancelQueue = useCallback(async (batchId?: string) => {
+  // Cancel queue (clearAll=true deletes all including failed/completed)
+  const cancelQueue = useCallback(async (batchId?: string, clearAll = false) => {
     if (!clientId) return;
 
     try {
@@ -190,6 +197,9 @@ export function useQueuePolling({
         params.set('batchId', batchId);
       } else {
         params.set('clientId', clientId);
+      }
+      if (clearAll) {
+        params.set('clearAll', 'true');
       }
 
       const res = await fetch(`/api/tools/meta-tag-analyser/queue?${params.toString()}`, {
@@ -207,13 +217,13 @@ export function useQueuePolling({
   }, [clientId, stopPolling, refreshStatus, onError]);
 
   // Queue URLs
-  const queueUrls = useCallback(async (urls: string[]): Promise<{ queued: number; batchId: string }> => {
+  const queueUrls = useCallback(async (urls: string[], clearExisting = true): Promise<{ queued: number; batchId: string }> => {
     if (!clientId) throw new Error('No client selected');
 
     const res = await fetch('/api/tools/meta-tag-analyser/queue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId, urls }),
+      body: JSON.stringify({ clientId, urls, clearExisting }),
     });
 
     if (!res.ok) {
@@ -225,6 +235,26 @@ export function useQueuePolling({
     setTotalQueued(prev => prev + result.queued);
     return result;
   }, [clientId]);
+
+  // Retry failed URLs
+  const retryFailed = useCallback(async (): Promise<{ reset: number }> => {
+    if (!clientId) throw new Error('No client selected');
+
+    const res = await fetch('/api/tools/meta-tag-analyser/queue/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to retry failed URLs');
+    }
+
+    const result = await res.json();
+    await refreshStatus();
+    return result;
+  }, [clientId, refreshStatus]);
 
   // Check for pending URLs on mount
   useEffect(() => {
@@ -273,6 +303,7 @@ export function useQueuePolling({
     cancelQueue,
     refreshStatus,
     queueUrls,
+    retryFailed,
     totalProcessed,
     totalQueued,
   };

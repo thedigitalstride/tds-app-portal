@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { clientId, urls } = body;
+    const { clientId, urls, clearExisting } = body;
 
     if (!clientId) {
       return NextResponse.json({ error: 'clientId is required' }, { status: 400 });
@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
+
+    // Optionally clear existing pending/completed items to start fresh
+    // This prevents old items from inflating the progress totals
+    if (clearExisting) {
+      await PendingScan.deleteMany({ clientId });
+    }
 
     const batchId = randomUUID();
     const now = new Date();
@@ -60,7 +66,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Cancel all pending URLs for a batch or client
+// DELETE - Cancel/clear URLs for a batch or client
+// Use clearAll=true to delete all statuses (including failed/completed), otherwise only pending
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession();
@@ -71,6 +78,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
     const clientId = searchParams.get('clientId');
+    const clearAll = searchParams.get('clearAll') === 'true';
 
     if (!batchId && !clientId) {
       return NextResponse.json(
@@ -81,9 +89,12 @@ export async function DELETE(request: NextRequest) {
 
     await connectDB();
 
-    const query: { status: string; batchId?: string; clientId?: string } = {
-      status: 'pending',
-    };
+    const query: { status?: string; batchId?: string; clientId?: string } = {};
+
+    // Only filter by pending status if not clearing all
+    if (!clearAll) {
+      query.status = 'pending';
+    }
 
     if (batchId) {
       query.batchId = batchId;
