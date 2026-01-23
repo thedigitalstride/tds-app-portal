@@ -52,6 +52,9 @@ interface Client {
   contactName?: string;
   isActive: boolean;
   toolUsage?: ToolUsageData[];
+  // Page store settings
+  pageFreshnessHours?: number;
+  maxSnapshotsPerUrl?: number;
 }
 
 export default function ClientsPage() {
@@ -66,6 +69,8 @@ export default function ClientsPage() {
     description: '',
     contactEmail: '',
     contactName: '',
+    pageFreshnessHours: 24,
+    maxSnapshotsPerUrl: 10,
   });
 
   useEffect(() => {
@@ -148,6 +153,8 @@ export default function ClientsPage() {
       description: client.description || '',
       contactEmail: client.contactEmail || '',
       contactName: client.contactName || '',
+      pageFreshnessHours: client.pageFreshnessHours ?? 24,
+      maxSnapshotsPerUrl: client.maxSnapshotsPerUrl ?? 10,
     });
     setDialogOpen(true);
   };
@@ -160,6 +167,8 @@ export default function ClientsPage() {
       description: '',
       contactEmail: '',
       contactName: '',
+      pageFreshnessHours: 24,
+      maxSnapshotsPerUrl: 10,
     });
   };
 
@@ -375,6 +384,38 @@ export default function ClientsPage() {
                   }
                   placeholder="john@example.com"
                 />
+              </div>
+              {/* Page Store Settings */}
+              <div className="pt-4 border-t border-neutral-200">
+                <p className="text-sm font-medium text-neutral-500 mb-3">Page Store Settings</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Cache Freshness (hours)</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={formData.pageFreshnessHours}
+                      onChange={(e) =>
+                        setFormData({ ...formData, pageFreshnessHours: parseInt(e.target.value) || 24 })
+                      }
+                    />
+                    <p className="text-xs text-neutral-400 mt-1">1-168 hours (default: 24)</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Max Snapshots per URL</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={formData.maxSnapshotsPerUrl}
+                      onChange={(e) =>
+                        setFormData({ ...formData, maxSnapshotsPerUrl: parseInt(e.target.value) || 10 })
+                      }
+                    />
+                    <p className="text-xs text-neutral-400 mt-1">1-100 snapshots (default: 10)</p>
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

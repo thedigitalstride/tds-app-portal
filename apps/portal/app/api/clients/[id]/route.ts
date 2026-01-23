@@ -69,6 +69,9 @@ export async function PUT(
     if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
     if (body.contactName !== undefined) updateData.contactName = body.contactName;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    // Page store settings
+    if (body.pageFreshnessHours !== undefined) updateData.pageFreshnessHours = body.pageFreshnessHours;
+    if (body.maxSnapshotsPerUrl !== undefined) updateData.maxSnapshotsPerUrl = body.maxSnapshotsPerUrl;
 
     await connectDB();
     const client = await Client.findByIdAndUpdate(
