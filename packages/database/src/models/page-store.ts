@@ -5,9 +5,9 @@ export interface IPageStore extends Document {
   url: string;
   urlHash: string;
 
-  // Latest snapshot reference
-  latestSnapshotId: mongoose.Types.ObjectId;
-  latestFetchedAt: Date;
+  // Latest snapshot reference (optional - may not exist for new entries)
+  latestSnapshotId?: mongoose.Types.ObjectId;
+  latestFetchedAt?: Date;
 
   // Snapshot management
   snapshotCount: number;
