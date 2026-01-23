@@ -9,3 +9,4 @@ export { UserPermissions, type IUserPermissions } from './models/user-permission
 export { ClientAssignment, type IClientAssignment } from './models/client-assignment';
 export { PageSnapshot, type IPageSnapshot } from './models/page-snapshot';
 export { PageStore, type IPageStore } from './models/page-store';
+export { normaliseUrl, hashUrl } from './utils/url-utils';
