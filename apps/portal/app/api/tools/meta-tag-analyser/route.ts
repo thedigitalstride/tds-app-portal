@@ -604,6 +604,12 @@ export async function POST(request: NextRequest) {
         });
         html = pageResult.html;
       } catch (pageError) {
+        if (pageError instanceof UnauthorizedError) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (pageError instanceof ForbiddenError) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
         return NextResponse.json(
           { error: pageError instanceof Error ? pageError.message : 'Failed to fetch URL' },
           { status: 400 }
