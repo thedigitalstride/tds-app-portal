@@ -262,7 +262,9 @@ export function Sidebar() {
               </div>
             )}
             <div className="mt-1 space-y-1">
-              {tools.map((tool) => {
+              {tools
+                .filter((tool) => !tool.requiredRole || tool.requiredRole === 'user' || isAdmin)
+                .map((tool) => {
                 const isActive = pathname.startsWith(tool.href);
                 const linkContent = (
                   <Link
