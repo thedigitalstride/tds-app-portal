@@ -638,7 +638,7 @@ export function LibraryTable({
               Are you sure you want to delete {selectedRows.size} URL{selectedRows.size !== 1 ? 's' : ''}? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm mb-4">
             <strong>Warning:</strong> This will permanently delete:
             <ul className="list-disc ml-5 mt-1">
               <li>{selectedRows.size} saved URL{selectedRows.size !== 1 ? 's' : ''}</li>

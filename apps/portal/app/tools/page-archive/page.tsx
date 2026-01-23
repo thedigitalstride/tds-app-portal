@@ -309,7 +309,7 @@ export default function PageArchivePage() {
               Are you sure you want to delete {selectedUrlHashes.size} URL{selectedUrlHashes.size !== 1 ? 's' : ''} and all their snapshots? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm mb-4">
             <strong>Warning:</strong> This will permanently delete:
             <ul className="list-disc ml-5 mt-1">
               <li>{selectedUrlHashes.size} stored URL{selectedUrlHashes.size !== 1 ? 's' : ''}</li>
