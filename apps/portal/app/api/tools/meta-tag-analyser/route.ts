@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
+import { getPage } from '@/lib/services/page-store-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -575,7 +576,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { url } = await request.json();
+    const { url, clientId } = await request.json();
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -589,22 +590,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
 
-    // Fetch the page
-    const response = await fetch(validUrl.toString(), {
-      headers: {
-        'User-Agent': 'TDS Meta Tag Analyser/1.0',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
+    // Get HTML content - use page store if clientId provided, otherwise direct fetch
+    let html: string;
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to fetch URL: ${response.status} ${response.statusText}` },
-        { status: 400 }
-      );
+    if (clientId) {
+      // Use page store service for caching and versioning
+      try {
+        const pageResult = await getPage({
+          url: validUrl.toString(),
+          clientId,
+          userId: session.user.id,
+          toolId: 'meta-tag-analyser',
+        });
+        html = pageResult.html;
+      } catch (pageError) {
+        return NextResponse.json(
+          { error: pageError instanceof Error ? pageError.message : 'Failed to fetch URL' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Fallback: direct fetch (for backwards compatibility)
+      const response = await fetch(validUrl.toString(), {
+        headers: {
+          'User-Agent': 'TDS Meta Tag Analyser/1.0',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+      });
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: `Failed to fetch URL: ${response.status} ${response.statusText}` },
+          { status: 400 }
+        );
+      }
+
+      html = await response.text();
     }
-
-    const html = await response.text();
 
     // Parse meta tags using regex (works without jsdom)
     const getMetaContent = (name: string): string => {
