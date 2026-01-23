@@ -180,7 +180,7 @@ export function ScanPanel({
       const analyzeRes = await fetch('/api/tools/meta-tag-analyser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, clientId }),
       });
 
       const analyzeData = await analyzeRes.json();
