@@ -76,7 +76,7 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { name: 'title', criticality: 'critical', category: 'basicSeo' },
   { name: 'description', criticality: 'critical', category: 'basicSeo' },
   { name: 'viewport', criticality: 'critical', category: 'basicSeo' },
-  { name: 'canonical', criticality: 'critical', category: 'basicSeo' },
+  { name: 'canonical', criticality: 'important', category: 'basicSeo' },
   { name: 'charset', criticality: 'important', category: 'basicSeo' },
   { name: 'language', criticality: 'important', category: 'basicSeo' },
   { name: 'robots', criticality: 'optional', category: 'basicSeo' },

@@ -40,7 +40,7 @@ export const FIELD_TOOLTIPS: Record<string, FieldTooltip> = {
       'Tells search engines the preferred URL for this content, preventing duplicate content issues.',
     bestPractice:
       'Use absolute URLs. Point to the primary version of your page. Self-referencing canonicals are valid.',
-    criticality: 'critical',
+    criticality: 'important',
   },
   robots: {
     title: 'Robots Meta Tag',

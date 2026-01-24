@@ -34,7 +34,7 @@ const FIELD_CRITICALITY: Record<string, FieldCriticality> = {
   'title': 'critical',
   'description': 'critical',
   'viewport': 'critical',
-  'canonical': 'critical',
+  'canonical': 'important',
   'og:title': 'critical',
   'og:description': 'critical',
   'og:image': 'critical',
