@@ -30,7 +30,7 @@ interface PageArchiveImporterProps {
   clientId: string;
   isOpen: boolean;
   onClose: () => void;
-  onImport: (urls: string[]) => void;
+  onImport: (urls: string[]) => void | Promise<void>;
   checkExistingUrls: (urls: string[]) => Promise<CheckUrlsResult>;
   toolName?: string; // For display purposes, e.g., "Meta Tag Analyser"
 }
@@ -137,14 +137,16 @@ export function PageArchiveImporter({
   };
 
   // Handle import
-  const handleImport = () => {
+  const handleImport = async () => {
     if (selectedUrls.size === 0) return;
 
     setImporting(true);
-    onImport(Array.from(selectedUrls));
-    // The parent component handles the rest; close the modal
-    onClose();
-    setImporting(false);
+    try {
+      await onImport(Array.from(selectedUrls));
+    } finally {
+      setImporting(false);
+      onClose();
+    }
   };
 
   // Stats
