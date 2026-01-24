@@ -36,7 +36,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { useClient } from '@/components/client-context';
-import { AddUrlsPanel } from './components/AddUrlsPanel';
+import { UrlBatchPanel } from '@/components/url-batch-panel';
 
 interface PageStoreEntry {
   _id: string;
@@ -539,12 +539,18 @@ export default function PageLibraryPage() {
       </Dialog>
 
       {/* Add URLs Panel */}
-      <AddUrlsPanel
+      <UrlBatchPanel
         isOpen={showAddUrlsPanel}
         onClose={() => setShowAddUrlsPanel(false)}
         clientId={selectedClientId}
         clientName={selectedClient?.name || ''}
-        onUrlsAdded={fetchUrls}
+        toolId="page-library"
+        onUrlsProcessed={fetchUrls}
+        title="Add URLs"
+        singleUrlLabel="URL to archive"
+        singleButtonLabel="Add URL"
+        bulkButtonLabel="Archive"
+        processingLabel="Archiving URLs..."
       />
     </div>
   );
