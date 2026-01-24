@@ -37,6 +37,7 @@ import {
   TooltipProvider,
 } from '@tds/ui';
 import { tools } from '@/lib/tools';
+import { getVersionDisplay } from '@/lib/version';
 import { useClient } from './client-context';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
@@ -452,6 +453,19 @@ export function Sidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+
+        {/* Version Footer */}
+        <div className={cn(
+          "border-t border-neutral-200 px-4 py-2",
+          collapsed && "px-2 py-1"
+        )}>
+          <span className={cn(
+            "text-[10px] text-neutral-400 font-mono",
+            collapsed && "hidden"
+          )}>
+            {getVersionDisplay()}
+          </span>
         </div>
       </aside>
     </TooltipProvider>

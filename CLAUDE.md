@@ -246,3 +246,64 @@ In portal app tsconfig:
 - `@/*` - `apps/portal/*`
 - `@tds/ui` - `packages/ui`
 - `@tds/database` - `packages/database`
+
+## Versioning System
+
+This project uses **Semantic Versioning** with **Conventional Commits**.
+
+### Commit Message Format
+```
+<type>[optional scope][!]: <description>
+```
+
+**Types and their version impact:**
+| Type | Version Bump | Description |
+|------|--------------|-------------|
+| `feat` | MINOR | New feature for the user |
+| `fix` | PATCH | Bug fix |
+| `docs` | PATCH | Documentation only |
+| `style` | PATCH | Formatting, no code change |
+| `refactor` | PATCH | Code change, no feature/fix |
+| `perf` | PATCH | Performance improvement |
+| `test` | none | Adding/updating tests |
+| `build` | none | Build system changes |
+| `ci` | none | CI configuration changes |
+| `chore` | PATCH | Other changes |
+
+**Breaking changes:** Add `!` after type OR include `BREAKING CHANGE:` in footer → MAJOR bump
+
+### When Committing Changes
+
+**IMPORTANT:** When creating a commit, Claude MUST:
+
+1. **Determine version bump** based on commit type(s) in this session:
+   - Any `BREAKING CHANGE:` or `!` → bump MAJOR, reset MINOR and PATCH to 0
+   - Any `feat:` (without breaking) → bump MINOR, reset PATCH to 0
+   - Only `fix:`, `refactor:`, `docs:`, `style:`, `perf:`, `chore:` → bump PATCH
+   - Only `test:`, `build:`, `ci:` → NO version bump
+
+2. **Update version file** (`apps/portal/lib/version.ts`):
+   - Update `major`, `minor`, or `patch` number
+   - Update `buildDate` to today's date (YYYY-MM-DD format)
+
+3. **Update CHANGELOG.md**:
+   - Add entry under `## [Unreleased]` section
+   - Use format: `- <description> ([commit-type])`
+   - When releasing: move unreleased items to new version header
+
+### Example Workflow
+
+```bash
+# User asks: "Add a dark mode toggle"
+# Claude implements feature, then commits:
+
+# 1. Determine: feat: → MINOR bump (1.0.0 → 1.1.0)
+# 2. Update version.ts: minor: 1, patch: 0, buildDate: '2024-01-25'
+# 3. Update CHANGELOG.md under [Unreleased]:
+#    ### Added
+#    - Dark mode toggle in user settings
+# 4. Commit with message: "feat(ui): add dark mode toggle"
+```
+
+### Version Display
+Version is shown in the sidebar footer as: `v1.2.3 · Jan 24`
