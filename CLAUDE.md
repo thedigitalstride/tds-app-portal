@@ -56,6 +56,7 @@ MongoDB with Mongoose. Connection uses global singleton pattern for serverless c
 - `Client` - name, website, description, contactEmail, contactName, isActive, createdBy
 - `PageStore` - URL index with latestSnapshotId, clientsWithAccess (Page Store)
 - `PageSnapshot` - version history with blobUrl, fetchedAt, httpStatus (Page Store)
+- `UrlBatch` - generic batch processing for any tool (URL Batch Processing)
 
 ### Page Store Architecture (Single Source of Truth)
 
@@ -113,6 +114,74 @@ const snapshotId = snapshot._id.toString();
 const response = await fetch(url);  // ❌ Violates single source of truth
 ```
 
+### URL Batch Processing (Shared Component)
+
+Tools that process multiple URLs use the **shared URL batch system** for consistent UX.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              UrlBatchPanel (Shared UI Component)            │
+│  - Single URL / Bulk Import modes                          │
+│  - Sitemap parsing / URL list input                        │
+│  - Live progress bar + current URL                         │
+│  - Cancel button + background processing                   │
+│  Location: apps/portal/components/url-batch-panel.tsx      │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ calls
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              /api/url-batch (Shared API)                    │
+│  - POST: Create batch                                      │
+│  - GET: Poll status + process URLs                         │
+│  - DELETE: Cancel batch                                    │
+│  - Processor registry for tool-specific logic              │
+│  Location: apps/portal/app/api/url-batch/route.ts          │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ uses
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              UrlBatch Model (Generic)                       │
+│  - toolId identifies which processor to use                │
+│  - Tracks: urls, succeeded, failed, progress               │
+│  Location: packages/database/src/models/url-batch.ts       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Using UrlBatchPanel in a tool:**
+
+```tsx
+import { UrlBatchPanel } from '@/components/url-batch-panel';
+
+<UrlBatchPanel
+  isOpen={showPanel}
+  onClose={() => setShowPanel(false)}
+  clientId={selectedClientId}
+  clientName={selectedClient?.name || ''}
+  toolId="my-tool"  // Must match processor registry
+  onUrlsProcessed={refreshData}
+  // Optional customization:
+  title="Add URLs"
+  singleUrlLabel="URL to process"
+  processingLabel="Processing..."
+/>
+```
+
+**Adding a new processor** (in `/api/url-batch/route.ts`):
+
+```typescript
+const processors: Record<string, UrlProcessor> = {
+  'page-library': async (url, clientId, userId) => {
+    // Archive to Page Store
+    const result = await getPage({ url, clientId, userId, toolId: 'page-library' });
+    return { success: true, result: { snapshotId: result.snapshot._id } };
+  },
+  'my-new-tool': async (url, clientId, userId) => {
+    // Custom processing logic
+    return { success: true, result: { /* tool-specific data */ } };
+  },
+};
+```
+
 ### Adding New Tools
 
 **See [TOOL_STANDARDS.md](./TOOL_STANDARDS.md) for detailed patterns and code examples.**
@@ -121,6 +190,7 @@ const response = await fetch(url);  // ❌ Violates single source of truth
 2. Register in: `apps/portal/lib/tools.ts` (add to `tools` array)
 3. Add API routes: `apps/portal/app/api/tools/[tool-name]/route.ts`
 4. Add model: `packages/database/src/models/[model-name].ts` (with history tracking)
+5. **If tool processes URLs:** Use `UrlBatchPanel` component and add processor to `/api/url-batch/route.ts`
 
 Tool interface:
 ```typescript
