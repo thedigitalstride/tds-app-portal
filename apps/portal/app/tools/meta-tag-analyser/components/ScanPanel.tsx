@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search,
   X,
@@ -12,14 +12,13 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  Pause,
+  Archive,
   Play,
   Square,
-  Clock,
-  RotateCcw,
-  Archive,
+  FileText,
 } from 'lucide-react';
 import { PageArchiveImporter } from '@/components/page-archive-importer';
+import { BatchReport } from './BatchReport';
 import {
   Button,
   Input,
@@ -71,19 +70,31 @@ interface BulkResult {
   error?: string;
   score: number;
   selected?: boolean;
+  snapshotId?: string;
 }
 
-interface QueueStatus {
-  total: number;
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-  permanentlyFailed: number;
-  remainingToProcess: number;
-  failedUrls: Array<{ url: string; error: string; retryCount: number; batchId: string }>;
-  activeBatches: string[];
-  hasQueuedUrls: boolean;
+interface BatchStatus {
+  batchId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  progress: { completed: number; total: number };
+  currentUrl?: string;
+  results: {
+    succeeded: Array<{ url: string; score: number; analysisId: string; processedAt: string }>;
+    failed: Array<{ url: string; error: string; attempts: number; lastAttemptAt: string }>;
+    skipped: Array<{ url: string; reason: 'duplicate' | 'nested_sitemap' | 'invalid' | 'already_exists' }>;
+  };
+  averageScore?: number;
+  completedAt?: string;
+}
+
+interface ParsedUrls {
+  urls: string[];
+  totalUrls: number;
+  filteredUrls?: {
+    nestedSitemaps: number;
+    duplicates: number;
+    total: number;
+  };
 }
 
 interface ScanPanelProps {
@@ -92,24 +103,7 @@ interface ScanPanelProps {
   clientId: string | null;
   clientName: string;
   onScanComplete: () => void;
-  // Polling props (lifted from page)
-  queueStatus: QueueStatus | null;
-  isPolling: boolean;
-  isPaused: boolean;
-  queueLoading: boolean;
-  queueProgress: { completed: number; total: number } | null;
-  startPolling: () => void;
-  stopPolling: () => void;
-  pausePolling: () => void;
-  resumePolling: () => void;
-  cancelQueue: (batchId?: string, clearAll?: boolean) => Promise<void>;
-  refreshStatus: () => Promise<void>;
-  queueUrls: (urls: string[], clearExisting?: boolean) => Promise<{ queued: number; batchId: string }>;
-  retryFailed: () => Promise<{ reset: number }>;
-  totalProcessed: number;
 }
-
-const IMMEDIATE_SCAN_LIMIT = 50;
 
 export function ScanPanel({
   isOpen,
@@ -117,26 +111,8 @@ export function ScanPanel({
   clientId,
   clientName,
   onScanComplete,
-  // Polling props
-  queueStatus,
-  isPolling,
-  isPaused,
-  queueLoading: _queueLoading,
-  queueProgress,
-  startPolling,
-  stopPolling: _stopPolling,
-  pausePolling,
-  resumePolling,
-  cancelQueue,
-  refreshStatus,
-  queueUrls,
-  retryFailed,
-  totalProcessed: _totalProcessed,
 }: ScanPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
-
-  // Archive importer state
-  const [showArchiveImporter, setShowArchiveImporter] = useState(false);
 
   // Single URL state
   const [url, setUrl] = useState('');
@@ -144,39 +120,74 @@ export function ScanPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Bulk scan state
+  // Bulk scan state - Phase 1: Parse URLs
   const [bulkMode, setBulkMode] = useState<'sitemap' | 'urls'>('sitemap');
   const [sitemapUrl, setSitemapUrl] = useState('');
   const [urlList, setUrlList] = useState('');
-  const [bulkLoading, setBulkLoading] = useState(false);
+  const [parsedUrls, setParsedUrls] = useState<ParsedUrls | null>(null);
+  const [parseLoading, setParseLoading] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  // Bulk scan state - Phase 2: Batch Processing
+  const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
+  const [, setIsPolling] = useState(false);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Batch Report state
+  const [showReport, setShowReport] = useState(false);
+  const [completedBatch, setCompletedBatch] = useState<BatchStatus | null>(null);
+
+  // Legacy bulk results for immediate small scans
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
   const [bulkStats, setBulkStats] = useState<{
     totalUrls: number;
     analyzed: number;
     failed: number;
     averageScore: number;
-    filteredUrls?: {
-      nestedSitemaps: number;
-      duplicates: number;
-      total: number;
-    };
   } | null>(null);
-  const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [retryLoading, setRetryLoading] = useState(false);
-  // Track total URLs discovered (may be more than queued after filtering)
-  const [_totalDiscovered, setTotalDiscovered] = useState<number | null>(null);
 
-  // Show resume prompt if there are pending URLs and not already polling
-  const showResumePrompt = queueStatus?.hasQueuedUrls && !isPolling;
+  // Page Archive importer state
+  const [showArchiveImporter, setShowArchiveImporter] = useState(false);
 
-  // Check for pending URLs when client changes
+  // Cleanup polling on unmount
   useEffect(() => {
-    if (clientId && isOpen) {
-      refreshStatus();
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, []);
+
+  // Stop polling when panel closes
+  useEffect(() => {
+    if (!isOpen && pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+      setIsPolling(false);
     }
-  }, [clientId, isOpen, refreshStatus]);
+  }, [isOpen]);
+
+  // Check which URLs already exist in the library for this client
+  const checkExistingUrls = useCallback(async (urls: string[]) => {
+    if (!clientId) return { existing: [], new: urls };
+
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/check-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, urls }),
+      });
+
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fall through to default
+    }
+    return { existing: [], new: urls };
+  }, [clientId]);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600 bg-green-50';
@@ -184,6 +195,7 @@ export function ScanPanel({
     return 'text-red-600 bg-red-50';
   };
 
+  // Single URL scan
   const analyzeSingleUrl = async () => {
     if (!url || !clientId) return;
 
@@ -192,7 +204,6 @@ export function ScanPanel({
     setSuccess(null);
 
     try {
-      // First analyze
       const analyzeRes = await fetch('/api/tools/meta-tag-analyser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,7 +216,6 @@ export function ScanPanel({
         throw new Error(analyzeData.error || 'Failed to analyze URL');
       }
 
-      // Then save immediately
       const saveRes = await fetch('/api/tools/meta-tag-analyser/saved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,14 +223,15 @@ export function ScanPanel({
           clientId,
           result: analyzeData.result,
           issues: analyzeData.issues,
+          snapshotId: analyzeData.snapshotId,
         }),
       });
 
       if (saveRes.ok) {
         const saveData = await saveRes.json();
         setSuccess(saveData.message || (saveData.isUpdate ? 'URL updated' : 'URL saved'));
-        setUrl(''); // Clear for next scan
-        onScanComplete(); // Refresh the library
+        setUrl('');
+        onScanComplete();
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
@@ -230,160 +241,233 @@ export function ScanPanel({
     }
   };
 
-  const runBulkScan = async () => {
-    setBulkLoading(true);
-    setBulkError(null);
-    setBulkResults([]);
-    setBulkStats(null);
-    setExpandedRows(new Set());
-    setTotalDiscovered(null);
+  // Phase 1: Parse URLs (for bulk mode)
+  const parseUrls = async () => {
+    if (!clientId) return;
+
+    setParseLoading(true);
+    setParseError(null);
+    setParsedUrls(null);
 
     try {
-      let urlsToScan: string[] = [];
-
       if (bulkMode === 'sitemap') {
-        // For sitemap, fetch and parse first to get URL list
+        if (!sitemapUrl) {
+          setParseError('Sitemap URL is required');
+          setParseLoading(false);
+          return;
+        }
+
         const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'sitemap', sitemapUrl, clientId }),
+          body: JSON.stringify({
+            mode: 'sitemap',
+            sitemapUrl,
+            clientId,
+            parseOnly: true,
+          }),
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error || 'Bulk scan failed');
+          throw new Error(data.error || 'Failed to parse sitemap');
         }
 
-        // Mark all successful results as selected by default
-        const resultsWithSelection = data.results.map((r: BulkResult) => ({
-          ...r,
-          selected: !r.error,
-        }));
-
-        setBulkResults(resultsWithSelection);
-        setBulkStats({
+        setParsedUrls({
+          urls: data.urls,
           totalUrls: data.totalUrls,
-          analyzed: data.analyzed,
-          failed: data.failed,
-          averageScore: data.averageScore,
           filteredUrls: data.filteredUrls,
         });
-
-        // Queue remaining URLs if there are more than 50
-        if (data.hasMoreUrls && data.remainingUrls?.length > 0) {
-          const queueResult = await queueUrls(data.remainingUrls);
-
-          // Start background processing
-          startPolling();
-
-          setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
-          setTimeout(() => setSuccess(null), 5000);
-        }
-
-        setBulkLoading(false);
-        return;
-      }
-
-      // For URL list mode, handle the split
-      urlsToScan = urlList.split('\n').map(u => u.trim()).filter(Boolean);
-
-      if (urlsToScan.length <= IMMEDIATE_SCAN_LIMIT) {
-        // All URLs can be scanned immediately
-        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls: urlsToScan, clientId }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Bulk scan failed');
-        }
-
-        const resultsWithSelection = data.results.map((r: BulkResult) => ({
-          ...r,
-          selected: !r.error,
-        }));
-
-        setBulkResults(resultsWithSelection);
-        setBulkStats({
-          totalUrls: data.totalUrls,
-          analyzed: data.analyzed,
-          failed: data.failed,
-          averageScore: data.averageScore,
-        });
       } else {
-        // Split: first 50 immediate, rest queued
-        const immediateUrls = urlsToScan.slice(0, IMMEDIATE_SCAN_LIMIT);
-        const queuedUrls = urlsToScan.slice(IMMEDIATE_SCAN_LIMIT);
+        // URL list mode
+        const urls = urlList.split('\n').map(u => u.trim()).filter(Boolean);
+        if (urls.length === 0) {
+          setParseError('No URLs provided');
+          setParseLoading(false);
+          return;
+        }
 
-        // Scan first 50 immediately
-        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls: immediateUrls, clientId }),
+        setParsedUrls({
+          urls: urls.map(u => u.startsWith('http') ? u : `https://${u}`),
+          totalUrls: urls.length,
         });
+      }
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Failed to parse URLs');
+    } finally {
+      setParseLoading(false);
+    }
+  };
 
+  // Phase 2: Start batch processing
+  const startBatchScan = async () => {
+    if (!clientId || !parsedUrls?.urls.length) return;
+
+    // For small batches (10 or fewer), use immediate processing
+    if (parsedUrls.urls.length <= 10) {
+      await runImmediateScan(parsedUrls.urls);
+      return;
+    }
+
+    try {
+      // Create batch
+      const res = await fetch('/api/tools/meta-tag-analyser/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          urls: parsedUrls.urls,
+          source: bulkMode,
+          sourceUrl: bulkMode === 'sitemap' ? sitemapUrl : undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create batch');
+      }
+
+      setBatchStatus({
+        batchId: data.batchId,
+        status: 'pending',
+        progress: { completed: 0, total: data.totalUrls },
+        results: { succeeded: [], failed: [], skipped: [] },
+      });
+
+      // Start polling for progress
+      startPolling(data.batchId);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Failed to start batch');
+    }
+  };
+
+  // Immediate scan for small batches
+  const runImmediateScan = async (urls: string[]) => {
+    setParseLoading(true);
+    setBulkResults([]);
+    setBulkStats(null);
+
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'urls',
+          urls,
+          clientId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Bulk scan failed');
+      }
+
+      const resultsWithSelection = data.results.map((r: BulkResult) => ({
+        ...r,
+        selected: !r.error,
+      }));
+
+      setBulkResults(resultsWithSelection);
+      setBulkStats({
+        totalUrls: data.totalUrls,
+        analyzed: data.analyzed,
+        failed: data.failed,
+        averageScore: data.averageScore,
+      });
+      setParsedUrls(null);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Bulk scan failed');
+    } finally {
+      setParseLoading(false);
+    }
+  };
+
+  // Poll for batch progress
+  const startPolling = (batchId: string) => {
+    setIsPolling(true);
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/tools/meta-tag-analyser/batch?batchId=${batchId}`);
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error || 'Bulk scan failed');
+          throw new Error(data.error || 'Failed to get batch status');
         }
 
-        const resultsWithSelection = data.results.map((r: BulkResult) => ({
-          ...r,
-          selected: !r.error,
-        }));
+        setBatchStatus(data);
 
-        setBulkResults(resultsWithSelection);
-        setBulkStats({
-          totalUrls: urlsToScan.length,
-          analyzed: data.analyzed,
-          failed: data.failed,
-          averageScore: data.averageScore,
-        });
+        // Check if batch is complete
+        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+          setIsPolling(false);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
 
-        // Queue remaining URLs
-        const queueResult = await queueUrls(queuedUrls);
+          // Show report
+          setCompletedBatch(data);
+          setShowReport(true);
 
-        // Start background processing
-        startPolling();
-
-        setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
-        setTimeout(() => setSuccess(null), 5000);
+          // Refresh library
+          onScanComplete();
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
       }
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setBulkLoading(false);
-    }
+    };
+
+    // Poll immediately, then every 1 second
+    poll();
+    pollingRef.current = setInterval(poll, 1000);
   };
 
-  // Handle retry failed URLs
-  const handleRetryFailed = async () => {
-    setRetryLoading(true);
+  // Cancel batch
+  const cancelBatch = async () => {
+    if (!batchStatus?.batchId) return;
+
     try {
-      const result = await retryFailed();
-      if (result.reset > 0) {
-        setSuccess(`${result.reset} URLs reset for retry.`);
-        startPolling();
-        setTimeout(() => setSuccess(null), 3000);
+      await fetch(`/api/tools/meta-tag-analyser/batch?batchId=${batchStatus.batchId}`, {
+        method: 'DELETE',
+      });
+
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
+      setIsPolling(false);
+      setBatchStatus(null);
+      setParsedUrls(null);
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'Failed to retry');
-    } finally {
-      setRetryLoading(false);
+      console.error('Cancel error:', err);
     }
   };
 
+  // Handle import from Page Archive
+  const handleImportFromArchive = async (urls: string[]) => {
+    setShowArchiveImporter(false);
+    if (urls.length === 0) return;
+
+    // Set up the URL list and parse
+    const normalizedUrls = urls.map(u => u.startsWith('http') ? u : `https://${u}`);
+    setParsedUrls({
+      urls: normalizedUrls,
+      totalUrls: normalizedUrls.length,
+    });
+  };
+
+  // Legacy: Toggle result selection
   const toggleResultSelection = (index: number) => {
     setBulkResults(prev => prev.map((r, i) =>
       i === index ? { ...r, selected: !r.selected } : r
     ));
   };
 
+  // Legacy: Save bulk results
   const saveBulkResults = async () => {
     if (!clientId || bulkResults.length === 0) return;
 
@@ -404,18 +488,14 @@ export function ScanPanel({
 
       if (res.ok) {
         onScanComplete();
-        // Reset bulk state
-        setBulkResults([]);
-        setBulkStats(null);
-        setSitemapUrl('');
-        setUrlList('');
+        resetBulkState();
         onClose();
       } else {
         const data = await res.json();
-        setBulkError(data.error || 'Failed to save results');
+        setParseError(data.error || 'Failed to save results');
       }
     } catch (_err) {
-      setBulkError('Failed to save bulk results');
+      setParseError('Failed to save bulk results');
     } finally {
       setBulkSaving(false);
     }
@@ -433,123 +513,16 @@ export function ScanPanel({
     });
   };
 
-  // Check which URLs already have meta tag analysis results
-  const checkExistingUrls = useCallback(async (urls: string[]) => {
-    if (!clientId) {
-      return { existing: [], new: urls };
-    }
-
-    try {
-      const res = await fetch('/api/tools/meta-tag-analyser/check-urls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, urls }),
-      });
-
-      if (!res.ok) {
-        console.error('Failed to check existing URLs');
-        return { existing: [], new: urls };
-      }
-
-      const data = await res.json();
-      return { existing: data.existing, new: data.new };
-    } catch (err) {
-      console.error('Error checking existing URLs:', err);
-      return { existing: [], new: urls };
-    }
-  }, [clientId]);
-
-  // Handle importing URLs from the Page Archive
-  const handleImportFromArchive = useCallback(async (urls: string[]) => {
-    if (!clientId || urls.length === 0) return;
-
-    // Switch to bulk mode with URL list
-    setMode('bulk');
-    setBulkMode('urls');
-    setUrlList(urls.join('\n'));
-    setShowArchiveImporter(false);
-
-    // Auto-trigger the scan
-    setBulkLoading(true);
-    setBulkError(null);
+  const resetBulkState = () => {
+    setParsedUrls(null);
+    setBatchStatus(null);
     setBulkResults([]);
     setBulkStats(null);
+    setParseError(null);
+    setSitemapUrl('');
+    setUrlList('');
     setExpandedRows(new Set());
-    setTotalDiscovered(null);
-
-    try {
-      if (urls.length <= IMMEDIATE_SCAN_LIMIT) {
-        // All URLs can be scanned immediately
-        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls, clientId }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Bulk scan failed');
-        }
-
-        const resultsWithSelection = data.results.map((r: BulkResult) => ({
-          ...r,
-          selected: !r.error,
-        }));
-
-        setBulkResults(resultsWithSelection);
-        setBulkStats({
-          totalUrls: data.totalUrls,
-          analyzed: data.analyzed,
-          failed: data.failed,
-          averageScore: data.averageScore,
-        });
-      } else {
-        // Split: first 50 immediate, rest queued
-        const immediateUrls = urls.slice(0, IMMEDIATE_SCAN_LIMIT);
-        const queuedUrls = urls.slice(IMMEDIATE_SCAN_LIMIT);
-
-        // Scan first 50 immediately
-        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'urls', urls: immediateUrls, clientId }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Bulk scan failed');
-        }
-
-        const resultsWithSelection = data.results.map((r: BulkResult) => ({
-          ...r,
-          selected: !r.error,
-        }));
-
-        setBulkResults(resultsWithSelection);
-        setBulkStats({
-          totalUrls: urls.length,
-          analyzed: data.analyzed,
-          failed: data.failed,
-          averageScore: data.averageScore,
-        });
-
-        // Queue remaining URLs
-        const queueResult = await queueUrls(queuedUrls);
-
-        // Start background processing
-        startPolling();
-
-        setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
-        setTimeout(() => setSuccess(null), 5000);
-      }
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setBulkLoading(false);
-    }
-  }, [clientId, queueUrls, startPolling]);
+  };
 
   const selectedCount = bulkResults.filter(r => r.selected && !r.error).length;
 
@@ -583,7 +556,7 @@ export function ScanPanel({
           <Button
             variant={mode === 'single' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setMode('single')}
+            onClick={() => { setMode('single'); resetBulkState(); }}
           >
             <Search className="mr-2 h-4 w-4" />
             Single URL
@@ -591,21 +564,10 @@ export function ScanPanel({
           <Button
             variant={mode === 'bulk' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setMode('bulk')}
+            onClick={() => { setMode('bulk'); resetBulkState(); }}
           >
             <List className="mr-2 h-4 w-4" />
             Bulk Import
-          </Button>
-          <div className="flex-1" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowArchiveImporter(true)}
-            disabled={!clientId}
-            title="Import URLs from Page Archive"
-          >
-            <Archive className="mr-2 h-4 w-4" />
-            From Archive
           </Button>
         </div>
 
@@ -649,7 +611,6 @@ export function ScanPanel({
                 Scan & Save
               </Button>
 
-              {/* Error */}
               {error && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -657,7 +618,6 @@ export function ScanPanel({
                 </div>
               )}
 
-              {/* Success */}
               {success && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
                   <CheckCircle className="h-4 w-4 flex-shrink-0" />
@@ -668,260 +628,217 @@ export function ScanPanel({
           ) : (
             /* Bulk Import Mode */
             <div className="space-y-4">
-              {/* Bulk Mode Selection */}
-              <div className="flex gap-2">
-                <Button
-                  variant={bulkMode === 'sitemap' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBulkMode('sitemap')}
-                >
-                  <MapPin className="mr-2 h-4 w-4" />
-                  From Sitemap
-                </Button>
-                <Button
-                  variant={bulkMode === 'urls' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBulkMode('urls')}
-                >
-                  <List className="mr-2 h-4 w-4" />
-                  URL List
-                </Button>
-              </div>
+              {/* Bulk Mode Selection - only show if not processing */}
+              {!batchStatus && !bulkStats && (
+                <>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant={bulkMode === 'sitemap' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => { setBulkMode('sitemap'); setParsedUrls(null); setParseError(null); }}
+                    >
+                      <MapPin className="mr-2 h-4 w-4" />
+                      From Sitemap
+                    </Button>
+                    <Button
+                      variant={bulkMode === 'urls' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => { setBulkMode('urls'); setParsedUrls(null); setParseError(null); }}
+                    >
+                      <List className="mr-2 h-4 w-4" />
+                      URL List
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowArchiveImporter(true)}
+                    >
+                      <Archive className="mr-2 h-4 w-4" />
+                      From Library
+                    </Button>
+                  </div>
 
-              {bulkMode === 'sitemap' ? (
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Sitemap URL
-                  </label>
-                  <Input
-                    type="url"
-                    placeholder="https://example.com/sitemap.xml"
-                    value={sitemapUrl}
-                    onChange={(e) => setSitemapUrl(e.target.value)}
-                    disabled={bulkLoading}
-                  />
-                  <p className="mt-1 text-xs text-neutral-500">
-                    First 50 URLs scanned immediately, rest processed in background
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    URLs (one per line)
-                  </label>
-                  <Textarea
-                    placeholder={'https://example.com/page1\nhttps://example.com/page2\nhttps://example.com/page3'}
-                    value={urlList}
-                    onChange={(e) => setUrlList(e.target.value)}
-                    rows={6}
-                    disabled={bulkLoading}
-                  />
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {urlList.split('\n').filter(Boolean).length} URLs
-                    {urlList.split('\n').filter(Boolean).length > IMMEDIATE_SCAN_LIMIT && (
-                      <span className="text-amber-600">
-                        {' '}- First {IMMEDIATE_SCAN_LIMIT} scanned immediately, rest queued
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-
-              {/* Scan Button (only show if no results yet) */}
-              {!bulkStats && (
-                <Button
-                  onClick={runBulkScan}
-                  disabled={bulkLoading || (bulkMode === 'sitemap' ? !sitemapUrl : !urlList.trim())}
-                  className="w-full"
-                >
-                  {bulkLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Scanning...
-                    </>
+                  {bulkMode === 'sitemap' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        Sitemap URL
+                      </label>
+                      <Input
+                        type="url"
+                        placeholder="https://example.com/sitemap.xml"
+                        value={sitemapUrl}
+                        onChange={(e) => { setSitemapUrl(e.target.value); setParsedUrls(null); }}
+                        disabled={parseLoading}
+                      />
+                    </div>
                   ) : (
-                    <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Scan {bulkMode === 'sitemap' ? 'Sitemap' : 'URLs'}
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {/* Resume Prompt */}
-              {showResumePrompt && queueStatus && (
-                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-amber-600 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium text-amber-800">
-                        Resume background processing?
-                      </p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        {queueStatus.remainingToProcess} URLs are waiting to be processed.
-                        {queueStatus.permanentlyFailed > 0 && (
-                          <span> ({queueStatus.permanentlyFailed} failed)</span>
-                        )}
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        URLs (one per line)
+                      </label>
+                      <Textarea
+                        placeholder={'https://example.com/page1\nhttps://example.com/page2\nhttps://example.com/page3'}
+                        value={urlList}
+                        onChange={(e) => { setUrlList(e.target.value); setParsedUrls(null); }}
+                        rows={6}
+                        disabled={parseLoading}
+                      />
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {urlList.split('\n').filter(Boolean).length} URLs entered
                       </p>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
+                  )}
+
+                  {/* Parse Button - Phase 1 */}
+                  {!parsedUrls && (
                     <Button
-                      size="sm"
-                      onClick={startPolling}
+                      onClick={parseUrls}
+                      disabled={parseLoading || (bulkMode === 'sitemap' ? !sitemapUrl : !urlList.trim())}
+                      className="w-full"
                     >
-                      <Play className="mr-2 h-4 w-4" />
-                      Resume
+                      {parseLoading ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          {bulkMode === 'sitemap' ? 'Parsing Sitemap...' : 'Preparing URLs...'}
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="mr-2 h-4 w-4" />
+                          {bulkMode === 'sitemap' ? 'Parse Sitemap' : 'Prepare URLs'}
+                        </>
+                      )}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => cancelQueue()}
-                    >
-                      <Square className="mr-2 h-4 w-4" />
-                      Cancel All
-                    </Button>
-                  </div>
-                </div>
+                  )}
+
+                  {/* Parsed URLs Summary - Phase 1 Complete */}
+                  {parsedUrls && !batchStatus && (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-blue-600" />
+                          <span className="font-medium text-blue-800">
+                            {parsedUrls.totalUrls} URLs ready to scan
+                          </span>
+                        </div>
+
+                        {parsedUrls.filteredUrls && parsedUrls.filteredUrls.total > 0 && (
+                          <div className="text-xs text-blue-700 mb-3">
+                            <span className="font-medium">{parsedUrls.filteredUrls.total} URLs filtered:</span>
+                            {parsedUrls.filteredUrls.nestedSitemaps > 0 && (
+                              <span className="ml-1">
+                                {parsedUrls.filteredUrls.nestedSitemaps} nested sitemap{parsedUrls.filteredUrls.nestedSitemaps !== 1 ? 's' : ''} (processed recursively)
+                              </span>
+                            )}
+                            {parsedUrls.filteredUrls.nestedSitemaps > 0 && parsedUrls.filteredUrls.duplicates > 0 && ', '}
+                            {parsedUrls.filteredUrls.duplicates > 0 && (
+                              <span>
+                                {parsedUrls.filteredUrls.duplicates} duplicate{parsedUrls.filteredUrls.duplicates !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={startBatchScan}
+                            disabled={parseLoading}
+                            className="flex-1"
+                          >
+                            <Play className="mr-2 h-4 w-4" />
+                            Scan {parsedUrls.totalUrls} URL{parsedUrls.totalUrls !== 1 ? 's' : ''}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setParsedUrls(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Queue Progress */}
-              {isPolling && queueProgress && (
-                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
-                      <span className="font-medium text-blue-800">
-                        Background processing...
+              {/* Batch Processing Progress - Phase 2 */}
+              {batchStatus && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
+                        <span className="font-medium text-blue-800">
+                          Scanning URLs...
+                        </span>
+                      </div>
+                      <span className="text-sm text-blue-700 font-mono">
+                        {batchStatus.progress.completed}/{batchStatus.progress.total}
                       </span>
                     </div>
-                    <span className="text-sm text-blue-700">
-                      {queueProgress.completed}/{queueProgress.total}
-                    </span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${Math.round((queueProgress.completed / queueProgress.total) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-blue-600">
-                    You can close this panel - processing will continue in the background.
-                  </p>
-                  <div className="flex gap-2">
-                    {isPaused ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={resumePolling}
-                      >
-                        <Play className="mr-2 h-4 w-4" />
-                        Resume
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={pausePolling}
-                      >
-                        <Pause className="mr-2 h-4 w-4" />
-                        Pause
-                      </Button>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-blue-200 rounded-full h-2.5">
+                      <div
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.round((batchStatus.progress.completed / batchStatus.progress.total) * 100)}%`,
+                        }}
+                      />
+                    </div>
+
+                    {/* Current URL */}
+                    {batchStatus.currentUrl && (
+                      <p className="text-xs text-blue-600 font-mono truncate">
+                        {batchStatus.currentUrl.replace(/^https?:\/\//, '').slice(0, 50)}...
+                      </p>
                     )}
+
+                    {/* Live Stats */}
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-white/50 rounded p-2">
+                        <p className="text-xs text-neutral-500">Succeeded</p>
+                        <p className="font-semibold text-green-600">{batchStatus.results.succeeded.length}</p>
+                      </div>
+                      <div className="bg-white/50 rounded p-2">
+                        <p className="text-xs text-neutral-500">Failed</p>
+                        <p className="font-semibold text-red-600">{batchStatus.results.failed.length}</p>
+                      </div>
+                      <div className="bg-white/50 rounded p-2">
+                        <p className="text-xs text-neutral-500">Remaining</p>
+                        <p className="font-semibold text-neutral-600">
+                          {batchStatus.progress.total - batchStatus.progress.completed}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-blue-600">
+                      You can close this panel - processing will continue. Results are saved automatically.
+                    </p>
+
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => cancelQueue()}
+                      onClick={cancelBatch}
+                      className="w-full"
                     >
                       <Square className="mr-2 h-4 w-4" />
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Failed URLs Section */}
-              {queueStatus && queueStatus.failedUrls && queueStatus.failedUrls.length > 0 && !isPolling && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium text-red-800">
-                        {queueStatus.failedUrls.length} URL{queueStatus.failedUrls.length !== 1 ? 's' : ''} failed
-                      </p>
-                      <p className="text-sm text-red-700 mt-1">
-                        These URLs could not be scanned after multiple attempts.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Failed URLs List */}
-                  <div className="max-h-32 overflow-y-auto bg-white/50 rounded border border-red-200">
-                    {queueStatus.failedUrls.slice(0, 10).map((f, i) => (
-                      <div key={i} className="px-2 py-1 border-b border-red-100 last:border-b-0">
-                        <p className="font-mono text-xs text-red-800 truncate" title={f.url}>
-                          {f.url.replace(/^https?:\/\//, '')}
-                        </p>
-                        <p className="text-xs text-red-600">{f.error}</p>
-                      </div>
-                    ))}
-                    {queueStatus.failedUrls.length > 10 && (
-                      <div className="px-2 py-1 text-xs text-red-600 italic">
-                        ...and {queueStatus.failedUrls.length - 10} more
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleRetryFailed}
-                      disabled={retryLoading}
-                      className="border-red-300 text-red-700 hover:bg-red-100"
-                    >
-                      {retryLoading ? (
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                      )}
-                      Retry Failed
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => cancelQueue(undefined, true)}
-                      className="border-red-300 text-red-700 hover:bg-red-100"
-                    >
-                      <X className="mr-2 h-4 w-4" />
-                      Clear All
+                      Cancel Scan
                     </Button>
                   </div>
                 </div>
               )}
 
               {/* Error */}
-              {bulkError && (
+              {parseError && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  {bulkError}
+                  {parseError}
                 </div>
               )}
 
-              {/* Success message for queue */}
-              {success && mode === 'bulk' && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                  {success}
-                </div>
-              )}
-
-              {/* Bulk Results Review */}
-              {bulkStats && !bulkLoading && (
+              {/* Legacy: Bulk Results Review (for small immediate scans) */}
+              {bulkStats && !parseLoading && (
                 <div className="space-y-4">
-                  {/* Stats Summary */}
                   <div className="grid grid-cols-4 gap-2">
                     <div className="rounded-lg bg-neutral-50 p-2 text-center">
                       <p className="text-xs text-neutral-500">Total</p>
@@ -943,27 +860,6 @@ export function ScanPanel({
                     </div>
                   </div>
 
-                  {/* Filtered URLs Info */}
-                  {bulkStats.filteredUrls && bulkStats.filteredUrls.total > 0 && (
-                    <div className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-2">
-                      <span className="font-medium">{bulkStats.filteredUrls.total} URLs filtered:</span>
-                      {bulkStats.filteredUrls.nestedSitemaps > 0 && (
-                        <span className="ml-1">
-                          {bulkStats.filteredUrls.nestedSitemaps} nested sitemap{bulkStats.filteredUrls.nestedSitemaps !== 1 ? 's' : ''} (processed recursively)
-                        </span>
-                      )}
-                      {bulkStats.filteredUrls.nestedSitemaps > 0 && bulkStats.filteredUrls.duplicates > 0 && (
-                        <span>, </span>
-                      )}
-                      {bulkStats.filteredUrls.duplicates > 0 && (
-                        <span>
-                          {bulkStats.filteredUrls.duplicates} duplicate{bulkStats.filteredUrls.duplicates !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Results List with Checkboxes */}
                   <div className="border rounded-lg overflow-hidden">
                     <div className="bg-neutral-50 px-3 py-2 border-b flex items-center justify-between">
                       <span className="text-sm font-medium text-neutral-700">
@@ -991,7 +887,6 @@ export function ScanPanel({
                             className={`px-3 py-2 flex items-center gap-3 text-sm ${item.error ? 'bg-red-50/50' : 'hover:bg-neutral-50 cursor-pointer'}`}
                             onClick={() => !item.error && toggleResultSelection(index)}
                           >
-                            {/* Checkbox */}
                             <div
                               className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
                                 item.error
@@ -1006,7 +901,6 @@ export function ScanPanel({
                               )}
                             </div>
 
-                            {/* URL */}
                             <span
                               className={`flex-1 font-mono text-xs truncate ${item.error ? 'text-red-600' : ''}`}
                               title={item.url}
@@ -1014,7 +908,6 @@ export function ScanPanel({
                               {item.url.replace(/^https?:\/\//, '').slice(0, 40)}
                             </span>
 
-                            {/* Status/Score */}
                             {item.error ? (
                               <Badge variant="destructive" className="text-xs">Failed</Badge>
                             ) : (
@@ -1039,7 +932,6 @@ export function ScanPanel({
                             )}
                           </div>
 
-                          {/* Expanded Details */}
                           {expandedRows.has(index) && item.result && (
                             <div className="px-3 py-2 bg-neutral-50 border-t text-xs space-y-2">
                               <div>
@@ -1096,24 +988,34 @@ export function ScanPanel({
                 </>
               )}
             </Button>
-            {isPolling && queueProgress && (
-              <p className="text-xs text-center text-neutral-500">
-                + {queueProgress.total - queueProgress.completed} more URLs processing in background
-              </p>
-            )}
           </div>
         )}
       </div>
 
       {/* Page Archive Importer Modal */}
-      {clientId && (
-        <PageArchiveImporter
-          clientId={clientId}
-          isOpen={showArchiveImporter}
-          onClose={() => setShowArchiveImporter(false)}
-          onImport={handleImportFromArchive}
-          checkExistingUrls={checkExistingUrls}
-          toolName="Meta Tag Analyser"
+      <PageArchiveImporter
+        clientId={clientId || ''}
+        isOpen={showArchiveImporter}
+        onClose={() => setShowArchiveImporter(false)}
+        onImport={handleImportFromArchive}
+        checkExistingUrls={checkExistingUrls}
+        toolName="Meta Tag Analyser"
+      />
+
+      {/* Batch Report Modal */}
+      {showReport && completedBatch && (
+        <BatchReport
+          batchId={completedBatch.batchId}
+          status={completedBatch.status as 'completed' | 'failed' | 'cancelled'}
+          results={completedBatch.results}
+          averageScore={completedBatch.averageScore}
+          totalUrls={completedBatch.progress.total}
+          completedAt={completedBatch.completedAt}
+          onClose={() => {
+            setShowReport(false);
+            setCompletedBatch(null);
+            resetBulkState();
+          }}
         />
       )}
     </>

@@ -39,7 +39,17 @@ import {
   DialogFooter,
 } from '@tds/ui';
 import { MetadataViewer } from './MetadataViewer';
+import { StaleIndicator } from './StaleIndicator';
 import type { SavedAnalysis, MetadataSnapshot } from './types';
+
+// Helper to check if an analysis is stale (page updated since analysis)
+function isAnalysisStale(analysis: SavedAnalysis): boolean {
+  return !!(
+    analysis.analyzedSnapshotId &&
+    analysis.currentSnapshotId &&
+    analysis.analyzedSnapshotId !== analysis.currentSnapshotId
+  );
+}
 
 interface LibraryTableProps {
   analyses: SavedAnalysis[];
@@ -69,7 +79,7 @@ export function LibraryTable({
   const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
   const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
   const [rescanning, setRescanning] = useState<Set<string>>(new Set());
-  const [scoreFilter, setScoreFilter] = useState<'all' | 'good' | 'warning' | 'error'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'good' | 'warning' | 'error' | 'stale'>('all');
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkRescanning, setBulkRescanning] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -180,6 +190,9 @@ export function LibraryTable({
     }
   };
 
+  // Count stale analyses
+  const staleCount = analyses.filter(isAnalysisStale).length;
+
   // Filter and search
   const filteredAnalyses = analyses.filter(a => {
     // Search filter
@@ -192,6 +205,7 @@ export function LibraryTable({
     if (scoreFilter === 'good') matchesScore = a.score >= 80;
     else if (scoreFilter === 'warning') matchesScore = a.score >= 50 && a.score < 80;
     else if (scoreFilter === 'error') matchesScore = a.score < 50;
+    else if (scoreFilter === 'stale') matchesScore = isAnalysisStale(a);
 
     return matchesSearch && matchesScore;
   });
@@ -285,6 +299,15 @@ export function LibraryTable({
             >
               Error
             </button>
+            {staleCount > 0 && (
+              <button
+                onClick={() => setScoreFilter('stale')}
+                className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${scoreFilter === 'stale' ? 'bg-orange-100 text-orange-700 font-medium' : 'hover:bg-neutral-100'}`}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Stale ({staleCount})
+              </button>
+            )}
           </div>
         </div>
 
@@ -419,9 +442,14 @@ export function LibraryTable({
                       {analysis.title || <span className="text-neutral-400 italic">No title</span>}
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
-                        {analysis.score}%
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
+                          {analysis.score}%
+                        </span>
+                        {isAnalysisStale(analysis) && (
+                          <StaleIndicator compact showRescanButton={false} />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-neutral-500 text-sm">

@@ -33,8 +33,10 @@ import {
   Square,
   CheckSquare,
   History,
+  Plus,
 } from 'lucide-react';
 import { useClient } from '@/components/client-context';
+import { AddUrlsPanel } from './components/AddUrlsPanel';
 
 interface PageStoreEntry {
   _id: string;
@@ -53,7 +55,7 @@ interface Snapshot {
   httpStatus: number;
 }
 
-export default function PageArchivePage() {
+export default function PageLibraryPage() {
   const { selectedClientId, selectedClient } = useClient();
   const [urls, setUrls] = useState<PageStoreEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,8 +73,11 @@ export default function PageArchivePage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch URLs when client changes
-  useEffect(() => {
+  // Add URLs panel
+  const [showAddUrlsPanel, setShowAddUrlsPanel] = useState(false);
+
+  // Fetch URLs function
+  const fetchUrls = async () => {
     if (!selectedClientId) return;
 
     setLoading(true);
@@ -80,12 +85,19 @@ export default function PageArchivePage() {
     setSelectedUrlHashes(new Set());
     setSnapshotsCache({});
 
-    fetch(`/api/page-store/urls?clientId=${selectedClientId}`)
-      .then(res => res.json())
-      .then(data => {
-        setUrls(data.urls || []);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const res = await fetch(`/api/page-store/urls?clientId=${selectedClientId}`);
+      const data = await res.json();
+      setUrls(data.urls || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch URLs when client changes
+  useEffect(() => {
+    fetchUrls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId]);
 
   // Fetch snapshots when a row is expanded
@@ -216,16 +228,22 @@ export default function PageArchivePage() {
         <div>
           <div className="flex items-center gap-3">
             <Archive className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-semibold text-neutral-900">Page Archive</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">Page Library</h1>
           </div>
           <p className="mt-1 text-neutral-500">
             {selectedClient ? (
-              <>View stored page snapshots for <span className="font-medium text-neutral-700">{selectedClient.name}</span></>
+              <>Manage page collection for <span className="font-medium text-neutral-700">{selectedClient.name}</span></>
             ) : (
-              'Select a client from the sidebar to view stored pages'
+              'Select a client from the sidebar to manage pages'
             )}
           </p>
         </div>
+        {selectedClientId && (
+          <Button onClick={() => setShowAddUrlsPanel(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add URLs
+          </Button>
+        )}
       </div>
 
       {/* Loading State */}
@@ -257,8 +275,12 @@ export default function PageArchivePage() {
             </div>
             <p className="text-lg font-medium text-neutral-700">No stored pages yet</p>
             <p className="text-sm text-neutral-500 mt-1 text-center max-w-sm">
-              Pages will appear here automatically when scanned by other tools.
+              Add URLs to build your page library.
             </p>
+            <Button className="mt-4" onClick={() => setShowAddUrlsPanel(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add URLs
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -515,6 +537,15 @@ export default function PageArchivePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add URLs Panel */}
+      <AddUrlsPanel
+        isOpen={showAddUrlsPanel}
+        onClose={() => setShowAddUrlsPanel(false)}
+        clientId={selectedClientId}
+        clientName={selectedClient?.name || ''}
+        onUrlsAdded={fetchUrls}
+      />
     </div>
   );
 }

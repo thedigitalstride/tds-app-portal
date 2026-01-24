@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { connectDB, MetaTagAnalysis } from '@tds/database';
 import { calculateScore } from '@/app/tools/meta-tag-analyser/lib/scoring';
+import { getPage } from '@/lib/services/page-store-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -566,22 +567,34 @@ export async function POST(
     const previousDescription = existingAnalysis.description;
     const previousScore = existingAnalysis.score;
 
-    // Fetch the page again
-    const response = await fetch(existingAnalysis.url, {
-      headers: {
-        'User-Agent': 'TDS Meta Tag Analyser/1.0',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-
-    if (!response.ok) {
+    // Use Page Store to get fresh content - this is the ONLY place pages should be fetched
+    // forceRefresh ensures we get new content for the rescan
+    if (!existingAnalysis.clientId) {
       return NextResponse.json(
-        { error: `Failed to fetch URL: ${response.status} ${response.statusText}` },
+        { error: 'Cannot rescan: analysis has no associated client' },
         { status: 400 }
       );
     }
 
-    const html = await response.text();
+    let html: string;
+    let snapshotId: string;
+
+    try {
+      const pageResult = await getPage({
+        url: existingAnalysis.url,
+        clientId: existingAnalysis.clientId.toString(),
+        userId: session.user.id,
+        toolId: 'meta-tag-analyser',
+        forceRefresh: true,  // Always get fresh content for rescan
+      });
+      html = pageResult.html;
+      snapshotId = pageResult.snapshot._id.toString();
+    } catch (pageError) {
+      return NextResponse.json(
+        { error: pageError instanceof Error ? pageError.message : 'Failed to fetch URL' },
+        { status: 400 }
+      );
+    }
 
     // Parse meta tags using regex
     const getMetaContent = (name: string): string => {
@@ -858,6 +871,7 @@ export async function POST(
     const historyEntry = {
       scannedAt: new Date(),
       scannedBy: session.user.id,
+      pageSnapshotId: snapshotId,  // Track which Page Store snapshot was analyzed
       score: previousScore,
       categoryScores: existingAnalysis.categoryScores,
       changesDetected,
@@ -940,6 +954,9 @@ export async function POST(
           categoryScores: newCategoryScores,
           lastScannedAt: new Date(),
           lastScannedBy: session.user.id,
+          // Track which snapshot this analysis is based on
+          analyzedSnapshotId: snapshotId,
+          currentSnapshotId: snapshotId,
         },
         $push: {
           scanHistory: {

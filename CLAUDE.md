@@ -54,6 +54,64 @@ MongoDB with Mongoose. Connection uses global singleton pattern for serverless c
 **Models** (in `packages/database/src/`):
 - `User` - email, name, image, role (`'admin' | 'user'`)
 - `Client` - name, website, description, contactEmail, contactName, isActive, createdBy
+- `PageStore` - URL index with latestSnapshotId, clientsWithAccess (Page Store)
+- `PageSnapshot` - version history with blobUrl, fetchedAt, httpStatus (Page Store)
+
+### Page Store Architecture (Single Source of Truth)
+
+**Page Store is the ONLY place where page content is fetched and stored.** Tools NEVER fetch pages directly.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      PAGE LIBRARY UI                         │
+│  - View/manage stored URLs                                  │
+│  - Bulk refresh snapshots                                   │
+│  - Delete pages                                             │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ manages via
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       PAGE STORE                             │
+│  - PageStore model (URL index per client)                   │
+│  - PageSnapshot model (version history)                     │
+│  - Vercel Blob (HTML content storage)                       │
+│  - Service: lib/services/page-store-service.ts              │
+│  *** SINGLE SOURCE OF TRUTH FOR ALL PAGE CONTENT ***        │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ tools read via getPage()
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                         TOOLS                                │
+│  - Call getPage() to get HTML content                       │
+│  - NEVER use fetch() directly for page content              │
+│  - Track analyzedSnapshotId for staleness detection         │
+│  - Auto-creates Page Store entries on first scan            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Rules for tools that analyze web pages:**
+
+1. **Always use `getPage()` from `@/lib/services/page-store-service`** - never `fetch()` directly
+2. **Require `clientId`** - all page content is scoped to a client
+3. **Track `snapshotId`** - store which snapshot was analyzed for staleness detection
+4. **Use `forceRefresh: true`** for rescan operations to get fresh content
+
+```typescript
+import { getPage } from '@/lib/services/page-store-service';
+
+// Correct: Use Page Store
+const { html, snapshot } = await getPage({
+  url,
+  clientId,
+  userId: session.user.id,
+  toolId: 'my-tool',
+  forceRefresh: false,  // true for rescan
+});
+const snapshotId = snapshot._id.toString();
+
+// WRONG: Never do this
+const response = await fetch(url);  // ❌ Violates single source of truth
+```
 
 ### Adding New Tools
 

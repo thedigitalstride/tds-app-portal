@@ -169,41 +169,24 @@ async function parseSitemap(
 }
 
 interface AnalyzeOptions {
-  clientId?: string;
-  userId?: string;
+  clientId: string;
+  userId: string;
 }
 
-// Analyze a single URL - uses page store if clientId provided
+// Analyze a single URL - uses Page Store as the SINGLE SOURCE OF TRUTH
 async function analyzeUrl(
   url: string,
-  options?: AnalyzeOptions
-): Promise<{ result: MetaTagResult; issues: AnalysisIssue[] }> {
-  let html: string;
-
-  if (options?.clientId && options?.userId) {
-    // Use page store service for caching and versioning
-    const pageResult = await getPage({
-      url,
-      clientId: options.clientId,
-      userId: options.userId,
-      toolId: 'meta-tag-analyser',
-    });
-    html = pageResult.html;
-  } else {
-    // Direct fetch (backwards compatibility)
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'TDS Meta Tag Analyser/1.0',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status}`);
-    }
-
-    html = await response.text();
-  }
+  options: AnalyzeOptions
+): Promise<{ result: MetaTagResult; issues: AnalysisIssue[]; snapshotId: string }> {
+  // Use page store service - the ONLY place pages should be fetched
+  const pageResult = await getPage({
+    url,
+    clientId: options.clientId,
+    userId: options.userId,
+    toolId: 'meta-tag-analyser',
+  });
+  const html = pageResult.html;
+  const snapshotId = pageResult.snapshot._id.toString();
 
   const getMetaContent = (name: string): string => {
     const nameMatch = html.match(
@@ -336,7 +319,7 @@ async function analyzeUrl(
     issues.push({ type: 'warning', field: 'OG Image', message: 'Missing OG image' });
   }
 
-  return { result, issues };
+  return { result, issues, snapshotId };
 }
 
 export async function POST(request: NextRequest) {
@@ -348,6 +331,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { mode, sitemapUrl, urls, clientId, parseOnly } = body;
+
+    // clientId is REQUIRED - Page Store is the single source of truth
+    if (!clientId) {
+      return NextResponse.json({ error: 'Client ID is required' }, { status: 400 });
+    }
 
     let urlsToAnalyze: string[] = [];
     let filteredUrlsInfo: FilteredUrl[] = [];
@@ -392,11 +380,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Prepare options for analyzeUrl if clientId is provided
-    const analyzeOptions: AnalyzeOptions | undefined = clientId ? {
+    // Prepare options for analyzeUrl
+    const analyzeOptions: AnalyzeOptions = {
       clientId,
       userId: session.user.id,
-    } : undefined;
+    };
 
     // Store all URLs before limiting
     const allDiscoveredUrls = [...urlsToAnalyze];
@@ -415,15 +403,16 @@ export async function POST(request: NextRequest) {
       error?: string;
       score: number;
       categoryScores?: CategoryScores;
+      snapshotId?: string;  // Will be present on success, absent on error
     }> = [];
 
     for (const url of urlsToAnalyze) {
       try {
-        const { result, issues } = await analyzeUrl(url, analyzeOptions);
+        const { result, issues, snapshotId } = await analyzeUrl(url, analyzeOptions);
         // Use new severity-based scoring algorithm
         const { score, categoryScores } = calculateScore(result, issues);
 
-        results.push({ url, result, issues, score, categoryScores });
+        results.push({ url, result, issues, score, categoryScores, snapshotId });
 
         // Small delay to be respectful to servers
         await new Promise(resolve => setTimeout(resolve, 200));

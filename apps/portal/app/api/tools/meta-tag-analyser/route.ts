@@ -583,6 +583,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
+    // clientId is REQUIRED - Page Store is the single source of truth
+    if (!clientId) {
+      return NextResponse.json({ error: 'Client ID is required' }, { status: 400 });
+    }
+
     // Validate URL format
     let validUrl: URL;
     try {
@@ -591,48 +596,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
 
-    // Get HTML content - use page store if clientId provided, otherwise direct fetch
+    // Get HTML content from Page Store - the SINGLE SOURCE OF TRUTH for all page content
     let html: string;
+    let snapshotId: string;
 
-    if (clientId) {
-      // Use page store service for caching and versioning
-      try {
-        const pageResult = await getPage({
-          url: validUrl.toString(),
-          clientId,
-          userId: session.user.id,
-          toolId: 'meta-tag-analyser',
-        });
-        html = pageResult.html;
-      } catch (pageError) {
-        if (pageError instanceof UnauthorizedError) {
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (pageError instanceof ForbiddenError) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-        return NextResponse.json(
-          { error: pageError instanceof Error ? pageError.message : 'Failed to fetch URL' },
-          { status: 400 }
-        );
-      }
-    } else {
-      // Fallback: direct fetch (for backwards compatibility)
-      const response = await fetch(validUrl.toString(), {
-        headers: {
-          'User-Agent': 'TDS Meta Tag Analyser/1.0',
-          'Accept': 'text/html,application/xhtml+xml',
-        },
+    try {
+      const pageResult = await getPage({
+        url: validUrl.toString(),
+        clientId,
+        userId: session.user.id,
+        toolId: 'meta-tag-analyser',
       });
-
-      if (!response.ok) {
-        return NextResponse.json(
-          { error: `Failed to fetch URL: ${response.status} ${response.statusText}` },
-          { status: 400 }
-        );
+      html = pageResult.html;
+      snapshotId = pageResult.snapshot._id.toString();
+    } catch (pageError) {
+      if (pageError instanceof UnauthorizedError) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
-
-      html = await response.text();
+      if (pageError instanceof ForbiddenError) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      return NextResponse.json(
+        { error: pageError instanceof Error ? pageError.message : 'Failed to fetch URL' },
+        { status: 400 }
+      );
     }
 
     // Parse meta tags using regex (works without jsdom)
@@ -932,7 +919,7 @@ export async function POST(request: NextRequest) {
     // Calculate score using the new severity-based algorithm
     const { score, categoryScores } = calculateScore(result, issues);
 
-    return NextResponse.json({ result, issues, score, categoryScores });
+    return NextResponse.json({ result, issues, score, categoryScores, snapshotId });
   } catch (error) {
     console.error('Meta tag analysis error:', error);
     return NextResponse.json(

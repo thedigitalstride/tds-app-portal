@@ -179,7 +179,8 @@ async function upsertAnalysis(
   issues: AnalysisIssue[],
   userId: string,
   plannedTitle?: string,
-  plannedDescription?: string
+  plannedDescription?: string,
+  snapshotId?: string
 ): Promise<{ analysis: unknown; isUpdate: boolean }> {
   const now = new Date();
   // Use new severity-based scoring algorithm
@@ -206,6 +207,8 @@ async function upsertAnalysis(
       score: existingAnalysis.score,
       categoryScores: existingAnalysis.categoryScores,
       changesDetected,
+      // Reference to the PageSnapshot this scan was based on
+      pageSnapshotId: existingAnalysis.analyzedSnapshotId,
       // Full snapshot of all fields at this point in time
       snapshot: {
         title: existingAnalysis.title || '',
@@ -290,6 +293,11 @@ async function upsertAnalysis(
           categoryScores,
           lastScannedAt: now,
           lastScannedBy: userId,
+          // Page Library snapshot tracking for staleness detection
+          ...(snapshotId && {
+            analyzedSnapshotId: snapshotId,
+            currentSnapshotId: snapshotId, // Both are same when freshly analyzed
+          }),
           // Update planned values if provided
           ...(plannedTitle !== undefined && { plannedTitle }),
           ...(plannedDescription !== undefined && { plannedDescription }),
@@ -344,6 +352,11 @@ async function upsertAnalysis(
     scanCount: 1,
     lastScannedAt: now,
     lastScannedBy: userId,
+    // Page Library snapshot tracking for staleness detection
+    ...(snapshotId && {
+      analyzedSnapshotId: snapshotId,
+      currentSnapshotId: snapshotId, // Both are same when freshly analyzed
+    }),
     scanHistory: [],
   });
 
@@ -396,7 +409,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { clientId, result, issues, plannedTitle, plannedDescription, bulk, results } = body;
+    const { clientId, result, issues, plannedTitle, plannedDescription, bulk, results, snapshotId } = body;
 
     if (!clientId) {
       return NextResponse.json(
@@ -429,7 +442,10 @@ export async function POST(request: NextRequest) {
           clientId,
           r.result as ScanResult,
           r.issues || [],
-          session.user.id
+          session.user.id,
+          undefined, // plannedTitle
+          undefined, // plannedDescription
+          r.snapshotId // Pass snapshotId from each result
         );
         if (isUpdate) {
           updated++;
@@ -465,7 +481,8 @@ export async function POST(request: NextRequest) {
       issues || [],
       session.user.id,
       plannedTitle,
-      plannedDescription
+      plannedDescription,
+      snapshotId
     );
 
     return NextResponse.json(

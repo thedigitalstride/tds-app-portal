@@ -120,6 +120,8 @@ export interface IScanHistoryEntry {
   score: number;
   categoryScores?: ICategoryScores;
   changesDetected: boolean;
+  // Reference to the PageSnapshot this scan was based on
+  pageSnapshotId?: mongoose.Types.ObjectId;
   // Full snapshot of data at this point in time
   snapshot: {
     title: string;
@@ -250,6 +252,9 @@ export interface IMetaTagAnalysis extends Document {
   scanCount: number;
   lastScannedAt: Date;
   lastScannedBy: mongoose.Types.ObjectId;
+  // Page Library snapshot tracking for staleness detection
+  analyzedSnapshotId?: mongoose.Types.ObjectId; // The PageSnapshot this analysis is based on
+  currentSnapshotId?: mongoose.Types.ObjectId;  // Latest PageSnapshot for this URL (for staleness check)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -547,6 +552,11 @@ const scanHistoryEntrySchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // Reference to the PageSnapshot this scan was based on
+    pageSnapshotId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PageSnapshot',
+    },
     // Full snapshot of all fields at this point
     snapshot: {
       type: snapshotSchema,
@@ -659,6 +669,15 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
       type: Schema.Types.ObjectId,
       ref: 'User',
     },
+    // Page Library snapshot tracking for staleness detection
+    analyzedSnapshotId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PageSnapshot',
+    },
+    currentSnapshotId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PageSnapshot',
+    },
   },
   {
     timestamps: true,
@@ -668,6 +687,8 @@ const metaTagAnalysisSchema = new Schema<IMetaTagAnalysis>(
 // Compound index for efficient querying
 metaTagAnalysisSchema.index({ clientId: 1, url: 1 });
 metaTagAnalysisSchema.index({ clientId: 1, analyzedAt: -1 });
+// Index for staleness queries (find analyses where analyzed != current snapshot)
+metaTagAnalysisSchema.index({ clientId: 1, analyzedSnapshotId: 1, currentSnapshotId: 1 });
 
 // Delete cached model in development to pick up schema changes
 if (process.env.NODE_ENV !== 'production' && mongoose.models.MetaTagAnalysis) {

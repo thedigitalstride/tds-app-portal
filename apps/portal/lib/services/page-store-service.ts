@@ -3,6 +3,7 @@ import {
   PageSnapshot,
   PageStore,
   Client,
+  MetaTagAnalysis,
   normaliseUrl,
   hashUrl,
   type IPageSnapshot,
@@ -176,6 +177,13 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
       clientsWithAccess: [clientId],
     });
   }
+
+  // Update currentSnapshotId on any MetaTagAnalysis records for this URL
+  // This marks existing analyses as stale (analyzedSnapshotId !== currentSnapshotId)
+  await MetaTagAnalysis.updateMany(
+    { url: normalisedUrl },
+    { $set: { currentSnapshotId: snapshot._id } }
+  );
 
   // Enforce retention limit
   await enforceRetentionLimit(urlHash, client.maxSnapshotsPerUrl ?? 10);

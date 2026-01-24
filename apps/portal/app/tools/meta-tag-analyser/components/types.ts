@@ -206,4 +206,7 @@ export interface SavedAnalysis extends MetadataSnapshot {
   lastScannedBy?: { name: string; email: string };
   scanHistory?: ScanHistoryEntry[];
   isNew?: boolean;
+  // Page Library staleness tracking
+  analyzedSnapshotId?: string;
+  currentSnapshotId?: string;
 }
