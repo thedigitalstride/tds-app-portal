@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   X,
@@ -17,7 +17,9 @@ import {
   Square,
   Clock,
   RotateCcw,
+  Archive,
 } from 'lucide-react';
+import { PageArchiveImporter } from '@/components/page-archive-importer';
 import {
   Button,
   Input,
@@ -132,6 +134,9 @@ export function ScanPanel({
   totalProcessed: _totalProcessed,
 }: ScanPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
+
+  // Archive importer state
+  const [showArchiveImporter, setShowArchiveImporter] = useState(false);
 
   // Single URL state
   const [url, setUrl] = useState('');
@@ -428,6 +433,124 @@ export function ScanPanel({
     });
   };
 
+  // Check which URLs already have meta tag analysis results
+  const checkExistingUrls = useCallback(async (urls: string[]) => {
+    if (!clientId) {
+      return { existing: [], new: urls };
+    }
+
+    try {
+      const res = await fetch('/api/tools/meta-tag-analyser/check-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, urls }),
+      });
+
+      if (!res.ok) {
+        console.error('Failed to check existing URLs');
+        return { existing: [], new: urls };
+      }
+
+      const data = await res.json();
+      return { existing: data.existing, new: data.new };
+    } catch (err) {
+      console.error('Error checking existing URLs:', err);
+      return { existing: [], new: urls };
+    }
+  }, [clientId]);
+
+  // Handle importing URLs from the Page Archive
+  const handleImportFromArchive = useCallback(async (urls: string[]) => {
+    if (!clientId || urls.length === 0) return;
+
+    // Switch to bulk mode with URL list
+    setMode('bulk');
+    setBulkMode('urls');
+    setUrlList(urls.join('\n'));
+    setShowArchiveImporter(false);
+
+    // Auto-trigger the scan
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkResults([]);
+    setBulkStats(null);
+    setExpandedRows(new Set());
+    setTotalDiscovered(null);
+
+    try {
+      if (urls.length <= IMMEDIATE_SCAN_LIMIT) {
+        // All URLs can be scanned immediately
+        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'urls', urls, clientId }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Bulk scan failed');
+        }
+
+        const resultsWithSelection = data.results.map((r: BulkResult) => ({
+          ...r,
+          selected: !r.error,
+        }));
+
+        setBulkResults(resultsWithSelection);
+        setBulkStats({
+          totalUrls: data.totalUrls,
+          analyzed: data.analyzed,
+          failed: data.failed,
+          averageScore: data.averageScore,
+        });
+      } else {
+        // Split: first 50 immediate, rest queued
+        const immediateUrls = urls.slice(0, IMMEDIATE_SCAN_LIMIT);
+        const queuedUrls = urls.slice(IMMEDIATE_SCAN_LIMIT);
+
+        // Scan first 50 immediately
+        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'urls', urls: immediateUrls, clientId }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Bulk scan failed');
+        }
+
+        const resultsWithSelection = data.results.map((r: BulkResult) => ({
+          ...r,
+          selected: !r.error,
+        }));
+
+        setBulkResults(resultsWithSelection);
+        setBulkStats({
+          totalUrls: urls.length,
+          analyzed: data.analyzed,
+          failed: data.failed,
+          averageScore: data.averageScore,
+        });
+
+        // Queue remaining URLs
+        const queueResult = await queueUrls(queuedUrls);
+
+        // Start background processing
+        startPolling();
+
+        setSuccess(`First ${IMMEDIATE_SCAN_LIMIT} URLs scanned. ${queueResult.queued} URLs queued for background processing.`);
+        setTimeout(() => setSuccess(null), 5000);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [clientId, queueUrls, startPolling]);
+
   const selectedCount = bulkResults.filter(r => r.selected && !r.error).length;
 
   if (!isOpen) return null;
@@ -472,6 +595,17 @@ export function ScanPanel({
           >
             <List className="mr-2 h-4 w-4" />
             Bulk Import
+          </Button>
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowArchiveImporter(true)}
+            disabled={!clientId}
+            title="Import URLs from Page Archive"
+          >
+            <Archive className="mr-2 h-4 w-4" />
+            From Archive
           </Button>
         </div>
 
@@ -970,6 +1104,18 @@ export function ScanPanel({
           </div>
         )}
       </div>
+
+      {/* Page Archive Importer Modal */}
+      {clientId && (
+        <PageArchiveImporter
+          clientId={clientId}
+          isOpen={showArchiveImporter}
+          onClose={() => setShowArchiveImporter(false)}
+          onImport={handleImportFromArchive}
+          checkExistingUrls={checkExistingUrls}
+          toolName="Meta Tag Analyser"
+        />
+      )}
     </>
   );
 }

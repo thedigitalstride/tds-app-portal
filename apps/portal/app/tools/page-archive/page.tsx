@@ -32,9 +32,9 @@ import {
   ChevronUp,
   Square,
   CheckSquare,
-  FileText,
   History,
 } from 'lucide-react';
+import { useClient } from '@/components/client-context';
 
 interface PageStoreEntry {
   _id: string;
@@ -54,8 +54,7 @@ interface Snapshot {
 }
 
 export default function PageArchivePage() {
-  const [clients, setClients] = useState<Array<{ _id: string; name: string }>>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const { selectedClientId, selectedClient } = useClient();
   const [urls, setUrls] = useState<PageStoreEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -71,18 +70,6 @@ export default function PageArchivePage() {
   // Delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  // Fetch clients on mount
-  useEffect(() => {
-    fetch('/api/clients')
-      .then(res => res.json())
-      .then(data => {
-        setClients(data);
-        if (data.length > 0) {
-          setSelectedClientId(data[0]._id);
-        }
-      });
-  }, []);
 
   // Fetch URLs when client changes
   useEffect(() => {
@@ -222,10 +209,6 @@ export default function PageArchivePage() {
   const allSelected = filteredUrls.length > 0 && selectedUrlHashes.size === filteredUrls.length;
   const someSelected = selectedUrlHashes.size > 0 && selectedUrlHashes.size < filteredUrls.length;
 
-  // Get selected client name
-  const selectedClient = clients.find(c => c._id === selectedClientId);
-  const clientName = selectedClient?.name || '';
-
   return (
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
@@ -236,32 +219,14 @@ export default function PageArchivePage() {
             <h1 className="text-2xl font-semibold text-neutral-900">Page Archive</h1>
           </div>
           <p className="mt-1 text-neutral-500">
-            {selectedClientId && clientName ? (
-              <>View stored page snapshots for <span className="font-medium text-neutral-700">{clientName}</span></>
+            {selectedClient ? (
+              <>View stored page snapshots for <span className="font-medium text-neutral-700">{selectedClient.name}</span></>
             ) : (
-              'Select a client to view stored pages'
+              'Select a client from the sidebar to view stored pages'
             )}
           </p>
         </div>
       </div>
-
-      {/* Client Selector */}
-      <Card>
-        <CardContent className="pt-6">
-          <label className="block text-sm font-medium mb-2">Select Client</label>
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full p-2 border rounded-md"
-          >
-            {clients.map(client => (
-              <option key={client._id} value={client._id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-        </CardContent>
-      </Card>
 
       {/* Loading State */}
       {loading && (
@@ -276,9 +241,9 @@ export default function PageArchivePage() {
       {!loading && !selectedClientId && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <FileText className="h-16 w-16 text-neutral-200 mb-4" />
+            <Archive className="h-16 w-16 text-neutral-200 mb-4" />
             <p className="text-lg font-medium text-neutral-600">Select a client to view URLs</p>
-            <p className="text-sm text-neutral-400 mt-1">Choose a client from the dropdown to get started</p>
+            <p className="text-sm text-neutral-400 mt-1">Choose a client from the sidebar to get started</p>
           </CardContent>
         </Card>
       )}
