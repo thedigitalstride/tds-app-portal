@@ -22,7 +22,7 @@ interface AnalysisResult {
   score: number;
 }
 
-export function analyzePageContent(html: string, url: string): AnalysisResult {
+export function analyzePageContent(html: string, _url: string): AnalysisResult {
   const $ = cheerio.load(html);
   const issues: Issue[] = [];
   const conversionElements: ConversionElement[] = [];

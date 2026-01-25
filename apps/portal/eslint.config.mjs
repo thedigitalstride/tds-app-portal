@@ -1,9 +1,14 @@
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { FlatCompat } from '@eslint/eslintrc';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+
+// Use createRequire to resolve the plugin from node_modules (works with pnpm hoisting)
+const nextPlugin = require('@next/eslint-plugin-next');
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
@@ -12,6 +17,9 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {
+    plugins: {
+      '@next/next': nextPlugin,
+    },
     rules: {
       // Allow unused vars with underscore prefix
       '@typescript-eslint/no-unused-vars': [
