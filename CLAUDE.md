@@ -187,10 +187,41 @@ const processors: Record<string, UrlProcessor> = {
 **See [TOOL_STANDARDS.md](./TOOL_STANDARDS.md) for detailed patterns and code examples.**
 
 1. Create page: `apps/portal/app/tools/[tool-name]/page.tsx`
-2. Register in: `apps/portal/lib/tools.ts` (add to `tools` array)
-3. Add API routes: `apps/portal/app/api/tools/[tool-name]/route.ts`
-4. Add model: `packages/database/src/models/[model-name].ts` (with history tracking)
-5. **If tool processes URLs:** Use `UrlBatchPanel` component and add processor to `/api/url-batch/route.ts`
+2. **Create layout (REQUIRED):** `apps/portal/app/tools/[tool-name]/layout.tsx` - includes Sidebar and auth checks
+3. Register in: `apps/portal/lib/tools.ts` (add to `tools` array)
+4. Add API routes: `apps/portal/app/api/tools/[tool-name]/route.ts`
+5. Add model: `packages/database/src/models/[model-name].ts` (with history tracking)
+6. **If tool processes URLs:** Use `UrlBatchPanel` component and add processor to `/api/url-batch/route.ts`
+
+**Tool layout template** (every tool MUST have this):
+```typescript
+// apps/portal/app/tools/[tool-name]/layout.tsx
+import { redirect } from 'next/navigation';
+import { getServerSession } from '@/lib/auth';
+import { canAccessTool } from '@/lib/permissions';
+import { Sidebar } from '@/components/sidebar';
+
+const TOOL_ID = '[tool-name]';  // Must match tools.ts id
+
+export default async function ToolLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await getServerSession();
+  if (!session) redirect('/login');
+
+  const hasAccess = await canAccessTool(session.user.id, TOOL_ID);
+  if (!hasAccess) redirect('/dashboard?error=no-tool-access');
+
+  return (
+    <div className="flex h-screen bg-neutral-50">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto">{children}</main>
+    </div>
+  );
+}
+```
 
 Tool interface:
 ```typescript

@@ -24,16 +24,6 @@ export const tools: Tool[] = [
     hasClientData: true,
   },
   {
-    id: 'page-library',
-    name: 'Page Library',
-    description: 'Central hub for managing your page collection. Add URLs and view stored snapshots.',
-    icon: Archive,
-    href: '/tools/page-library',
-    category: 'utility',
-    requiredRole: 'admin',
-    hasClientData: true,
-  },
-  {
     id: 'ppc-page-analyser',
     name: 'PPC Page Analyser',
     description: 'Analyse landing pages for PPC campaigns. Check conversion elements, page speed, and ad relevance.',
@@ -41,6 +31,16 @@ export const tools: Tool[] = [
     href: '/tools/ppc-page-analyser',
     category: 'analytics',
     isNew: true,
+    hasClientData: true,
+  },
+  {
+    id: 'page-library',
+    name: 'Page Library',
+    description: 'Central hub for managing your page collection. Add URLs and view stored snapshots.',
+    icon: Archive,
+    href: '/tools/page-library',
+    category: 'utility',
+    requiredRole: 'admin',
     hasClientData: true,
   },
   // Add more tools here as they are built

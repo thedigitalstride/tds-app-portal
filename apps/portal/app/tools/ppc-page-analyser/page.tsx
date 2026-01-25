@@ -167,6 +167,26 @@ export default function PpcPageAnalyserPage() {
     fetchSavedAnalyses(selectedClientId);
   };
 
+  // Check which URLs already exist in the library for this client
+  const checkExistingUrls = useCallback(async (urls: string[]) => {
+    if (!selectedClientId) return { existing: [], new: urls };
+
+    try {
+      const res = await fetch('/api/tools/ppc-page-analyser/check-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId, urls }),
+      });
+
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fall through to default
+    }
+    return { existing: [], new: urls };
+  }, [selectedClientId]);
+
   return (
     <div className="p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between">
@@ -264,6 +284,9 @@ export default function PpcPageAnalyserPage() {
         title="Add Landing Pages"
         singleUrlLabel="Landing page URL"
         processingLabel="Analysing page..."
+        enablePageArchive={true}
+        checkExistingUrls={checkExistingUrls}
+        toolName="PPC Page Analyser"
       />
     </div>
   );

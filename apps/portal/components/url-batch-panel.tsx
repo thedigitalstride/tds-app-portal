@@ -13,7 +13,9 @@ import {
   Play,
   Square,
   FileText,
+  Archive,
 } from 'lucide-react';
+import { PageArchiveImporter } from '@/components/page-archive-importer';
 import { Button, Input, Textarea } from '@tds/ui';
 
 interface BatchStatus {
@@ -38,6 +40,11 @@ interface ParsedUrls {
   };
 }
 
+export interface CheckUrlsResult {
+  existing: string[];
+  new: string[];
+}
+
 export interface UrlBatchPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -52,6 +59,11 @@ export interface UrlBatchPanelProps {
   processingLabel?: string;
   singleButtonLabel?: string;
   bulkButtonLabel?: string;
+
+  // Page Archive integration (only for analysis tools, NOT Page Library)
+  enablePageArchive?: boolean;
+  checkExistingUrls?: (urls: string[]) => Promise<CheckUrlsResult>;
+  toolName?: string;
 }
 
 export function UrlBatchPanel({
@@ -66,8 +78,14 @@ export function UrlBatchPanel({
   processingLabel = 'Processing URLs...',
   singleButtonLabel = 'Add URL',
   bulkButtonLabel = 'Process',
+  enablePageArchive = false,
+  checkExistingUrls,
+  toolName,
 }: UrlBatchPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
+
+  // Page Archive importer state
+  const [showArchiveImporter, setShowArchiveImporter] = useState(false);
 
   // Single URL state
   const [url, setUrl] = useState('');
@@ -186,16 +204,11 @@ export function UrlBatchPanel({
           return;
         }
 
-        // Fetch and parse sitemap
-        const res = await fetch('/api/tools/meta-tag-analyser/bulk', {
+        // Fetch and parse sitemap using generic endpoint
+        const res = await fetch('/api/sitemap/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'sitemap',
-            sitemapUrl,
-            clientId,
-            parseOnly: true,
-          }),
+          body: JSON.stringify({ sitemapUrl }),
         });
 
         const data = await res.json();
@@ -331,6 +344,19 @@ export function UrlBatchPanel({
     setParseError(null);
     setSitemapUrl('');
     setUrlList('');
+  };
+
+  // Handle import from Page Archive
+  const handleImportFromArchive = async (urls: string[]) => {
+    setShowArchiveImporter(false);
+    if (urls.length === 0) return;
+
+    // Set up the URL list and populate parsedUrls
+    const normalizedUrls = urls.map((u) => (u.startsWith('http') ? u : `https://${u}`));
+    setParsedUrls({
+      urls: normalizedUrls,
+      totalUrls: normalizedUrls.length,
+    });
   };
 
   if (!isOpen) return null;
@@ -469,6 +495,16 @@ export function UrlBatchPanel({
                       <List className="mr-2 h-4 w-4" />
                       URL List
                     </Button>
+                    {enablePageArchive && checkExistingUrls && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowArchiveImporter(true)}
+                      >
+                        <Archive className="mr-2 h-4 w-4" />
+                        From Library
+                      </Button>
+                    )}
                   </div>
 
                   {bulkMode === 'sitemap' ? (
@@ -680,6 +716,18 @@ export function UrlBatchPanel({
           )}
         </div>
       </div>
+
+      {/* Page Archive Importer Modal */}
+      {enablePageArchive && checkExistingUrls && (
+        <PageArchiveImporter
+          clientId={clientId || ''}
+          isOpen={showArchiveImporter}
+          onClose={() => setShowArchiveImporter(false)}
+          onImport={handleImportFromArchive}
+          checkExistingUrls={checkExistingUrls}
+          toolName={toolName}
+        />
+      )}
     </>
   );
 }
