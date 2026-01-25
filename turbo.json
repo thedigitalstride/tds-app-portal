@@ -10,7 +10,8 @@
         "NEXTAUTH_URL",
         "NEXTAUTH_SECRET",
         "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET"
+        "GOOGLE_CLIENT_SECRET",
+        "BLOB_READ_WRITE_TOKEN"
       ]
     },
     "dev": {

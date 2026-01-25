@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
-import { connectDB, UrlBatch, type IUrlBatchSucceeded, type IUrlBatchFailed } from '@tds/database';
+import { connectDB, UrlBatch, PpcPageAnalysis, type IUrlBatchSucceeded, type IUrlBatchFailed } from '@tds/database';
 import { getPage } from '@/lib/services/page-store-service';
+import { analyzePageContent } from '@/app/api/tools/ppc-page-analyser/analyze';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,8 +47,112 @@ const processors: Record<string, UrlProcessor> = {
       };
     }
   },
-  // Future: Add more processors here
-  // 'meta-tag-analyser': async (url, clientId, userId) => { ... },
+  'ppc-page-analyser': async (url, clientId, userId) => {
+    try {
+      // Get page content via Page Store
+      const { html, snapshot } = await getPage({
+        url,
+        clientId,
+        userId,
+        toolId: 'ppc-page-analyser',
+      });
+
+      // Analyze the page
+      const analysisResult = analyzePageContent(html, url);
+      const snapshotId = snapshot._id.toString();
+      const now = new Date();
+
+      // Check if URL already exists for this client
+      const existingAnalysis = await PpcPageAnalysis.findOne({ clientId, url });
+
+      if (existingAnalysis) {
+        // Update existing analysis
+        const changesDetected = existingAnalysis.headline !== analysisResult.headline;
+
+        const historyEntry = {
+          scannedAt: now,
+          scannedBy: userId,
+          score: existingAnalysis.score,
+          changesDetected,
+          pageSnapshotId: existingAnalysis.analyzedSnapshotId,
+          snapshot: {
+            headline: existingAnalysis.headline,
+            subheadline: existingAnalysis.subheadline,
+            conversionElements: existingAnalysis.conversionElements,
+            issues: existingAnalysis.issues,
+          },
+        };
+
+        await PpcPageAnalysis.findByIdAndUpdate(
+          existingAnalysis._id,
+          {
+            $set: {
+              headline: analysisResult.headline,
+              subheadline: analysisResult.subheadline,
+              conversionElements: analysisResult.conversionElements,
+              issues: analysisResult.issues,
+              score: analysisResult.score,
+              lastScannedAt: now,
+              lastScannedBy: userId,
+              analyzedSnapshotId: snapshotId,
+              currentSnapshotId: snapshotId,
+            },
+            $push: {
+              scanHistory: {
+                $each: [historyEntry],
+                $slice: -50,
+              },
+            },
+            $inc: { scanCount: 1 },
+          }
+        );
+
+        return {
+          success: true,
+          result: {
+            analysisId: existingAnalysis._id.toString(),
+            snapshotId,
+            score: analysisResult.score,
+            isUpdate: true,
+          },
+        };
+      }
+
+      // Create new analysis
+      const newAnalysis = await PpcPageAnalysis.create({
+        clientId,
+        url,
+        headline: analysisResult.headline,
+        subheadline: analysisResult.subheadline,
+        conversionElements: analysisResult.conversionElements,
+        issues: analysisResult.issues,
+        score: analysisResult.score,
+        analyzedBy: userId,
+        analyzedAt: now,
+        scanCount: 1,
+        lastScannedAt: now,
+        lastScannedBy: userId,
+        analyzedSnapshotId: snapshotId,
+        currentSnapshotId: snapshotId,
+        scanHistory: [],
+      });
+
+      return {
+        success: true,
+        result: {
+          analysisId: newAnalysis._id.toString(),
+          snapshotId,
+          score: analysisResult.score,
+          isUpdate: false,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to analyze landing page',
+      };
+    }
+  },
 };
 
 // Helper to atomically claim a URL for processing

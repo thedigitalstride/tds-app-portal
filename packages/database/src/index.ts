@@ -11,4 +11,5 @@ export { PageSnapshot, type IPageSnapshot } from './models/page-snapshot';
 export { PageStore, type IPageStore } from './models/page-store';
 export { ScanBatch, type IScanBatch, type ISucceededUrl, type IFailedUrl, type ISkippedUrl, type ScanBatchStatus } from './models/scan-batch';
 export { UrlBatch, type IUrlBatch, type IUrlBatchSucceeded, type IUrlBatchFailed, type UrlBatchStatus } from './models/url-batch';
+export { PpcPageAnalysis, type IPpcPageAnalysis } from './models/ppc-page-analysis';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

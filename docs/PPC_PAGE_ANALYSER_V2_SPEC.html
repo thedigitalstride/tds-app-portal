@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPC Page Analyser v2 - Technical Specification</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+            --code-bg: #f8fafc;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        @media print {
+            body {
+                font-size: 10pt;
+                line-height: 1.4;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            .no-print {
+                display: none;
+            }
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+            table, pre, .mermaid {
+                page-break-inside: avoid;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: var(--bg);
+        }
+
+        h1 {
+            color: var(--primary);
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 10px;
+            font-size: 2em;
+        }
+
+        h2 {
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-top: 40px;
+            font-size: 1.5em;
+        }
+
+        h3 {
+            color: var(--secondary);
+            margin-top: 30px;
+            font-size: 1.2em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.9em;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: var(--code-bg);
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background: var(--code-bg);
+        }
+
+        code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        blockquote {
+            border-left: 4px solid var(--primary);
+            margin: 20px 0;
+            padding: 10px 20px;
+            background: var(--code-bg);
+        }
+
+        .meta-info {
+            background: var(--code-bg);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+        }
+
+        .meta-info p {
+            margin: 5px 0;
+        }
+
+        .toc {
+            background: var(--code-bg);
+            border-radius: 8px;
+            padding: 20px 30px;
+            margin: 30px 0;
+        }
+
+        .toc ol {
+            columns: 2;
+            column-gap: 40px;
+        }
+
+        .toc li {
+            margin: 5px 0;
+        }
+
+        .toc a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-error { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .checklist li {
+            padding: 5px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+
+        .checklist li::before {
+            content: "☐";
+            position: absolute;
+            left: 0;
+            color: var(--secondary);
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 40px 0;
+        }
+
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .print-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .sign-off-table td:last-child {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">🖨️ Print / Save PDF</button>
+
+    <h1>PPC Page Analyser v2<br><small style="font-size: 0.5em; color: var(--secondary);">Technical Specification</small></h1>
+
+    <div class="meta-info">
+        <p><strong>Version:</strong> 1.0.0</p>
+        <p><strong>Status:</strong> <span class="badge badge-warning">Draft for Review</span></p>
+        <p><strong>Created:</strong> 2026-01-25</p>
+        <p><strong>Author:</strong> Claude Code</p>
+    </div>
+
+    <hr>
+
+    <div class="toc">
+        <h3 style="margin-top: 0;">Table of Contents</h3>
+        <ol>
+            <li><a href="#executive-summary">Executive Summary</a></li>
+            <li><a href="#problem-statement">Problem Statement</a></li>
+            <li><a href="#solution-overview">Solution Overview</a></li>
+            <li><a href="#user-experience-flow">User Experience Flow</a></li>
+            <li><a href="#data-architecture">Data Architecture</a></li>
+            <li><a href="#technical-implementation">Technical Implementation</a></li>
+            <li><a href="#api-integrations">API Integrations</a></li>
+            <li><a href="#ai-analysis-engine">AI Analysis Engine</a></li>
+            <li><a href="#database-models">Database Models</a></li>
+            <li><a href="#file-structure">File Structure</a></li>
+            <li><a href="#environment-configuration">Environment Configuration</a></li>
+            <li><a href="#implementation-phases">Implementation Phases</a></li>
+            <li><a href="#future-enhancements">Future Enhancements</a></li>
+        </ol>
+    </div>
+
+    <hr>
+
+    <h2 id="executive-summary">1. Executive Summary</h2>
+
+    <p>The PPC Page Analyser v2 is an AI-powered tool that bridges the gap between Google Ads and landing page optimisation. It imports ad data directly from Google Ads API, analyses the relationship between ad copy and landing page content using AI (Claude or OpenAI), and provides actionable recommendations to improve Quality Score and conversion rates.</p>
+
+    <h3>Key Features</h3>
+    <ul>
+        <li><strong>Google Ads API Integration</strong> – Import campaigns, ad groups, RSAs, keywords, and Quality Scores</li>
+        <li><strong>Dual AI Support</strong> – Choose between Claude (Anthropic) or OpenAI for analysis</li>
+        <li><strong>Flexible Analysis Scope</strong> – Analyse single ads or entire ad groups against landing pages</li>
+        <li><strong>Message Match Detection</strong> – AI identifies mismatches between ad promises and page content</li>
+        <li><strong>Actionable Recommendations</strong> – Priority-ranked fixes with estimated impact</li>
+        <li><strong>Historical Tracking</strong> – Monitor improvements over time, correlate with QS changes</li>
+    </ul>
+
+    <hr>
+
+    <h2 id="problem-statement">2. Problem Statement</h2>
+
+    <h3>What Google/Microsoft Already Provide</h3>
+    <table>
+        <tr>
+            <th>They Do</th>
+            <th>They Don't Do</th>
+        </tr>
+        <tr>
+            <td>Quality Score (1-10)</td>
+            <td>Explain <em>why</em> it's low specifically</td>
+        </tr>
+        <tr>
+            <td>Landing Page Experience rating</td>
+            <td>Show which elements cause poor ratings</td>
+        </tr>
+        <tr>
+            <td>Ad Strength indicator</td>
+            <td>Connect ad copy to page elements</td>
+        </tr>
+        <tr>
+            <td>Generic recommendations</td>
+            <td>Provide specific rewrite suggestions</td>
+        </tr>
+    </table>
+
+    <h3>The Gap We Fill</h3>
+    <blockquote>
+        <p><strong>Google tells you:</strong> "Landing Page Experience: Below Average"</p>
+        <p><strong>We tell you:</strong> "Your Headline 3 promises 'Free Next-Day Delivery' but this isn't mentioned anywhere on your landing page. Add a delivery badge above the fold to improve message match."</p>
+    </blockquote>
+
+    <hr class="page-break">
+
+    <h2 id="solution-overview">3. Solution Overview</h2>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph Input["Data Input Layer"]
+        GA[Google Ads API]
+        MA[Microsoft Ads API<br/>Future]
+        ME[Manual Entry]
+    end
+
+    subgraph Storage["Data Storage"]
+        PS[(Page Store)]
+        DB[(MongoDB)]
+    end
+
+    subgraph Analysis["AI Analysis Engine"]
+        CL[Claude API]
+        OA[OpenAI API]
+    end
+
+    subgraph Output["Output Layer"]
+        RP[Analysis Report]
+        RC[Recommendations]
+        TR[Historical Tracking]
+    end
+
+    GA -->|Import Campaigns<br/>Ad Groups, RSAs| DB
+    MA -.->|Future| DB
+    ME -->|Manual Ad Data| DB
+
+    DB -->|Ad Data| Analysis
+    PS -->|Page Content| Analysis
+
+    CL --> RP
+    OA --> RP
+
+    RP --> RC
+    RP --> TR
+
+    TR -->|Correlate with| GA
+    </div>
+
+    <hr class="page-break">
+
+    <h2 id="user-experience-flow">4. User Experience Flow</h2>
+
+    <h3>Complete UX Journey</h3>
+
+    <div class="mermaid">
+flowchart TD
+    Start([User Opens PPC Analyser]) --> HasConnection{Google Ads<br/>Connected?}
+
+    HasConnection -->|No| Connect[Show Connect Button]
+    Connect --> OAuth[Google OAuth Flow]
+    OAuth --> SelectAccount[Select Google Ads Account]
+    SelectAccount --> StoreTokens[Store Encrypted Tokens]
+    StoreTokens --> HasConnection
+
+    HasConnection -->|Yes| ChooseMethod{Choose Input Method}
+
+    ChooseMethod -->|Import| ImportFlow
+    ChooseMethod -->|Manual| ManualFlow
+
+    subgraph ImportFlow[Google Ads Import]
+        ListCampaigns[List Available Campaigns]
+        ListCampaigns --> SelectCampaigns[User Selects Campaigns]
+        SelectCampaigns --> FetchData[Fetch Ad Groups + RSAs]
+        FetchData --> StoreLocal[Store Imported Data]
+    end
+
+    subgraph ManualFlow[Manual Entry]
+        EnterHeadlines[Enter Headlines 1-15]
+        EnterHeadlines --> EnterDescriptions[Enter Descriptions 1-4]
+        EnterDescriptions --> EnterKeywords[Enter Target Keywords]
+        EnterKeywords --> EnterURL[Enter Landing Page URL]
+    end
+
+    ImportFlow --> SelectScope
+    ManualFlow --> SelectScope
+
+    SelectScope{Select Analysis Scope}
+    SelectScope -->|Single Ad| SingleAd[Pick One RSA]
+    SelectScope -->|Ad Group| AdGroup[Pick Ad Group]
+
+    SingleAd --> ConfigureAI
+    AdGroup --> ConfigureAI
+
+    ConfigureAI[Configure Analysis]
+    ConfigureAI --> SelectProvider[Select AI: Claude / OpenAI]
+    SelectProvider --> SelectFocus[Select Focus: E-commerce / Lead Gen / B2B]
+    SelectFocus --> RunAnalysis
+
+    RunAnalysis[Run Analysis]
+    RunAnalysis --> FetchPage[Fetch Page via Page Store]
+    FetchPage --> SendToAI[Send to AI with Prompt]
+    SendToAI --> ProcessResponse[Process AI Response]
+    ProcessResponse --> GenerateReport[Generate Report]
+
+    GenerateReport --> End([Analysis Complete])
+    </div>
+
+    <h3>Screen-by-Screen Flow</h3>
+
+    <div class="mermaid">
+flowchart LR
+    subgraph Screen1["Screen 1: Dashboard"]
+        D1[Client Selector]
+        D2[Connection Status]
+        D3[Recent Analyses]
+        D4[Add New Analysis Button]
+    end
+
+    subgraph Screen2["Screen 2: Import/Entry"]
+        I1[Import from Google Ads Tab]
+        I2[Manual Entry Tab]
+        I3[Campaign/Ad Group Tree]
+        I4[Selection Checkboxes]
+    end
+
+    subgraph Screen3["Screen 3: Analysis Config"]
+        C1[Selected Ad/Ad Group Summary]
+        C2[AI Provider Toggle]
+        C3[Analysis Focus Dropdown]
+        C4[Run Analysis Button]
+    end
+
+    subgraph Screen4["Screen 4: Report"]
+        R1[Score Dashboard]
+        R2[Category Breakdown]
+        R3[Issues List]
+        R4[Recommendations]
+        R5[Message Match Visualizer]
+        R6[Export/Share Options]
+    end
+
+    Screen1 -->|Click Add New| Screen2
+    Screen2 -->|Select & Continue| Screen3
+    Screen3 -->|Run Analysis| Screen4
+    Screen4 -->|New Analysis| Screen2
+    </div>
+
+    <hr class="page-break">
+
+    <h2 id="data-architecture">5. Data Architecture</h2>
+
+    <h3>Data Flow Diagram</h3>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph External["External Systems"]
+        GAds[Google Ads API]
+        Claude[Claude API]
+        OpenAI[OpenAI API]
+    end
+
+    subgraph TDSPortal["TDS App Portal"]
+        subgraph Services["Service Layer"]
+            GAS[Google Ads Service]
+            AIS[AI Analysis Service]
+            PSS[Page Store Service]
+        end
+
+        subgraph API["API Routes"]
+            AuthAPI[/api/integrations/google-ads/auth]
+            ImportAPI[/api/integrations/google-ads/import]
+            AnalyzeAPI[/api/tools/ppc-page-analyser/analyze]
+            SavedAPI[/api/tools/ppc-page-analyser/saved]
+        end
+
+        subgraph Database["MongoDB Collections"]
+            GAC[(GoogleAdsConnection)]
+            IC[(ImportedCampaign)]
+            PA[(PpcAnalysis)]
+            PS[(PageStore)]
+        end
+    end
+
+    GAds <-->|OAuth + Data| GAS
+    Claude <-->|Analysis| AIS
+    OpenAI <-->|Analysis| AIS
+
+    GAS --> AuthAPI
+    GAS --> ImportAPI
+    AIS --> AnalyzeAPI
+    PSS --> AnalyzeAPI
+
+    AuthAPI --> GAC
+    ImportAPI --> IC
+    AnalyzeAPI --> PA
+    </div>
+
+    <h3>Entity Relationship Diagram</h3>
+
+    <div class="mermaid">
+erDiagram
+    Client ||--o{ GoogleAdsConnection : has
+    Client ||--o{ ImportedCampaign : has
+    Client ||--o{ PpcAnalysis : has
+    Client ||--o{ AIProviderConfig : has
+    Client ||--o{ PageStore : has
+
+    GoogleAdsConnection {
+        ObjectId _id PK
+        ObjectId clientId FK
+        string googleCustomerId
+        string accessToken
+        string refreshToken
+        date tokenExpiry
+    }
+
+    ImportedCampaign {
+        ObjectId _id PK
+        ObjectId clientId FK
+        string googleCampaignId
+        string name
+        string status
+        array adGroups
+    }
+
+    PpcAnalysis {
+        ObjectId _id PK
+        ObjectId clientId FK
+        string analysisType
+        string sourceType
+        object adData
+        string aiProvider
+        object analysis
+        ObjectId pageSnapshotId FK
+    }
+
+    PageStore ||--o{ PageSnapshot : has
+    PageStore {
+        ObjectId _id PK
+        ObjectId clientId FK
+        string url
+        ObjectId latestSnapshotId FK
+    }
+    </div>
+
+    <hr class="page-break">
+
+    <h2 id="technical-implementation">6. Technical Implementation</h2>
+
+    <h3>Google Ads OAuth Flow</h3>
+
+    <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant BE as Backend API
+    participant GA as Google OAuth
+    participant GAds as Google Ads API
+    participant DB as MongoDB
+
+    U->>FE: Click Connect Google Ads
+    FE->>BE: GET /api/integrations/google-ads/connect
+    BE->>FE: Return OAuth URL
+    FE->>GA: Redirect to Google OAuth
+
+    U->>GA: Authorize access
+    GA->>BE: Callback with auth code
+    BE->>GA: Exchange code for tokens
+    GA->>BE: Return access + refresh tokens
+
+    BE->>DB: Store GoogleAdsConnection
+    BE->>GAds: GET /customers
+    GAds->>BE: Return customer IDs
+    BE->>FE: Connection complete
+    </div>
+
+    <h3>Analysis Flow</h3>
+
+    <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant BE as Backend API
+    participant PS as Page Store
+    participant AI as AI Provider
+    participant DB as MongoDB
+
+    U->>FE: Select ad + click Analyze
+    FE->>BE: POST /api/tools/ppc-page-analyser/analyze
+
+    BE->>DB: Fetch ad data
+    DB->>BE: Return headlines, descriptions, keywords
+
+    BE->>PS: getPage(finalUrl, clientId)
+    PS->>BE: Return HTML content
+
+    BE->>BE: Build analysis prompt
+
+    BE->>AI: Send to Claude or OpenAI
+    AI->>BE: Return structured JSON analysis
+
+    BE->>DB: Save PpcAnalysis
+    BE->>FE: Return full report
+    </div>
+
+    <hr class="page-break">
+
+    <h2 id="api-integrations">7. API Integrations</h2>
+
+    <h3>Google Ads API</h3>
+
+    <h4>Required OAuth Scopes</h4>
+    <pre><code>https://www.googleapis.com/auth/adwords</code></pre>
+
+    <h4>Key Endpoints Used</h4>
+    <table>
+        <tr>
+            <th>Endpoint</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td><code>GET /customers</code></td>
+            <td>List accessible customer accounts</td>
+        </tr>
+        <tr>
+            <td><code>GET /customers/{id}/campaigns</code></td>
+            <td>List campaigns</td>
+        </tr>
+        <tr>
+            <td><code>GET /customers/{id}/adGroups</code></td>
+            <td>List ad groups</td>
+        </tr>
+        <tr>
+            <td><code>GET /customers/{id}/ads</code></td>
+            <td>Get RSA details</td>
+        </tr>
+        <tr>
+            <td><code>GET /customers/{id}/adGroupCriteria</code></td>
+            <td>Get keywords</td>
+        </tr>
+    </table>
+
+    <h3>AI Provider APIs</h3>
+    <table>
+        <tr>
+            <th>Provider</th>
+            <th>Models</th>
+            <th>Endpoint</th>
+        </tr>
+        <tr>
+            <td>Claude (Anthropic)</td>
+            <td>claude-sonnet-4-20250514, claude-opus-4-20250514</td>
+            <td>POST https://api.anthropic.com/v1/messages</td>
+        </tr>
+        <tr>
+            <td>OpenAI</td>
+            <td>gpt-4o, gpt-4o-mini</td>
+            <td>POST https://api.openai.com/v1/chat/completions</td>
+        </tr>
+    </table>
+
+    <hr class="page-break">
+
+    <h2 id="ai-analysis-engine">8. AI Analysis Engine</h2>
+
+    <h3>Analysis Framework</h3>
+
+    <p>The AI analyses the ad-to-page relationship across six weighted categories:</p>
+
+    <div class="mermaid">
+pie title Analysis Category Weights
+    "Message Match" : 25
+    "Ad Scent" : 20
+    "Conversion Elements" : 20
+    "Technical Quality" : 15
+    "Content Relevance" : 10
+    "Trust & Credibility" : 10
+    </div>
+
+    <h3>Category Definitions</h3>
+    <table>
+        <tr>
+            <th>Category</th>
+            <th>Weight</th>
+            <th>What AI Evaluates</th>
+        </tr>
+        <tr>
+            <td><strong>Message Match</strong></td>
+            <td>25%</td>
+            <td>Do ad headlines appear on page? Is the offer consistent? Keywords present?</td>
+        </tr>
+        <tr>
+            <td><strong>Ad Scent</strong></td>
+            <td>20%</td>
+            <td>Visual consistency, CTA alignment, emotional tone continuity</td>
+        </tr>
+        <tr>
+            <td><strong>Conversion Elements</strong></td>
+            <td>20%</td>
+            <td>CTA visibility, form friction, above-fold content, click path</td>
+        </tr>
+        <tr>
+            <td><strong>Technical Quality</strong></td>
+            <td>15%</td>
+            <td>Mobile responsiveness, page structure, Core Web Vitals indicators</td>
+        </tr>
+        <tr>
+            <td><strong>Content Relevance</strong></td>
+            <td>10%</td>
+            <td>Keyword density, semantic relevance, topic alignment</td>
+        </tr>
+        <tr>
+            <td><strong>Trust & Credibility</strong></td>
+            <td>10%</td>
+            <td>Social proof, testimonials, security badges, contact info</td>
+        </tr>
+    </table>
+
+    <h3>Expected AI Output Structure</h3>
+    <pre><code>{
+  "overallScore": 72,
+  "categoryScores": {
+    "messageMatch": 68,
+    "adScent": 75,
+    "conversionElements": 82,
+    "technicalQuality": 85,
+    "contentRelevance": 65,
+    "trustCredibility": 58
+  },
+  "issues": [
+    {
+      "severity": "critical",
+      "category": "messageMatch",
+      "element": "Headline 3",
+      "problem": "Ad headline 'Free Next-Day Delivery' not found on landing page",
+      "impact": "Users expect to see this offer confirmed on the page."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": 1,
+      "action": "Add delivery promise to landing page",
+      "suggestedChange": "Add 'Free Next-Day Delivery' badge in hero section",
+      "estimatedImpact": "High"
+    }
+  ],
+  "messageMatchMap": [
+    {
+      "adElement": "Headline 1: Premium Running Shoes",
+      "pageElement": "H1: Premium Running Shoes for Athletes",
+      "matchStrength": "strong"
+    }
+  ]
+}</code></pre>
+
+    <hr class="page-break">
+
+    <h2 id="database-models">9. Database Models</h2>
+
+    <h3>GoogleAdsConnection</h3>
+    <pre><code>interface IGoogleAdsConnection {
+  _id: ObjectId;
+  clientId: ObjectId;              // TDS Client reference
+  googleCustomerId: string;        // xxx-xxx-xxxx format
+  googleAccountName: string;       // Display name
+  accessToken: string;             // Encrypted
+  refreshToken: string;            // Encrypted
+  tokenExpiry: Date;
+  connectedBy: ObjectId;           // User who connected
+  connectedAt: Date;
+  lastSyncAt?: Date;
+}</code></pre>
+
+    <h3>ImportedCampaign</h3>
+    <pre><code>interface IImportedCampaign {
+  _id: ObjectId;
+  clientId: ObjectId;
+  googleCampaignId: string;
+  name: string;
+  status: 'ENABLED' | 'PAUSED' | 'REMOVED';
+  adGroups: {
+    googleAdGroupId: string;
+    name: string;
+    rsas: {
+      googleAdId: string;
+      headlines: { text: string; pinnedPosition?: number }[];
+      descriptions: { text: string; pinnedPosition?: number }[];
+      finalUrl: string;
+      adStrength: string;
+    }[];
+    keywords: { text: string; matchType: string }[];
+    qualityScore?: number;
+  }[];
+  lastImportedAt: Date;
+}</code></pre>
+
+    <h3>PpcAnalysis</h3>
+    <pre><code>interface IPpcAnalysis {
+  _id: ObjectId;
+  clientId: ObjectId;
+  analysisType: 'single_ad' | 'ad_group';
+  sourceType: 'google_import' | 'manual_entry';
+
+  adData: {
+    headlines: { text: string; pinnedPosition?: number }[];
+    descriptions: { text: string; pinnedPosition?: number }[];
+    keywords: { text: string; matchType: string }[];
+    finalUrl: string;
+    qualityScore?: number;
+  };
+
+  aiProvider: 'claude' | 'openai';
+  aiModel: string;
+
+  analysis: {
+    overallScore: number;
+    categoryScores: { ... };
+    issues: { ... }[];
+    recommendations: { ... }[];
+    messageMatchMap: { ... }[];
+  };
+
+  pageSnapshotId: ObjectId;
+  analyzedBy: ObjectId;
+  analyzedAt: Date;
+  scanHistory: { ... }[];
+}</code></pre>
+
+    <hr class="page-break">
+
+    <h2 id="file-structure">10. File Structure</h2>
+
+    <pre><code>apps/portal/
+├── lib/
+│   ├── services/
+│   │   ├── google-ads-service.ts       # Google Ads API wrapper
+│   │   ├── ai-analysis-service.ts      # Claude + OpenAI unified interface
+│   │   └── encryption-service.ts       # Token encryption/decryption
+│   │
+│   ├── google-ads/
+│   │   ├── client.ts                   # API client setup
+│   │   ├── types.ts                    # Google Ads type definitions
+│   │   └── queries.ts                  # GAQL queries
+│   │
+│   └── ai/
+│       ├── prompts/
+│       │   ├── base-analysis.ts        # Core analysis prompt
+│       │   ├── ecommerce-focus.ts      # E-commerce specific
+│       │   └── leadgen-focus.ts        # Lead gen specific
+│       ├── claude-client.ts            # Claude API wrapper
+│       └── openai-client.ts            # OpenAI API wrapper
+│
+├── app/
+│   ├── api/
+│   │   ├── integrations/
+│   │   │   └── google-ads/
+│   │   │       ├── connect/route.ts
+│   │   │       ├── callback/route.ts
+│   │   │       ├── campaigns/route.ts
+│   │   │       └── import/route.ts
+│   │   │
+│   │   └── tools/
+│   │       └── ppc-page-analyser/
+│   │           ├── analyze/route.ts
+│   │           ├── saved/route.ts
+│   │           └── export/route.ts
+│   │
+│   └── tools/
+│       └── ppc-page-analyser/
+│           ├── page.tsx
+│           └── components/
+│               ├── GoogleAdsImporter.tsx
+│               ├── ManualAdEntry.tsx
+│               ├── AnalysisReport.tsx
+│               ├── ScoreDashboard.tsx
+│               └── MessageMatchVisualizer.tsx
+
+packages/database/src/models/
+├── google-ads-connection.ts
+├── imported-campaign.ts
+├── ppc-analysis.ts
+└── ai-provider-config.ts</code></pre>
+
+    <hr class="page-break">
+
+    <h2 id="environment-configuration">11. Environment Configuration</h2>
+
+    <h3>Required Environment Variables</h3>
+
+    <pre><code># ===== Existing =====
+MONGODB_URI=mongodb+srv://...
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key
+GOOGLE_CLIENT_ID=oauth-client-id
+GOOGLE_CLIENT_SECRET=oauth-client-secret
+
+# ===== New: Google Ads API =====
+GOOGLE_ADS_DEVELOPER_TOKEN=your-developer-token
+GOOGLE_ADS_CLIENT_ID=oauth-client-id
+GOOGLE_ADS_CLIENT_SECRET=oauth-client-secret
+
+# ===== New: AI Providers =====
+ANTHROPIC_API_KEY=sk-ant-api03-...
+OPENAI_API_KEY=sk-proj-...
+
+# ===== New: Security =====
+ENCRYPTION_KEY=64-character-hex-string</code></pre>
+
+    <h3>Google Cloud Console Setup</h3>
+    <ol>
+        <li><strong>Enable APIs:</strong> Google Ads API, Google OAuth 2.0</li>
+        <li><strong>OAuth Consent Screen:</strong> Add scope <code>https://www.googleapis.com/auth/adwords</code></li>
+        <li><strong>Redirect URI:</strong> <code>https://your-domain.com/api/integrations/google-ads/callback</code></li>
+        <li><strong>Google Ads API Center:</strong> Apply for developer token</li>
+    </ol>
+
+    <hr class="page-break">
+
+    <h2 id="implementation-phases">12. Implementation Phases</h2>
+
+    <div class="mermaid">
+gantt
+    title PPC Page Analyser v2 Implementation
+    dateFormat  YYYY-MM-DD
+
+    section Phase 1: Foundation
+    Database Models           :p1a, 2026-01-26, 1d
+    Encryption Service        :p1b, after p1a, 1d
+    Environment Setup         :p1c, after p1a, 1d
+
+    section Phase 2: Google Ads
+    OAuth Flow               :p2a, after p1c, 2d
+    Campaign Import API      :p2b, after p2a, 2d
+    Import UI Components     :p2c, after p2b, 2d
+
+    section Phase 3: AI Engine
+    Claude Integration       :p3a, after p2c, 1d
+    OpenAI Integration       :p3b, after p3a, 1d
+    Analysis Prompts         :p3c, after p3b, 2d
+    Output Parser            :p3d, after p3c, 1d
+
+    section Phase 4: Analysis UI
+    Analysis Runner          :p4a, after p3d, 1d
+    Report Components        :p4b, after p4a, 2d
+    Message Match Viz        :p4c, after p4b, 1d
+    History and Export       :p4d, after p4c, 1d
+
+    section Phase 5: Polish
+    Testing and Bug Fixes    :p5a, after p4d, 2d
+    Documentation            :p5b, after p5a, 1d
+    </div>
+
+    <h3>Phase Checklist</h3>
+
+    <h4>Phase 1: Foundation (Days 1-2)</h4>
+    <ul class="checklist">
+        <li>Create database models (GoogleAdsConnection, ImportedCampaign, PpcAnalysis, AIProviderConfig)</li>
+        <li>Build encryption service for secure token storage</li>
+        <li>Set up environment variables</li>
+        <li>Export models from @tds/database package</li>
+    </ul>
+
+    <h4>Phase 2: Google Ads Integration (Days 3-6)</h4>
+    <ul class="checklist">
+        <li>Build Google Ads OAuth flow (connect, callback, disconnect)</li>
+        <li>Create Google Ads API service wrapper</li>
+        <li>Implement campaign/ad group listing endpoints</li>
+        <li>Build import functionality (fetch and store RSAs, keywords)</li>
+        <li>Create Import UI (campaign tree, selection, progress)</li>
+    </ul>
+
+    <h4>Phase 3: AI Analysis Engine (Days 7-11)</h4>
+    <ul class="checklist">
+        <li>Build Claude API client</li>
+        <li>Build OpenAI API client</li>
+        <li>Create unified AI service interface</li>
+        <li>Write analysis prompts (base + focus variants)</li>
+        <li>Build output parser for AI responses</li>
+        <li>Create AI provider configuration UI</li>
+    </ul>
+
+    <h4>Phase 4: Analysis UI (Days 12-16)</h4>
+    <ul class="checklist">
+        <li>Build Analysis Runner component</li>
+        <li>Create Score Dashboard</li>
+        <li>Build Category Breakdown visualisation</li>
+        <li>Create Issues List with severity indicators</li>
+        <li>Build Recommendations List with priority sorting</li>
+        <li>Create Message Match Visualizer</li>
+        <li>Implement History Timeline</li>
+        <li>Add Export options (PDF, CSV, JSON)</li>
+    </ul>
+
+    <h4>Phase 5: Polish (Days 17-19)</h4>
+    <ul class="checklist">
+        <li>End-to-end testing</li>
+        <li>Error handling improvements</li>
+        <li>Performance optimisation</li>
+        <li>Documentation updates</li>
+    </ul>
+
+    <hr class="page-break">
+
+    <h2 id="future-enhancements">13. Future Enhancements</h2>
+
+    <h3>Phase 6: Microsoft Ads Integration</h3>
+    <ul>
+        <li>Same OAuth + import pattern as Google</li>
+        <li>Cross-platform comparison view</li>
+        <li>Unified reporting across both platforms</li>
+    </ul>
+
+    <h3>Phase 7: Advanced Features</h3>
+    <ul>
+        <li><strong>A/B Test Suggestions</strong> – AI-generated test variants</li>
+        <li><strong>Competitor Analysis</strong> – Compare against competitor landing pages</li>
+        <li><strong>Automated Monitoring</strong> – Alert when QS drops, auto-analyse</li>
+        <li><strong>Bulk Analysis</strong> – Analyse entire account in one go</li>
+        <li><strong>Custom Scoring</strong> – Allow clients to weight categories differently</li>
+    </ul>
+
+    <h3>Phase 8: Integrations</h3>
+    <ul>
+        <li><strong>Slack/Teams</strong> – Notifications for score changes</li>
+        <li><strong>Google Sheets</strong> – Export reports directly</li>
+        <li><strong>Zapier/Make</strong> – Workflow automation</li>
+        <li><strong>Looker Studio</strong> – Dashboard integration</li>
+    </ul>
+
+    <hr>
+
+    <h2>Sign-off</h2>
+
+    <table class="sign-off-table">
+        <tr>
+            <th>Role</th>
+            <th>Name</th>
+            <th>Date</th>
+            <th>Signature</th>
+        </tr>
+        <tr>
+            <td>Author</td>
+            <td>Claude Code</td>
+            <td>2026-01-25</td>
+            <td>✓</td>
+        </tr>
+        <tr>
+            <td>Reviewer</td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Approver</td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+    </table>
+
+    <hr>
+
+    <p style="text-align: center; color: var(--secondary); font-size: 0.9em;">
+        <em>Document generated by Claude Code for TDS App Portal</em>
+    </p>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'neutral',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true
+            },
+            securityLevel: 'loose'
+        });
+    </script>
+</body>
+</html>

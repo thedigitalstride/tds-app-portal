@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-01-25
+### Added
+- PPC Page Analyser tool for analysing landing pages
+- Conversion element detection (CTAs, forms, phone numbers, chat widgets)
+- Landing page scoring system
+- Batch processing support for PPC Page Analyser
+
 ## [1.6.24] - 2025-01-24
 ### Changed
 - Update criticality levels and enhance hreflang handling in Meta Tag Analyser

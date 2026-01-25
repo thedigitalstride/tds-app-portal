@@ -1,4 +1,4 @@
-import { LucideIcon, Search, Users, Settings, FolderOpen, Archive } from 'lucide-react';
+import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -20,6 +20,16 @@ export const tools: Tool[] = [
     icon: Search,
     href: '/tools/meta-tag-analyser',
     category: 'seo',
+    isNew: true,
+    hasClientData: true,
+  },
+  {
+    id: 'ppc-page-analyser',
+    name: 'PPC Page Analyser',
+    description: 'Analyse landing pages for PPC campaigns. Check conversion elements, page speed, and ad relevance.',
+    icon: Target,
+    href: '/tools/ppc-page-analyser',
+    category: 'analytics',
     isNew: true,
     hasClientData: true,
   },
