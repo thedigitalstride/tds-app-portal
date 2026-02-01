@@ -34,10 +34,16 @@ import {
   CheckSquare,
   History,
   Plus,
+  Settings,
+  Cookie,
+  Globe,
+  X,
 } from 'lucide-react';
 import { useClient } from '@/components/client-context';
 import { UrlBatchPanel } from '@/components/url-batch-panel';
 import { ScreenshotThumbnail, ScreenshotLightbox } from '@/components/screenshot';
+
+type CookieConsentProvider = 'none' | 'cookiebot';
 
 interface PageStoreEntry {
   _id: string;
@@ -45,6 +51,7 @@ interface PageStoreEntry {
   urlHash: string;
   latestFetchedAt: string;
   snapshotCount: number;
+  cookieConsentProvider?: CookieConsentProvider | null;
   latestSnapshot?: {
     _id: string;
     fetchedAt: Date;
@@ -54,6 +61,12 @@ interface PageStoreEntry {
     screenshotMobileUrl?: string;
     renderMethod?: string;
   };
+}
+
+interface DomainConfig {
+  _id: string;
+  domain: string;
+  cookieConsentProvider: CookieConsentProvider;
 }
 
 interface Snapshot {
@@ -95,6 +108,119 @@ export default function PageLibraryPage() {
     capturedAt?: Date;
   } | null>(null);
 
+  // Rescan state
+  const [rescanning, setRescanning] = useState<string | null>(null);
+
+  // Domain settings state
+  const [showDomainSettings, setShowDomainSettings] = useState(false);
+  const [domainConfigs, setDomainConfigs] = useState<DomainConfig[]>([]);
+  const [loadingDomainConfigs, setLoadingDomainConfigs] = useState(false);
+  const [newDomain, setNewDomain] = useState('');
+  const [newProvider, setNewProvider] = useState<CookieConsentProvider>('cookiebot');
+  const [savingDomainConfig, setSavingDomainConfig] = useState(false);
+
+  // Fetch domain configs
+  const fetchDomainConfigs = async () => {
+    if (!selectedClientId) return;
+
+    setLoadingDomainConfigs(true);
+    try {
+      const res = await fetch(`/api/cookie-domain-config?clientId=${selectedClientId}`);
+      const data = await res.json();
+      setDomainConfigs(data.configs || []);
+    } catch (error) {
+      console.error('Failed to fetch domain configs:', error);
+    } finally {
+      setLoadingDomainConfigs(false);
+    }
+  };
+
+  // Add or update domain config
+  const handleSaveDomainConfig = async () => {
+    if (!selectedClientId || !newDomain.trim()) return;
+
+    setSavingDomainConfig(true);
+    try {
+      const res = await fetch('/api/cookie-domain-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          domain: newDomain.trim(),
+          cookieConsentProvider: newProvider,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to save domain config');
+
+      setNewDomain('');
+      await fetchDomainConfigs();
+    } catch (error) {
+      console.error('Failed to save domain config:', error);
+      alert('Failed to save domain configuration');
+    } finally {
+      setSavingDomainConfig(false);
+    }
+  };
+
+  // Delete domain config
+  const handleDeleteDomainConfig = async (domain: string) => {
+    if (!selectedClientId) return;
+
+    try {
+      const res = await fetch('/api/cookie-domain-config', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          domain,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to delete domain config');
+
+      await fetchDomainConfigs();
+    } catch (error) {
+      console.error('Failed to delete domain config:', error);
+      alert('Failed to delete domain configuration');
+    }
+  };
+
+  // Extract domain from URL (strips www. for consistent matching)
+  const extractDomain = (url: string): string => {
+    try {
+      let hostname = new URL(url).hostname.toLowerCase();
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.slice(4);
+      }
+      return hostname;
+    } catch {
+      let hostname = url.replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.slice(4);
+      }
+      return hostname;
+    }
+  };
+
+  // Get resolved provider for a URL (for display) - prefixed with _ as prepared for future use
+  const _getResolvedProvider = (entry: PageStoreEntry): { provider: CookieConsentProvider; inherited: boolean } => {
+    // URL-level override takes precedence
+    if (entry.cookieConsentProvider) {
+      return { provider: entry.cookieConsentProvider, inherited: false };
+    }
+
+    // Check domain config
+    const domain = extractDomain(entry.url);
+    const domainConfig = domainConfigs.find(c => c.domain === domain);
+    if (domainConfig) {
+      return { provider: domainConfig.cookieConsentProvider, inherited: true };
+    }
+
+    // Default to 'none'
+    return { provider: 'none', inherited: true };
+  };
+
   // Fetch URLs function
   const fetchUrls = async () => {
     if (!selectedClientId) return;
@@ -113,9 +239,10 @@ export default function PageLibraryPage() {
     }
   };
 
-  // Fetch URLs when client changes
+  // Fetch URLs and domain configs when client changes
   useEffect(() => {
     fetchUrls();
+    fetchDomainConfigs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId]);
 
@@ -232,6 +359,36 @@ export default function PageLibraryPage() {
     }
   };
 
+  const handleRescan = async (entry: PageStoreEntry, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (rescanning) return;
+
+    setRescanning(entry.urlHash);
+    try {
+      const response = await fetch('/api/page-store/rescan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: entry.url,
+          clientId: selectedClientId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to rescan URL');
+      }
+
+      // Refresh the URL list to show updated data
+      await fetchUrls();
+    } catch (error) {
+      console.error('Rescan error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to rescan URL. Please try again.');
+    } finally {
+      setRescanning(null);
+    }
+  };
+
   // Filter URLs by search query
   const filteredUrls = urls.filter(entry =>
     searchQuery === '' || entry.url.toLowerCase().includes(searchQuery.toLowerCase())
@@ -258,10 +415,16 @@ export default function PageLibraryPage() {
           </p>
         </div>
         {selectedClientId && (
-          <Button onClick={() => setShowAddUrlsPanel(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add URLs
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowDomainSettings(true)}>
+              <Settings className="mr-2 h-4 w-4" />
+              Domain Settings
+            </Button>
+            <Button onClick={() => setShowAddUrlsPanel(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add URLs
+            </Button>
+          </div>
         )}
       </div>
 
@@ -426,6 +589,15 @@ export default function PageLibraryPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => handleRescan(entry, e)}
+                              disabled={rescanning === entry.urlHash}
+                              title="Rescan URL"
+                            >
+                              <RefreshCw className={`h-4 w-4 text-neutral-400 hover:text-blue-500 ${rescanning === entry.urlHash ? 'animate-spin' : ''}`} />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -603,12 +775,16 @@ export default function PageLibraryPage() {
         clientId={selectedClientId}
         clientName={selectedClient?.name || ''}
         toolId="page-library"
-        onUrlsProcessed={fetchUrls}
+        onUrlsProcessed={() => {
+          fetchUrls();
+          fetchDomainConfigs();
+        }}
         title="Add URLs"
         singleUrlLabel="URL to archive"
         singleButtonLabel="Add URL"
         bulkButtonLabel="Archive"
         processingLabel="Archiving URLs..."
+        enableCookieConfig={true}
       />
 
       {/* Screenshot Lightbox */}
@@ -622,6 +798,120 @@ export default function PageLibraryPage() {
           capturedAt={lightboxData.capturedAt}
         />
       )}
+
+      {/* Domain Settings Modal */}
+      <Dialog open={showDomainSettings} onOpenChange={setShowDomainSettings}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Cookie className="h-5 w-5" />
+              Cookie Consent Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure cookie consent handling per domain. When scanning pages, the system will
+              automatically dismiss cookie dialogs using the configured provider.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Add new domain config */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Add Domain Configuration</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., example.com"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  className="flex-1"
+                />
+                <select
+                  value={newProvider}
+                  onChange={(e) => setNewProvider(e.target.value as CookieConsentProvider)}
+                  className="px-3 py-2 border rounded-md text-sm"
+                >
+                  <option value="cookiebot">Cookiebot</option>
+                  <option value="none">None</option>
+                </select>
+                <Button
+                  onClick={handleSaveDomainConfig}
+                  disabled={savingDomainConfig || !newDomain.trim()}
+                  size="sm"
+                >
+                  {savingDomainConfig ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Enter the domain without protocol (e.g., &quot;example.com&quot; not &quot;https://example.com&quot;)
+              </p>
+            </div>
+
+            {/* Existing domain configs */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Configured Domains</label>
+              {loadingDomainConfigs ? (
+                <div className="flex items-center gap-2 text-neutral-500 text-sm py-4">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : domainConfigs.length === 0 ? (
+                <div className="text-sm text-neutral-500 py-4 text-center border rounded-md bg-neutral-50">
+                  No domain configurations yet
+                </div>
+              ) : (
+                <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+                  {domainConfigs.map((config) => (
+                    <div
+                      key={config._id}
+                      className="flex items-center justify-between p-3 hover:bg-neutral-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Globe className="h-4 w-4 text-neutral-400" />
+                        <span className="font-mono text-sm">{config.domain}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          config.cookieConsentProvider === 'cookiebot'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-neutral-100 text-neutral-600'
+                        }`}>
+                          {config.cookieConsentProvider === 'cookiebot' ? 'Cookiebot' : 'None'}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteDomainConfig(config.domain)}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4 text-neutral-400 hover:text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Info box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
+              <strong>How it works:</strong>
+              <ul className="list-disc ml-5 mt-1 space-y-1">
+                <li>Domain settings apply to all URLs on that domain</li>
+                <li>ScrapingBee uses fresh sessions, so cookies must be dismissed on every scan</li>
+                <li><strong>Cookiebot</strong> - Clicks the &quot;Allow All&quot; or &quot;Accept&quot; button</li>
+                <li><strong>None</strong> - No cookie handling (for sites without dialogs)</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDomainSettings(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import type { CookieConsentProvider } from './cookie-domain-config';
 
 export interface IPageStore extends Document {
   _id: mongoose.Types.ObjectId;
@@ -14,6 +15,9 @@ export interface IPageStore extends Document {
 
   // Access tracking
   clientsWithAccess: mongoose.Types.ObjectId[];
+
+  // Cookie consent override (null = inherit from domain config)
+  cookieConsentProvider?: CookieConsentProvider | null;
 
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +52,12 @@ const pageStoreSchema = new Schema<IPageStore>(
       type: Schema.Types.ObjectId,
       ref: 'Client',
     }],
+    // Cookie consent override - null means inherit from domain config
+    cookieConsentProvider: {
+      type: String,
+      enum: ['none', 'cookiebot', null],
+      default: null,
+    },
   },
   {
     timestamps: true,

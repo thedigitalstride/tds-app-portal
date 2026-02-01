@@ -14,6 +14,7 @@ import {
   Square,
   FileText,
   Archive,
+  Cookie,
 } from 'lucide-react';
 import { PageArchiveImporter } from '@/components/page-archive-importer';
 import { Button, Input, Textarea } from '@tds/ui';
@@ -30,6 +31,8 @@ interface BatchStatus {
   completedAt?: string;
 }
 
+type CookieConsentProvider = 'none' | 'cookiebot';
+
 interface ParsedUrls {
   urls: string[];
   totalUrls: number;
@@ -38,6 +41,8 @@ interface ParsedUrls {
     duplicates: number;
     total: number;
   };
+  /** Unique domains extracted from URLs */
+  uniqueDomains?: string[];
 }
 
 export interface CheckUrlsResult {
@@ -64,6 +69,9 @@ export interface UrlBatchPanelProps {
   enablePageArchive?: boolean;
   checkExistingUrls?: (urls: string[]) => Promise<CheckUrlsResult>;
   toolName?: string;
+
+  // Cookie consent handling for bulk imports (Page Library only)
+  enableCookieConfig?: boolean;
 }
 
 export function UrlBatchPanel({
@@ -81,6 +89,7 @@ export function UrlBatchPanel({
   enablePageArchive = false,
   checkExistingUrls,
   toolName,
+  enableCookieConfig = false,
 }: UrlBatchPanelProps) {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
 
@@ -105,6 +114,60 @@ export function UrlBatchPanel({
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [, setIsPolling] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cookie consent config state
+  const [cookieProvider, setCookieProvider] = useState<CookieConsentProvider>('none');
+  const [configuringCookies, setConfiguringCookies] = useState(false);
+
+  // Helper to extract domain from URL (strips www. for consistent matching)
+  const extractDomain = (url: string): string => {
+    try {
+      let hostname = new URL(url).hostname.toLowerCase();
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.slice(4);
+      }
+      return hostname;
+    } catch {
+      let hostname = url.replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.slice(4);
+      }
+      return hostname;
+    }
+  };
+
+  // Helper to get unique domains from URLs
+  const getUniqueDomains = (urls: string[]): string[] => {
+    const domains = new Set(urls.map(extractDomain));
+    return Array.from(domains).sort();
+  };
+
+  // Save domain configs before starting batch
+  const saveDomainConfigs = async (domains: string[], provider: CookieConsentProvider) => {
+    if (!clientId || provider === 'none') return;
+
+    setConfiguringCookies(true);
+    try {
+      // Save config for each domain
+      await Promise.all(
+        domains.map((domain) =>
+          fetch('/api/cookie-domain-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientId,
+              domain,
+              cookieConsentProvider: provider,
+            }),
+          })
+        )
+      );
+    } catch (error) {
+      console.error('Failed to save domain configs:', error);
+    } finally {
+      setConfiguringCookies(false);
+    }
+  };
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -217,11 +280,13 @@ export function UrlBatchPanel({
           throw new Error(data.error || 'Failed to parse sitemap');
         }
 
-        setParsedUrls({
+        const parsedData = {
           urls: data.urls,
           totalUrls: data.totalUrls,
           filteredUrls: data.filteredUrls,
-        });
+          uniqueDomains: getUniqueDomains(data.urls),
+        };
+        setParsedUrls(parsedData);
       } else {
         // URL list mode
         const urls = urlList.split('\n').map((u) => u.trim()).filter(Boolean);
@@ -231,9 +296,11 @@ export function UrlBatchPanel({
           return;
         }
 
+        const normalizedUrls = urls.map((u) => (u.startsWith('http') ? u : `https://${u}`));
         setParsedUrls({
-          urls: urls.map((u) => (u.startsWith('http') ? u : `https://${u}`)),
+          urls: normalizedUrls,
           totalUrls: urls.length,
+          uniqueDomains: getUniqueDomains(normalizedUrls),
         });
       }
     } catch (err) {
@@ -248,6 +315,11 @@ export function UrlBatchPanel({
     if (!clientId || !parsedUrls?.urls.length) return;
 
     try {
+      // Save domain configs if cookie handling is enabled and provider is selected
+      if (enableCookieConfig && cookieProvider !== 'none' && parsedUrls.uniqueDomains) {
+        await saveDomainConfigs(parsedUrls.uniqueDomains, cookieProvider);
+      }
+
       // Create batch
       const res = await fetch('/api/url-batch', {
         method: 'POST',
@@ -344,6 +416,7 @@ export function UrlBatchPanel({
     setParseError(null);
     setSitemapUrl('');
     setUrlList('');
+    setCookieProvider('none');
   };
 
   // Handle import from Page Archive
@@ -576,6 +649,17 @@ export function UrlBatchPanel({
                           </span>
                         </div>
 
+                        {parsedUrls.uniqueDomains && parsedUrls.uniqueDomains.length > 0 && (
+                          <div className="text-xs text-blue-700 mb-3">
+                            <span className="font-medium">{parsedUrls.uniqueDomains.length} unique domain{parsedUrls.uniqueDomains.length !== 1 ? 's' : ''}</span>
+                            {parsedUrls.uniqueDomains.length <= 3 && (
+                              <span className="ml-1">
+                                ({parsedUrls.uniqueDomains.join(', ')})
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {parsedUrls.filteredUrls && parsedUrls.filteredUrls.total > 0 && (
                           <div className="text-xs text-blue-700 mb-3">
                             <span className="font-medium">{parsedUrls.filteredUrls.total} URLs filtered:</span>
@@ -593,14 +677,48 @@ export function UrlBatchPanel({
                           </div>
                         )}
 
-                        <div className="flex gap-2">
+                        {/* Cookie consent config (only for Page Library) */}
+                        {enableCookieConfig && parsedUrls.uniqueDomains && parsedUrls.uniqueDomains.length > 0 && (
+                          <div className="border-t border-blue-200 pt-3 mt-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Cookie className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-800">Cookie Consent Handling</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={cookieProvider}
+                                onChange={(e) => setCookieProvider(e.target.value as CookieConsentProvider)}
+                                className="flex-1 px-3 py-2 border border-blue-200 rounded-md text-sm bg-white"
+                              >
+                                <option value="none">No cookie handling</option>
+                                <option value="cookiebot">Cookiebot (auto-dismiss)</option>
+                              </select>
+                            </div>
+                            {cookieProvider !== 'none' && (
+                              <p className="text-xs text-blue-600 mt-2">
+                                Will configure {cookieProvider} for {parsedUrls.uniqueDomains.length} domain{parsedUrls.uniqueDomains.length !== 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 mt-3">
                           <Button
                             onClick={startBatchProcessing}
-                            disabled={parseLoading}
+                            disabled={parseLoading || configuringCookies}
                             className="flex-1"
                           >
-                            <Play className="mr-2 h-4 w-4" />
-                            {bulkButtonLabel} {parsedUrls.totalUrls} URL{parsedUrls.totalUrls !== 1 ? 's' : ''}
+                            {configuringCookies ? (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                Configuring...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="mr-2 h-4 w-4" />
+                                {bulkButtonLabel} {parsedUrls.totalUrls} URL{parsedUrls.totalUrls !== 1 ? 's' : ''}
+                              </>
+                            )}
                           </Button>
                           <Button
                             variant="outline"
