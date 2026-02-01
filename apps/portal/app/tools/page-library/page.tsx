@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { useClient } from '@/components/client-context';
 import { UrlBatchPanel } from '@/components/url-batch-panel';
+import { ScreenshotThumbnail, ScreenshotLightbox } from '@/components/screenshot';
 
 interface PageStoreEntry {
   _id: string;
@@ -44,6 +45,15 @@ interface PageStoreEntry {
   urlHash: string;
   latestFetchedAt: string;
   snapshotCount: number;
+  latestSnapshot?: {
+    _id: string;
+    fetchedAt: Date;
+    httpStatus: number;
+    contentSize: number;
+    screenshotDesktopUrl?: string;
+    screenshotMobileUrl?: string;
+    renderMethod?: string;
+  };
 }
 
 interface Snapshot {
@@ -75,6 +85,15 @@ export default function PageLibraryPage() {
 
   // Add URLs panel
   const [showAddUrlsPanel, setShowAddUrlsPanel] = useState(false);
+
+  // Screenshot lightbox
+  const [lightboxData, setLightboxData] = useState<{
+    isOpen: boolean;
+    desktopUrl?: string;
+    mobileUrl?: string;
+    pageUrl: string;
+    capturedAt?: Date;
+  } | null>(null);
 
   // Fetch URLs function
   const fetchUrls = async () => {
@@ -342,6 +361,7 @@ export default function PageLibraryPage() {
                       </button>
                     </TableHead>
                     <TableHead className="w-8"></TableHead>
+                    <TableHead className="w-20">Preview</TableHead>
                     <TableHead>URL</TableHead>
                     <TableHead className="w-24">Snapshots</TableHead>
                     <TableHead className="w-32">Last Fetched</TableHead>
@@ -370,6 +390,21 @@ export default function PageLibraryPage() {
                           ) : (
                             <ChevronDown className="h-4 w-4 text-neutral-400" />
                           )}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <ScreenshotThumbnail
+                            desktopUrl={entry.latestSnapshot?.screenshotDesktopUrl}
+                            mobileUrl={entry.latestSnapshot?.screenshotMobileUrl}
+                            alt={entry.url}
+                            size="sm"
+                            onClick={() => setLightboxData({
+                              isOpen: true,
+                              desktopUrl: entry.latestSnapshot?.screenshotDesktopUrl,
+                              mobileUrl: entry.latestSnapshot?.screenshotMobileUrl,
+                              pageUrl: entry.url,
+                              capturedAt: entry.latestSnapshot?.fetchedAt,
+                            })}
+                          />
                         </TableCell>
                         <TableCell className="max-w-md">
                           <span
@@ -406,7 +441,7 @@ export default function PageLibraryPage() {
                       {/* Expanded Row - Snapshot History */}
                       {expandedRows.has(entry.urlHash) && (
                         <TableRow>
-                          <TableCell colSpan={6} className="bg-neutral-50/50 p-0">
+                          <TableCell colSpan={7} className="bg-neutral-50/50 p-0">
                             <div className="p-4 space-y-4">
                               {/* URL Header with Open Link */}
                               <div className="flex items-center gap-2 pb-2 border-b">
@@ -421,12 +456,34 @@ export default function PageLibraryPage() {
                                 </a>
                               </div>
 
-                              {/* Snapshot History */}
-                              <div>
-                                <h4 className="text-sm font-medium text-neutral-700 mb-3 flex items-center gap-2">
-                                  <Clock className="h-4 w-4" />
-                                  Snapshot History
-                                </h4>
+                              {/* Screenshot Preview and Snapshot History */}
+                              <div className="flex gap-6">
+                                {/* Screenshot Preview */}
+                                {(entry.latestSnapshot?.screenshotDesktopUrl || entry.latestSnapshot?.screenshotMobileUrl) && (
+                                  <div className="flex-shrink-0">
+                                    <h4 className="text-sm font-medium text-neutral-700 mb-3">Screenshot Preview</h4>
+                                    <ScreenshotThumbnail
+                                      desktopUrl={entry.latestSnapshot?.screenshotDesktopUrl}
+                                      mobileUrl={entry.latestSnapshot?.screenshotMobileUrl}
+                                      alt={entry.url}
+                                      size="md"
+                                      onClick={() => setLightboxData({
+                                        isOpen: true,
+                                        desktopUrl: entry.latestSnapshot?.screenshotDesktopUrl,
+                                        mobileUrl: entry.latestSnapshot?.screenshotMobileUrl,
+                                        pageUrl: entry.url,
+                                        capturedAt: entry.latestSnapshot?.fetchedAt,
+                                      })}
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Snapshot History */}
+                                <div className="flex-1">
+                                  <h4 className="text-sm font-medium text-neutral-700 mb-3 flex items-center gap-2">
+                                    <Clock className="h-4 w-4" />
+                                    Snapshot History
+                                  </h4>
 
                                 {loadingSnapshots.has(entry.urlHash) ? (
                                   <div className="flex items-center gap-2 text-neutral-500 text-sm">
@@ -475,6 +532,7 @@ export default function PageLibraryPage() {
                                     </div>
                                   </div>
                                 )}
+                                </div>
                               </div>
                             </div>
                           </TableCell>
@@ -552,6 +610,18 @@ export default function PageLibraryPage() {
         bulkButtonLabel="Archive"
         processingLabel="Archiving URLs..."
       />
+
+      {/* Screenshot Lightbox */}
+      {lightboxData && (
+        <ScreenshotLightbox
+          isOpen={lightboxData.isOpen}
+          onClose={() => setLightboxData(null)}
+          desktopUrl={lightboxData.desktopUrl}
+          mobileUrl={lightboxData.mobileUrl}
+          pageUrl={lightboxData.pageUrl}
+          capturedAt={lightboxData.capturedAt}
+        />
+      )}
     </div>
   );
 }

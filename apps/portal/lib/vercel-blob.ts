@@ -46,3 +46,18 @@ export async function fetchPageHtml(blobUrl: string): Promise<string> {
   }
   return response.text();
 }
+
+/**
+ * Upload a screenshot buffer to Vercel Blob storage.
+ */
+export async function uploadScreenshot(
+  pathname: string,
+  buffer: Buffer
+): Promise<{ url: string }> {
+  const blob = await put(pathname, buffer, {
+    access: 'public',
+    contentType: 'image/png',
+  });
+
+  return { url: blob.url };
+}

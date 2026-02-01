@@ -22,6 +22,21 @@ export interface IPageSnapshot extends Document {
   cacheControl?: string;
   xRobotsTag?: string;
 
+  // Screenshot storage (Vercel Blob URLs)
+  screenshotDesktopUrl?: string;
+  screenshotMobileUrl?: string;
+  screenshotDesktopSize?: number;
+  screenshotMobileSize?: number;
+
+  // Render metadata
+  renderMethod: 'fetch' | 'scrapingbee';
+  jsRendered: boolean;
+  renderTimeMs?: number;
+
+  // ScrapingBee metadata
+  scrapingBeeCreditsUsed?: number;
+  resolvedUrl?: string;
+
   createdAt: Date;
 }
 
@@ -76,6 +91,31 @@ const pageSnapshotSchema = new Schema<IPageSnapshot>(
     lastModified: String,
     cacheControl: String,
     xRobotsTag: String,
+    // Screenshot storage
+    screenshotDesktopUrl: String,
+    screenshotMobileUrl: String,
+    screenshotDesktopSize: {
+      type: Number,
+      min: 0,
+    },
+    screenshotMobileSize: {
+      type: Number,
+      min: 0,
+    },
+    // Render metadata
+    renderMethod: {
+      type: String,
+      enum: ['fetch', 'scrapingbee'],
+      default: 'fetch',
+    },
+    jsRendered: {
+      type: Boolean,
+      default: false,
+    },
+    renderTimeMs: Number,
+    // ScrapingBee metadata
+    scrapingBeeCreditsUsed: Number,
+    resolvedUrl: String,
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
