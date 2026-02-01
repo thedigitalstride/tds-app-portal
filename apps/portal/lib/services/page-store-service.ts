@@ -7,9 +7,9 @@ import {
   normaliseUrl,
   hashUrl,
   type IPageSnapshot,
-  type IPageStore,
 } from '@tds/database';
-import { uploadPageHtml, deletePageHtml, fetchPageHtml } from '@/lib/vercel-blob';
+import { uploadPageHtml, deletePageHtml, fetchPageHtml, uploadScreenshot } from '@/lib/vercel-blob';
+import { fetchWithDualScreenshots } from './scrapingbee-service';
 
 export interface GetPageOptions {
   url: string;
@@ -29,18 +29,53 @@ export interface PageResult {
 interface FetchResult {
   html: string;
   httpStatus: number;
-  contentType?: string;
-  lastModified?: string;
-  cacheControl?: string;
-  xRobotsTag?: string;
+  screenshotDesktopBuffer?: Buffer;
+  screenshotMobileBuffer?: Buffer;
+  resolvedUrl: string;
+  renderTimeMs: number;
+  creditsUsed: number;
 }
 
 /**
- * Fetch a page from the web.
+ * Fetch a page using ScrapingBee with JavaScript rendering and screenshots.
  */
 async function fetchFromWeb(url: string): Promise<FetchResult> {
+  // Check if ScrapingBee API key is configured
+  if (!process.env.SCRAPINGBEE_API_KEY) {
+    // Fallback to simple fetch if no API key (for development/testing)
+    console.warn('SCRAPINGBEE_API_KEY not set, using fallback fetch');
+    return fetchFromWebFallback(url);
+  }
+
+  try {
+    const result = await fetchWithDualScreenshots(url, {
+      blockAds: true,
+      waitMs: 3000,
+    });
+
+    return {
+      html: result.html,
+      screenshotDesktopBuffer: result.screenshotDesktop,
+      screenshotMobileBuffer: result.screenshotMobile,
+      httpStatus: result.statusCode,
+      resolvedUrl: result.resolvedUrl,
+      renderTimeMs: result.renderTimeMs,
+      creditsUsed: result.totalCreditsUsed,
+    };
+  } catch (error) {
+    console.error('ScrapingBee fetch failed, using fallback:', error);
+    return fetchFromWebFallback(url);
+  }
+}
+
+/**
+ * Fallback fetch using native fetch (no JS rendering, no screenshots).
+ * Used when ScrapingBee is not configured or fails.
+ */
+async function fetchFromWebFallback(url: string): Promise<FetchResult> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const startTime = Date.now();
 
   try {
     const response = await fetch(url, {
@@ -60,10 +95,9 @@ async function fetchFromWeb(url: string): Promise<FetchResult> {
     return {
       html,
       httpStatus: response.status,
-      contentType: response.headers.get('content-type') || undefined,
-      lastModified: response.headers.get('last-modified') || undefined,
-      cacheControl: response.headers.get('cache-control') || undefined,
-      xRobotsTag: response.headers.get('x-robots-tag') || undefined,
+      resolvedUrl: url,
+      renderTimeMs: Date.now() - startTime,
+      creditsUsed: 0,
     };
   } finally {
     clearTimeout(timeoutId);
@@ -137,6 +171,33 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     fetchedAt
   );
 
+  // Upload screenshots to Vercel Blob
+  let screenshotDesktopUrl: string | undefined;
+  let screenshotMobileUrl: string | undefined;
+  let screenshotDesktopSize: number | undefined;
+  let screenshotMobileSize: number | undefined;
+
+  if (fetchResult.screenshotDesktopBuffer) {
+    const desktopBlob = await uploadScreenshot(
+      `page-store/${urlHash}/${fetchedAt.getTime()}-desktop.png`,
+      fetchResult.screenshotDesktopBuffer
+    );
+    screenshotDesktopUrl = desktopBlob.url;
+    screenshotDesktopSize = fetchResult.screenshotDesktopBuffer.length;
+  }
+
+  if (fetchResult.screenshotMobileBuffer) {
+    const mobileBlob = await uploadScreenshot(
+      `page-store/${urlHash}/${fetchedAt.getTime()}-mobile.png`,
+      fetchResult.screenshotMobileBuffer
+    );
+    screenshotMobileUrl = mobileBlob.url;
+    screenshotMobileSize = fetchResult.screenshotMobileBuffer.length;
+  }
+
+  // Determine render method based on whether ScrapingBee was used
+  const usedScrapingBee = fetchResult.creditsUsed > 0;
+
   // Create snapshot record
   const snapshot = await PageSnapshot.create({
     url: normalisedUrl,
@@ -148,10 +209,18 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     blobUrl,
     contentSize,
     httpStatus: fetchResult.httpStatus,
-    contentType: fetchResult.contentType,
-    lastModified: fetchResult.lastModified,
-    cacheControl: fetchResult.cacheControl,
-    xRobotsTag: fetchResult.xRobotsTag,
+    // Screenshot fields
+    screenshotDesktopUrl,
+    screenshotMobileUrl,
+    screenshotDesktopSize,
+    screenshotMobileSize,
+    // Render metadata
+    renderMethod: usedScrapingBee ? 'scrapingbee' : 'fetch',
+    jsRendered: usedScrapingBee,
+    renderTimeMs: fetchResult.renderTimeMs,
+    // ScrapingBee metadata
+    scrapingBeeCreditsUsed: fetchResult.creditsUsed || undefined,
+    resolvedUrl: fetchResult.resolvedUrl !== normalisedUrl ? fetchResult.resolvedUrl : undefined,
   });
 
   // Update or create page store entry using atomic operations
@@ -247,14 +316,56 @@ export async function getSnapshotById(
   };
 }
 
+export interface PopulatedPageStoreEntry {
+  _id: string;
+  url: string;
+  urlHash: string;
+  latestFetchedAt: Date;
+  snapshotCount: number;
+  latestSnapshot?: {
+    _id: string;
+    fetchedAt: Date;
+    httpStatus: number;
+    contentSize: number;
+    screenshotDesktopUrl?: string;
+    screenshotMobileUrl?: string;
+    renderMethod?: string;
+  };
+}
+
 /**
  * Get all stored URLs for a client.
+ * Populates latestSnapshot with screenshot URLs for display.
  */
-export async function getClientUrls(clientId: string): Promise<IPageStore[]> {
+export async function getClientUrls(clientId: string): Promise<PopulatedPageStoreEntry[]> {
   await connectDB();
 
-  return PageStore.find({ clientsWithAccess: clientId })
-    .sort({ latestFetchedAt: -1 });
+  const docs = await PageStore.find({ clientsWithAccess: clientId })
+    .populate({
+      path: 'latestSnapshotId',
+      select: 'fetchedAt httpStatus contentSize screenshotDesktopUrl screenshotMobileUrl renderMethod',
+    })
+    .sort({ latestFetchedAt: -1 })
+    .lean();
+
+  // Transform to include latestSnapshot as a nested object
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return docs.map((doc: any) => ({
+    _id: doc._id.toString(),
+    url: doc.url,
+    urlHash: doc.urlHash,
+    latestFetchedAt: doc.latestFetchedAt,
+    snapshotCount: doc.snapshotCount,
+    latestSnapshot: doc.latestSnapshotId ? {
+      _id: doc.latestSnapshotId._id.toString(),
+      fetchedAt: doc.latestSnapshotId.fetchedAt,
+      httpStatus: doc.latestSnapshotId.httpStatus,
+      contentSize: doc.latestSnapshotId.contentSize,
+      screenshotDesktopUrl: doc.latestSnapshotId.screenshotDesktopUrl,
+      screenshotMobileUrl: doc.latestSnapshotId.screenshotMobileUrl,
+      renderMethod: doc.latestSnapshotId.renderMethod,
+    } : undefined,
+  }));
 }
 
 /**
