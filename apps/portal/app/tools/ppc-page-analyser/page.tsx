@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Library, Clock } from 'lucide-react';
-import { Button } from '@tds/ui';
+import { Plus, Library, Clock, Sparkles } from 'lucide-react';
+import { Button, Card } from '@tds/ui';
 import { useClient } from '@/components/client-context';
 import { useToast } from '@/components/toast-context';
 import { UrlBatchPanel } from '@/components/url-batch-panel';
 import { StatsCards } from './components/StatsCards';
 import { LibraryTable } from './components/LibraryTable';
 import { BatchHistoryTab } from './components/BatchHistoryTab';
+import { ManualAdEntry } from './components/ManualAdEntry';
 import type { SavedAnalysis } from './components/types';
 
-type TabType = 'library' | 'history';
+type TabType = 'library' | 'history' | 'new-analysis';
 
 export default function PpcPageAnalyserPage() {
   const { clients, selectedClientId } = useClient();
@@ -203,10 +204,20 @@ export default function PpcPageAnalyserPage() {
           </p>
         </div>
 
-        <Button onClick={() => setIsPanelOpen(true)} disabled={!selectedClientId}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add URLs
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setActiveTab('new-analysis')}
+            disabled={!selectedClientId}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI Analysis
+          </Button>
+          <Button onClick={() => setIsPanelOpen(true)} disabled={!selectedClientId}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add URLs
+          </Button>
+        </div>
       </div>
 
       {selectedClientId && activeTab === 'library' && (
@@ -252,11 +263,22 @@ export default function PpcPageAnalyserPage() {
               <Clock className="h-4 w-4" />
               Batch History
             </button>
+            <button
+              onClick={() => setActiveTab('new-analysis')}
+              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeTab === 'new-analysis'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              AI Analysis
+            </button>
           </nav>
         </div>
       )}
 
-      {activeTab === 'library' ? (
+      {activeTab === 'library' && (
         <LibraryTable
           analyses={savedAnalyses}
           isLoading={loadingSaved}
@@ -268,10 +290,38 @@ export default function PpcPageAnalyserPage() {
           onExport={handleExport}
           onAddUrls={() => setIsPanelOpen(true)}
         />
-      ) : (
+      )}
+
+      {activeTab === 'history' && (
         <BatchHistoryTab
           clientId={selectedClientId}
         />
+      )}
+
+      {activeTab === 'new-analysis' && selectedClientId && (
+        <Card className="p-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              AI-Powered Landing Page Analysis
+            </h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              Enter your Google Ads creative (headlines, descriptions, keywords) to analyse
+              how well your landing page aligns with your ad messaging.
+            </p>
+          </div>
+          <ManualAdEntry
+            clientId={selectedClientId}
+            onAnalysisComplete={(analysisId) => {
+              fetchSavedAnalyses(selectedClientId, [analysisId]);
+              setActiveTab('library');
+              addToast({
+                type: 'success',
+                message: 'AI analysis complete! View your results in the library.',
+              });
+            }}
+            onCancel={() => setActiveTab('library')}
+          />
+        </Card>
       )}
 
       <UrlBatchPanel
