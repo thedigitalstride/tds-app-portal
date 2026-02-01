@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth';
 import { connectDB, PpcPageAnalysis } from '@tds/database';
 import { getPage } from '@/lib/services/page-store-service';
 import { analyzePageContent } from '../../../analyze';
+import { canAccessClient } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,12 @@ export async function POST(
 
     if (!analysis) {
       return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
+    }
+
+    // Verify user has access to the client that owns this analysis
+    const hasAccess = await canAccessClient(session.user.id, analysis.clientId.toString());
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Fetch fresh page content via Page Store
@@ -58,21 +65,32 @@ export async function POST(
     };
 
     // Update the analysis
+    // If V2 AI analysis exists, preserve its score as the primary score
+    // Only update V1 DOM analysis fields, not the overall score
     const snapshotId = snapshot._id.toString();
+    const hasV2Analysis = !!analysis.analysisV2?.overallScore;
+
+    const updateFields: Record<string, unknown> = {
+      headline: analysisResult.headline,
+      subheadline: analysisResult.subheadline,
+      conversionElements: analysisResult.conversionElements,
+      issues: analysisResult.issues,
+      lastScannedAt: now,
+      lastScannedBy: session.user.id,
+      analyzedSnapshotId: snapshotId,
+      currentSnapshotId: snapshotId,
+    };
+
+    // Only update score if no V2 analysis exists
+    // This preserves the AI-generated score when rescanning
+    if (!hasV2Analysis) {
+      updateFields.score = analysisResult.score;
+    }
+
     const updatedAnalysis = await PpcPageAnalysis.findByIdAndUpdate(
       id,
       {
-        $set: {
-          headline: analysisResult.headline,
-          subheadline: analysisResult.subheadline,
-          conversionElements: analysisResult.conversionElements,
-          issues: analysisResult.issues,
-          score: analysisResult.score,
-          lastScannedAt: now,
-          lastScannedBy: session.user.id,
-          analyzedSnapshotId: snapshotId,
-          currentSnapshotId: snapshotId,
-        },
+        $set: updateFields,
         $push: {
           scanHistory: {
             $each: [historyEntry],

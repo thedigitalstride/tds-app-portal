@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   ExternalLink,
@@ -16,7 +17,10 @@ import {
   Square,
   CheckSquare,
   AlertTriangle,
+  Eye,
+  Sparkles,
 } from 'lucide-react';
+import { InfoTooltip } from './InfoTooltip';
 import {
   Button,
   Card,
@@ -37,6 +41,12 @@ import {
   DialogFooter,
 } from '@tds/ui';
 import type { SavedAnalysis } from './types';
+import {
+  getScoreBadgeColor,
+  matchesScoreFilter,
+  getDisplayScore,
+  type ScoreCategory,
+} from '../lib/score-utils';
 
 interface LibraryTableProps {
   analyses: SavedAnalysis[];
@@ -61,19 +71,18 @@ export function LibraryTable({
   onExport,
   onAddUrls,
 }: LibraryTableProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [rescanning, setRescanning] = useState<Set<string>>(new Set());
-  const [scoreFilter, setScoreFilter] = useState<'all' | 'good' | 'warning' | 'error'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | ScoreCategory>('all');
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkRescanning, setBulkRescanning] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600 bg-green-50';
-    if (score >= 50) return 'text-amber-600 bg-amber-50';
-    return 'text-red-600 bg-red-50';
+  const handleViewDetails = (id: string) => {
+    router.push(`/tools/ppc-page-analyser/${id}`);
   };
 
   const toggleRowExpand = (id: string) => {
@@ -166,12 +175,10 @@ export function LibraryTable({
       a.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
       a.headline?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    let matchesScore = true;
-    if (scoreFilter === 'good') matchesScore = a.score >= 80;
-    else if (scoreFilter === 'warning') matchesScore = a.score >= 50 && a.score < 80;
-    else if (scoreFilter === 'error') matchesScore = a.score < 50;
+    const displayScore = getDisplayScore(a);
+    const matchesScoreValue = matchesScoreFilter(displayScore, scoreFilter);
 
-    return matchesSearch && matchesScore;
+    return matchesSearch && matchesScoreValue;
   });
 
   const allSelected = filteredAnalyses.length > 0 && selectedRows.size === filteredAnalyses.length;
@@ -242,21 +249,24 @@ export function LibraryTable({
             </button>
             <button
               onClick={() => setScoreFilter('good')}
-              className={`px-2 py-1 text-xs rounded ${scoreFilter === 'good' ? 'bg-green-100 text-green-700 font-medium' : 'hover:bg-neutral-100'}`}
+              className={`px-2 py-1 text-xs rounded inline-flex items-center gap-1 ${scoreFilter === 'good' ? 'bg-green-100 text-green-700 font-medium' : 'hover:bg-neutral-100'}`}
             >
               Good
+              <InfoTooltip tooltipKey="filterGood" iconOnly size="xs" asSpan />
             </button>
             <button
               onClick={() => setScoreFilter('warning')}
-              className={`px-2 py-1 text-xs rounded ${scoreFilter === 'warning' ? 'bg-amber-100 text-amber-700 font-medium' : 'hover:bg-neutral-100'}`}
+              className={`px-2 py-1 text-xs rounded inline-flex items-center gap-1 ${scoreFilter === 'warning' ? 'bg-amber-100 text-amber-700 font-medium' : 'hover:bg-neutral-100'}`}
             >
               Warning
+              <InfoTooltip tooltipKey="filterWarning" iconOnly size="xs" asSpan />
             </button>
             <button
               onClick={() => setScoreFilter('error')}
-              className={`px-2 py-1 text-xs rounded ${scoreFilter === 'error' ? 'bg-red-100 text-red-700 font-medium' : 'hover:bg-neutral-100'}`}
+              className={`px-2 py-1 text-xs rounded inline-flex items-center gap-1 ${scoreFilter === 'error' ? 'bg-red-100 text-red-700 font-medium' : 'hover:bg-neutral-100'}`}
             >
               Error
+              <InfoTooltip tooltipKey="filterError" iconOnly size="xs" asSpan />
             </button>
           </div>
         </div>
@@ -344,10 +354,30 @@ export function LibraryTable({
                 </TableHead>
                 <TableHead className="w-8"></TableHead>
                 <TableHead>URL</TableHead>
-                <TableHead>Headline</TableHead>
-                <TableHead className="w-20">Score</TableHead>
-                <TableHead className="w-20">Scans</TableHead>
-                <TableHead className="w-28">Last Scanned</TableHead>
+                <TableHead>
+                  <span className="inline-flex items-center gap-1">
+                    Headline
+                    <InfoTooltip tooltipKey="tableHeadline" iconOnly size="xs" />
+                  </span>
+                </TableHead>
+                <TableHead className="w-20">
+                  <span className="inline-flex items-center gap-1">
+                    Score
+                    <InfoTooltip tooltipKey="tableScore" iconOnly size="xs" />
+                  </span>
+                </TableHead>
+                <TableHead className="w-20">
+                  <span className="inline-flex items-center gap-1">
+                    Scans
+                    <InfoTooltip tooltipKey="tableScans" iconOnly size="xs" />
+                  </span>
+                </TableHead>
+                <TableHead className="w-28">
+                  <span className="inline-flex items-center gap-1">
+                    Last Scanned
+                    <InfoTooltip tooltipKey="tableLastScanned" iconOnly size="xs" />
+                  </span>
+                </TableHead>
                 <TableHead className="w-28"></TableHead>
               </TableRow>
             </TableHeader>
@@ -387,9 +417,14 @@ export function LibraryTable({
                       {analysis.headline || <span className="text-neutral-400 italic">No headline</span>}
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreColor(analysis.score)}`}>
-                        {analysis.score}%
-                      </span>
+                      {(() => {
+                        const displayScore = getDisplayScore(analysis);
+                        return (
+                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getScoreBadgeColor(displayScore)}`}>
+                            {displayScore}%
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-neutral-500 text-sm">
@@ -480,6 +515,34 @@ export function LibraryTable({
                               </div>
                             </div>
                           )}
+
+                          {/* V2 Analysis indicator and View Details button */}
+                          <div className="flex items-center justify-between pt-4 border-t">
+                            <div className="flex items-center gap-2">
+                              {analysis.analysisV2 && (
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <Sparkles className="h-3 w-3" />
+                                  AI Analysis
+                                </Badge>
+                              )}
+                              {analysis.aiProvider && (
+                                <span className="text-xs text-neutral-500">
+                                  via {analysis.aiProvider === 'claude' ? 'Claude' : 'OpenAI'}
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewDetails(analysis._id);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
