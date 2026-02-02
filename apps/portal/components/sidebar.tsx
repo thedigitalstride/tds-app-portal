@@ -17,6 +17,7 @@ import {
   X,
   MessageSquare,
   Shield,
+  CreditCard,
 } from 'lucide-react';
 import {
   cn,
@@ -51,6 +52,7 @@ const adminNavigation = [
   { name: 'User Management', href: '/admin/users', icon: Settings },
   { name: 'Profiles', href: '/admin/profiles', icon: Shield },
   { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare },
+  { name: 'ScrapingBee Usage', href: '/admin/scrapingbee-usage', icon: CreditCard },
 ];
 
 export function Sidebar() {

@@ -4,12 +4,72 @@ import {
   PageStore,
   Client,
   MetaTagAnalysis,
+  CookieDomainConfig,
   normaliseUrl,
   hashUrl,
   type IPageSnapshot,
+  type CookieConsentProvider,
 } from '@tds/database';
 import { uploadPageHtml, deletePageHtml, fetchPageHtml, uploadScreenshot } from '@/lib/vercel-blob';
-import { fetchWithDualScreenshots } from './scrapingbee-service';
+import {
+  fetchWithDualScreenshots,
+  type CookieConsentProvider as ScrapingBeeProvider,
+  type ProxyTier,
+} from './scrapingbee-service';
+
+/**
+ * Extract domain from a URL (without protocol, path, or www. prefix).
+ * Normalizes domains so "www.example.com" and "example.com" match.
+ */
+function extractDomain(url: string): string {
+  try {
+    const parsed = new URL(url);
+    let hostname = parsed.hostname.toLowerCase();
+    // Strip www. prefix for consistent matching
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.slice(4);
+    }
+    return hostname;
+  } catch {
+    // Fallback for invalid URLs
+    let hostname = url.replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.slice(4);
+    }
+    return hostname;
+  }
+}
+
+/**
+ * Resolve cookie consent provider for a URL.
+ * Priority: URL override → Domain config → 'none'
+ */
+export async function resolveCookieProvider(
+  url: string,
+  clientId: string
+): Promise<CookieConsentProvider> {
+  const urlHash = hashUrl(url);
+  const domain = extractDomain(url);
+
+  // Check for URL-level override
+  const pageStore = await PageStore.findOne({ urlHash });
+  if (pageStore?.cookieConsentProvider) {
+    return pageStore.cookieConsentProvider;
+  }
+
+  // Check for domain-level config
+  const domainConfig = await CookieDomainConfig.findOne({
+    domain,
+    clientId,
+  });
+
+  if (domainConfig) {
+    return domainConfig.cookieConsentProvider;
+  }
+
+  // Default to 'none'
+  return 'none';
+}
 
 export interface GetPageOptions {
   url: string;
@@ -34,12 +94,17 @@ interface FetchResult {
   resolvedUrl: string;
   renderTimeMs: number;
   creditsUsed: number;
+  /** Which proxy tier was used (undefined for fallback fetch) */
+  proxyTierUsed?: ProxyTier;
 }
 
 /**
  * Fetch a page using ScrapingBee with JavaScript rendering and screenshots.
  */
-async function fetchFromWeb(url: string): Promise<FetchResult> {
+async function fetchFromWeb(
+  url: string,
+  cookieConsentProvider: CookieConsentProvider = 'none'
+): Promise<FetchResult> {
   // Check if ScrapingBee API key is configured
   if (!process.env.SCRAPINGBEE_API_KEY) {
     // Fallback to simple fetch if no API key (for development/testing)
@@ -51,6 +116,7 @@ async function fetchFromWeb(url: string): Promise<FetchResult> {
     const result = await fetchWithDualScreenshots(url, {
       blockAds: true,
       waitMs: 3000,
+      cookieConsentProvider: cookieConsentProvider as ScrapingBeeProvider,
     });
 
     return {
@@ -61,6 +127,7 @@ async function fetchFromWeb(url: string): Promise<FetchResult> {
       resolvedUrl: result.resolvedUrl,
       renderTimeMs: result.renderTimeMs,
       creditsUsed: result.totalCreditsUsed,
+      proxyTierUsed: result.proxyTierUsed,
     };
   } catch (error) {
     console.error('ScrapingBee fetch failed, using fallback:', error);
@@ -160,8 +227,11 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     }
   }
 
+  // Resolve cookie consent provider for this URL
+  const cookieConsentProvider = await resolveCookieProvider(normalisedUrl, clientId);
+
   // Need to fetch fresh content
-  const fetchResult = await fetchFromWeb(normalisedUrl);
+  const fetchResult = await fetchFromWeb(normalisedUrl, cookieConsentProvider);
   const fetchedAt = new Date();
 
   // Upload HTML to Vercel Blob
@@ -221,6 +291,7 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     // ScrapingBee metadata
     scrapingBeeCreditsUsed: fetchResult.creditsUsed || undefined,
     resolvedUrl: fetchResult.resolvedUrl !== normalisedUrl ? fetchResult.resolvedUrl : undefined,
+    proxyTierUsed: fetchResult.proxyTierUsed,
   });
 
   // Update or create page store entry using atomic operations
@@ -322,6 +393,8 @@ export interface PopulatedPageStoreEntry {
   urlHash: string;
   latestFetchedAt: Date;
   snapshotCount: number;
+  /** Cookie consent provider override for this URL (null = inherit from domain) */
+  cookieConsentProvider?: CookieConsentProvider | null;
   latestSnapshot?: {
     _id: string;
     fetchedAt: Date;
@@ -356,6 +429,7 @@ export async function getClientUrls(clientId: string): Promise<PopulatedPageStor
     urlHash: doc.urlHash,
     latestFetchedAt: doc.latestFetchedAt,
     snapshotCount: doc.snapshotCount,
+    cookieConsentProvider: doc.cookieConsentProvider ?? null,
     latestSnapshot: doc.latestSnapshotId ? {
       _id: doc.latestSnapshotId._id.toString(),
       fetchedAt: doc.latestSnapshotId.fetchedAt,
@@ -366,6 +440,98 @@ export async function getClientUrls(clientId: string): Promise<PopulatedPageStor
       renderMethod: doc.latestSnapshotId.renderMethod,
     } : undefined,
   }));
+}
+
+/**
+ * Get domain configs for a client.
+ */
+export async function getDomainConfigs(clientId: string): Promise<Array<{
+  _id: string;
+  domain: string;
+  cookieConsentProvider: CookieConsentProvider;
+}>> {
+  await connectDB();
+
+  const configs = await CookieDomainConfig.find({ clientId })
+    .sort({ domain: 1 })
+    .lean();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return configs.map((doc: any) => ({
+    _id: doc._id.toString(),
+    domain: doc.domain,
+    cookieConsentProvider: doc.cookieConsentProvider,
+  }));
+}
+
+/**
+ * Set cookie consent provider for a domain.
+ */
+export async function setDomainConfig(
+  domain: string,
+  clientId: string,
+  provider: CookieConsentProvider
+): Promise<{ _id: string; domain: string; cookieConsentProvider: CookieConsentProvider }> {
+  await connectDB();
+
+  // Normalize domain: lowercase, trim, remove www. prefix
+  let normalizedDomain = domain.toLowerCase().trim();
+  if (normalizedDomain.startsWith('www.')) {
+    normalizedDomain = normalizedDomain.slice(4);
+  }
+
+  const result = await CookieDomainConfig.findOneAndUpdate(
+    { domain: normalizedDomain, clientId },
+    { cookieConsentProvider: provider },
+    { upsert: true, new: true }
+  );
+
+  return {
+    _id: result._id.toString(),
+    domain: result.domain,
+    cookieConsentProvider: result.cookieConsentProvider,
+  };
+}
+
+/**
+ * Delete domain config.
+ */
+export async function deleteDomainConfig(
+  domain: string,
+  clientId: string
+): Promise<boolean> {
+  await connectDB();
+
+  // Normalize domain: lowercase, trim, remove www. prefix
+  let normalizedDomain = domain.toLowerCase().trim();
+  if (normalizedDomain.startsWith('www.')) {
+    normalizedDomain = normalizedDomain.slice(4);
+  }
+
+  const result = await CookieDomainConfig.deleteOne({
+    domain: normalizedDomain,
+    clientId,
+  });
+
+  return result.deletedCount > 0;
+}
+
+/**
+ * Update cookie consent provider for a specific URL (override).
+ */
+export async function setUrlCookieProvider(
+  urlHash: string,
+  clientId: string,
+  provider: CookieConsentProvider | null
+): Promise<boolean> {
+  await connectDB();
+
+  const result = await PageStore.updateOne(
+    { urlHash, clientsWithAccess: clientId },
+    { $set: { cookieConsentProvider: provider } }
+  );
+
+  return result.modifiedCount > 0;
 }
 
 /**

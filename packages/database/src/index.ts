@@ -26,4 +26,5 @@ export {
   type IV2Summary,
   type IAnalysisV2,
 } from './models/ppc-page-analysis';
+export { CookieDomainConfig, type ICookieDomainConfig, type CookieConsentProvider } from './models/cookie-domain-config';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

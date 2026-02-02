@@ -36,6 +36,8 @@ export interface IPageSnapshot extends Document {
   // ScrapingBee metadata
   scrapingBeeCreditsUsed?: number;
   resolvedUrl?: string;
+  /** Which proxy tier was used ('standard' | 'premium' | 'stealth') */
+  proxyTierUsed?: 'standard' | 'premium' | 'stealth';
 
   createdAt: Date;
 }
@@ -116,6 +118,10 @@ const pageSnapshotSchema = new Schema<IPageSnapshot>(
     // ScrapingBee metadata
     scrapingBeeCreditsUsed: Number,
     resolvedUrl: String,
+    proxyTierUsed: {
+      type: String,
+      enum: ['standard', 'premium', 'stealth'],
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
