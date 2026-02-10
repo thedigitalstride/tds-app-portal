@@ -115,10 +115,12 @@ export default function MetaTagAnalyserPage() {
   }, [selectedClientId, fetchSavedAnalyses]);
 
   // Handle rescan
-  const handleRescan = async (id: string) => {
+  const handleRescan = async (id: string, includeScreenshots: boolean) => {
     try {
       const res = await fetch(`/api/tools/meta-tag-analyser/saved/${id}/rescan`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeScreenshots }),
       });
       if (res.ok) {
         const data = await res.json();

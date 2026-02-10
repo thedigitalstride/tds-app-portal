@@ -13,6 +13,7 @@ import {
 import { uploadPageHtml, deletePageHtml, fetchPageHtml, uploadScreenshot } from '@/lib/vercel-blob';
 import {
   fetchWithDualScreenshots,
+  fetchHtmlOnly,
   type CookieConsentProvider as ScrapingBeeProvider,
   type ProxyTier,
 } from './scrapingbee-service';
@@ -78,6 +79,8 @@ export interface GetPageOptions {
   toolId: string;
   forceRefresh?: boolean;
   maxAgeOverride?: number; // Hours
+  /** Skip screenshot capture for faster/cheaper rescans. Default: false */
+  skipScreenshots?: boolean;
 }
 
 export interface PageResult {
@@ -100,10 +103,13 @@ interface FetchResult {
 
 /**
  * Fetch a page using ScrapingBee with JavaScript rendering and screenshots.
+ *
+ * @param skipScreenshots - If true, only fetch HTML (no screenshots). Saves credits and time.
  */
 async function fetchFromWeb(
   url: string,
-  cookieConsentProvider: CookieConsentProvider = 'none'
+  cookieConsentProvider: CookieConsentProvider = 'none',
+  skipScreenshots: boolean = false
 ): Promise<FetchResult> {
   // Check if ScrapingBee API key is configured
   if (!process.env.SCRAPINGBEE_API_KEY) {
@@ -113,6 +119,28 @@ async function fetchFromWeb(
   }
 
   try {
+    if (skipScreenshots) {
+      // HTML-only fetch for quick rescans
+      const result = await fetchHtmlOnly(url, {
+        blockAds: true,
+        waitMs: 3000,
+        cookieConsentProvider: cookieConsentProvider as ScrapingBeeProvider,
+      });
+
+      return {
+        html: result.html,
+        // No screenshots
+        screenshotDesktopBuffer: undefined,
+        screenshotMobileBuffer: undefined,
+        httpStatus: result.statusCode,
+        resolvedUrl: result.resolvedUrl,
+        renderTimeMs: result.renderTimeMs,
+        creditsUsed: result.creditsUsed,
+        proxyTierUsed: result.proxyTierUsed,
+      };
+    }
+
+    // Full fetch with dual screenshots
     const result = await fetchWithDualScreenshots(url, {
       blockAds: true,
       waitMs: 3000,
@@ -187,7 +215,7 @@ function isSnapshotFresh(
  * Main method to get a page. Auto-fetches if stale or missing.
  */
 export async function getPage(options: GetPageOptions): Promise<PageResult> {
-  const { url, clientId, userId, toolId, forceRefresh, maxAgeOverride } = options;
+  const { url, clientId, userId, toolId, forceRefresh, maxAgeOverride, skipScreenshots } = options;
 
   await connectDB();
 
@@ -231,7 +259,7 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
   const cookieConsentProvider = await resolveCookieProvider(normalisedUrl, clientId);
 
   // Need to fetch fresh content
-  const fetchResult = await fetchFromWeb(normalisedUrl, cookieConsentProvider);
+  const fetchResult = await fetchFromWeb(normalisedUrl, cookieConsentProvider, skipScreenshots);
   const fetchedAt = new Date();
 
   // Upload HTML to Vercel Blob

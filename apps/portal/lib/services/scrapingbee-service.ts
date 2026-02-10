@@ -342,6 +342,22 @@ export interface DualScreenshotOptions
   autoEscalate?: boolean;
 }
 
+export interface HtmlOnlyOptions
+  extends Omit<ScrapingBeeOptions, 'url' | 'device' | 'captureScreenshot' | 'fullPageScreenshot'> {
+  /** Whether to auto-escalate proxy tier on blocking errors. Default: true */
+  autoEscalate?: boolean;
+}
+
+export interface HtmlOnlyResult {
+  html: string;
+  resolvedUrl: string;
+  statusCode: number;
+  creditsUsed: number;
+  renderTimeMs: number;
+  /** Which proxy tier was used */
+  proxyTierUsed: ProxyTier;
+}
+
 export interface DualScreenshotResult {
   html: string;
   screenshotDesktop?: Buffer;
@@ -463,6 +479,59 @@ export async function fetchWithDualScreenshots(
     totalCreditsUsed,
     renderTimeMs: Date.now() - startTime,
     proxyTierUsed: highestTierUsed,
+  };
+}
+
+/**
+ * Fetch a page HTML only (no screenshots).
+ *
+ * This is a lighter-weight alternative to fetchWithDualScreenshots that:
+ * - Makes a single request (instead of two for desktop/mobile)
+ * - Doesn't capture screenshots (saves ~5 credits per request)
+ * - Uses fetchWithRetry for automatic proxy tier escalation
+ *
+ * Use this for "quick rescan" operations where you only need updated HTML content.
+ *
+ * Credit savings vs fetchWithDualScreenshots:
+ * - Best case: ~15 credits saved (20 → 5)
+ * - Worst case: ~55 credits saved (80 → 25) if escalation needed
+ */
+export async function fetchHtmlOnly(
+  url: string,
+  options?: HtmlOnlyOptions
+): Promise<HtmlOnlyResult> {
+  const startTime = Date.now();
+  const proxyTier = options?.proxyTier ?? 'standard';
+  const autoEscalate = options?.autoEscalate ?? true;
+
+  console.log(
+    `[ScrapingBee] Starting HTML-only fetch for ${url} (tier: ${proxyTier}, autoEscalate: ${autoEscalate})`
+  );
+
+  const result = await fetchWithRetry({
+    url,
+    device: 'desktop', // Desktop provides full HTML
+    captureScreenshot: false, // No screenshot
+    proxyTier,
+    autoEscalate,
+    blockAds: options?.blockAds ?? true,
+    waitMs: options?.waitMs,
+    jsScenario: options?.jsScenario,
+    cookieConsentProvider: options?.cookieConsentProvider,
+  });
+
+  console.log(
+    `[ScrapingBee] HTML-only fetch succeeded for ${url}: ${result.creditsUsed} credits, ` +
+      `${result.renderTimeMs}ms, tier: ${result.proxyTierUsed}`
+  );
+
+  return {
+    html: result.html,
+    resolvedUrl: result.resolvedUrl,
+    statusCode: result.statusCode,
+    creditsUsed: result.creditsUsed,
+    renderTimeMs: Date.now() - startTime,
+    proxyTierUsed: result.proxyTierUsed,
   };
 }
 

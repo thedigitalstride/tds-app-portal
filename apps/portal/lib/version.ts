@@ -12,10 +12,10 @@
 
 export const VERSION = {
   major: 1,
-  minor: 7,
+  minor: 8,
   patch: 0,
   /** ISO date of last version bump */
-  buildDate: '2026-01-25',
+  buildDate: '2026-02-10',
 } as const;
 
 export const VERSION_STRING = `${VERSION.major}.${VERSION.minor}.${VERSION.patch}`;

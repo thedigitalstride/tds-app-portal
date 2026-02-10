@@ -148,10 +148,10 @@ export function UrlBatchPanel({
 
     setConfiguringCookies(true);
     try {
-      // Save config for each domain
-      await Promise.all(
-        domains.map((domain) =>
-          fetch('/api/cookie-domain-config', {
+      // Save config for each domain and validate responses
+      const results = await Promise.all(
+        domains.map(async (domain) => {
+          const res = await fetch('/api/cookie-domain-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -159,11 +159,18 @@ export function UrlBatchPanel({
               domain,
               cookieConsentProvider: provider,
             }),
-          })
-        )
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `Failed to save config for ${domain}`);
+          }
+          return { domain, success: true };
+        })
       );
+      return results;
     } catch (error) {
       console.error('Failed to save domain configs:', error);
+      throw error; // Re-throw to allow caller to handle
     } finally {
       setConfiguringCookies(false);
     }
@@ -429,6 +436,7 @@ export function UrlBatchPanel({
     setParsedUrls({
       urls: normalizedUrls,
       totalUrls: normalizedUrls.length,
+      uniqueDomains: getUniqueDomains(normalizedUrls),
     });
   };
 

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-02-10
+### Added
+- Quick rescan option that skips screenshots for faster, cheaper rescans
+- Image preview thumbnails with click-to-enlarge Dialog modal and broken image detection
+- Unified field status module (`field-status.ts`) as single source of truth for field validity across scoring and UI
+- Per-field status badges in Open Graph and Twitter Card sections (replacing section-level badges)
+- HTML-only fetch mode in ScrapingBee service (`fetchHtmlOnly`) saving ~15-55 credits per rescan
+
+### Fixed
+- Saved route now passes imageValidation to scoring so broken images are not counted as present
+- Auth import in ScrapingBee usage layout to use shared `getServerSession`
+- Cookie domain config saves now validate responses and propagate errors
+
+### Changed
+- MetadataViewer layout: Technical, Structured Data, and Image Validation sections moved to left column
+- Scoring module refactored to delegate field presence checks to unified field-status utility
+
+## [1.7.1] - 2026-02-10
+### Fixed
+- Queue processor now uses Page Store (getPage) instead of direct fetch, fixing single source of truth violation
+- Batch route now extracts all meta tag fields (was missing author, themeColor, favicon, hreflang, security, siteVerification, etc.)
+- Batch route now runs comprehensive 20+ rule analysis instead of simplified 8-check version
+- Batch and queue routes now pass imageValidation to scoring so broken images are not scored as "present"
+
+### Changed
+- Extract shared API library for meta tag analyser (types.ts, parse-html.ts, analyze.ts) eliminating ~2000 lines of duplicated code across 4 routes
+
 ## [1.7.0] - 2026-01-25
 ### Added
 - PPC Page Analyser tool for analysing landing pages
