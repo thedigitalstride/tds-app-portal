@@ -30,7 +30,7 @@
  * - Missing title + description: BasicSEO = 50%, Overall = 80%
  */
 
-import type { AnalysisIssue, MetadataSnapshot } from '../components/types';
+import type { AnalysisIssue, ImageValidations, MetadataSnapshot } from '../components/types';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -119,80 +119,98 @@ const CATEGORY_WEIGHTS: Record<keyof CategoryScores, number> = {
 };
 
 // =============================================================================
-// FIELD PRESENCE DETECTION
+// FIELD VALUE EXTRACTION
 // =============================================================================
 
+import { isFieldPresent as checkFieldPresent } from './field-status';
+
 /**
- * Checks if a specific field is present in the analysis result.
+ * Extracts the value of a field from the metadata result.
+ * Returns the value as a string, or undefined if not present.
  */
-function isFieldPresent(
+function getFieldValue(
   fieldName: string,
   result: MetadataSnapshot
-): boolean {
+): string | undefined {
   switch (fieldName) {
     // Basic SEO fields
     case 'title':
-      return Boolean(result.title);
+      return result.title || undefined;
     case 'description':
-      return Boolean(result.description);
+      return result.description || undefined;
     case 'viewport':
-      return Boolean(result.viewport);
+      return result.viewport;
     case 'canonical':
-      return Boolean(result.canonical);
+      return result.canonical;
     case 'charset':
-      return Boolean(result.charset);
+      return result.charset;
     case 'language':
-      return Boolean(result.language);
+      return result.language;
     case 'robots':
-      return Boolean(result.robots);
+      return result.robots;
 
     // Open Graph fields
     case 'og:title':
-      return Boolean(result.openGraph?.title);
+      return result.openGraph?.title;
     case 'og:description':
-      return Boolean(result.openGraph?.description);
+      return result.openGraph?.description;
     case 'og:image':
-      return Boolean(result.openGraph?.image);
+      return result.openGraph?.image;
     case 'og:url':
-      return Boolean(result.openGraph?.url);
+      return result.openGraph?.url;
     case 'og:type':
-      return Boolean(result.openGraph?.type);
+      return result.openGraph?.type;
     case 'og:site_name':
-      return Boolean(result.openGraph?.siteName);
+      return result.openGraph?.siteName;
     case 'og:locale':
-      return Boolean(result.openGraph?.locale);
+      return result.openGraph?.locale;
     case 'og:image:alt':
-      return Boolean(result.openGraph?.imageDetails?.alt);
+      return result.openGraph?.imageDetails?.alt;
     case 'og:image:width':
-      return Boolean(result.openGraph?.imageDetails?.width);
+      return result.openGraph?.imageDetails?.width?.toString();
     case 'og:image:height':
-      return Boolean(result.openGraph?.imageDetails?.height);
+      return result.openGraph?.imageDetails?.height?.toString();
 
     // Twitter fields
     case 'twitter:card':
-      return Boolean(result.twitter?.card);
+      return result.twitter?.card;
     case 'twitter:title':
-      return Boolean(result.twitter?.title);
+      return result.twitter?.title;
     case 'twitter:description':
-      return Boolean(result.twitter?.description);
+      return result.twitter?.description;
     case 'twitter:image':
-      return Boolean(result.twitter?.image);
+      return result.twitter?.image;
     case 'twitter:site':
-      return Boolean(result.twitter?.site);
+      return result.twitter?.site;
     case 'twitter:creator':
-      return Boolean(result.twitter?.creator);
+      return result.twitter?.creator;
     case 'twitter:image:alt':
-      return Boolean(result.twitter?.imageAlt);
+      return result.twitter?.imageAlt;
 
-    // Technical fields
+    // Technical fields - special handling
     case 'structured-data':
-      return Boolean(result.structuredData?.found && result.structuredData?.isValidJson);
+      // Structured data is "present" if found AND valid JSON
+      return (result.structuredData?.found && result.structuredData?.isValidJson) ? 'true' : undefined;
     case 'web-manifest':
-      return Boolean(result.mobile?.manifest);
+      return result.mobile?.manifest;
 
     default:
-      return false;
+      return undefined;
   }
+}
+
+/**
+ * Checks if a specific field is present and valid in the analysis result.
+ * Delegates to the shared field-status utility for consistent logic.
+ */
+function isFieldPresent(
+  fieldName: string,
+  result: MetadataSnapshot,
+  issues: AnalysisIssue[],
+  imageValidation?: ImageValidations
+): boolean {
+  const value = getFieldValue(fieldName, result);
+  return checkFieldPresent(fieldName, value, issues, imageValidation);
 }
 
 // =============================================================================
@@ -268,12 +286,13 @@ function hasQualityIssue(
  */
 function evaluateFields(
   result: MetadataSnapshot,
-  issues: AnalysisIssue[]
+  issues: AnalysisIssue[],
+  imageValidation?: ImageValidations
 ): FieldEvaluation[] {
   return FIELD_DEFINITIONS.map(field => ({
     name: field.name,
     criticality: field.criticality,
-    isPresent: isFieldPresent(field.name, result),
+    isPresent: isFieldPresent(field.name, result, issues, imageValidation),
     hasQualityIssue: hasQualityIssue(field.name, issues),
   }));
 }
@@ -379,18 +398,20 @@ function calculateOverallScore(categories: CategoryScores): number {
  *
  * @param result - The metadata snapshot from the analysis
  * @param issues - The list of issues found during analysis
+ * @param imageValidation - Optional image validation results for og:image and twitter:image
  * @returns Score (0-100) and category breakdown
  *
  * @example
- * const { score, categoryScores } = calculateScore(result, issues);
+ * const { score, categoryScores } = calculateScore(result, issues, result.imageValidation);
  * // score: 85
  * // categoryScores: { basicSeo: 100, social: 75, twitter: 80, technical: 100 }
  */
 export function calculateScore(
   result: MetadataSnapshot,
-  issues: AnalysisIssue[]
+  issues: AnalysisIssue[],
+  imageValidation?: ImageValidations
 ): ScoringResult {
-  const evaluations = evaluateFields(result, issues);
+  const evaluations = evaluateFields(result, issues, imageValidation);
   const categoryScores = calculateCategoryScores(evaluations);
   const score = calculateOverallScore(categoryScores);
 

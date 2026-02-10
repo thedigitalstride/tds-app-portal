@@ -184,7 +184,8 @@ async function upsertAnalysis(
 ): Promise<{ analysis: unknown; isUpdate: boolean }> {
   const now = new Date();
   // Use new severity-based scoring algorithm
-  const { score, categoryScores } = calculateScore(result, issues);
+  // Pass imageValidation so broken images are not counted as "present"
+  const { score, categoryScores } = calculateScore(result, issues, result.imageValidation);
 
   // Check if this URL already exists for this client
   const existingAnalysis = await MetaTagAnalysis.findOne({

@@ -410,6 +410,8 @@ export async function POST(request: NextRequest) {
       try {
         const { result, issues, snapshotId } = await analyzeUrl(url, analyzeOptions);
         // Use new severity-based scoring algorithm
+        // Note: This bulk route doesn't perform image validation for performance,
+        // so images are scored based on URL presence only
         const { score, categoryScores } = calculateScore(result, issues);
 
         results.push({ url, result, issues, score, categoryScores, snapshotId });
