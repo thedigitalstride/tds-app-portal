@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { X, Download, Monitor, Smartphone, ExternalLink, Copy, Check } from 'lucide-react';
 import { Button, cn } from '@tds/ui';
 
@@ -143,14 +144,17 @@ export function ScreenshotLightbox({
         {/* Screenshot container */}
         <div className="flex-1 overflow-auto p-4 bg-neutral-100">
           {activeUrl ? (
-            <div className="flex justify-center">
-              <img
+            <div className={cn(
+              'relative mx-auto',
+              activeDevice === 'mobile' ? 'max-w-sm w-full aspect-[9/16]' : 'max-w-5xl w-full aspect-video'
+            )}>
+              <Image
                 src={activeUrl}
                 alt={`${activeDevice} screenshot of ${pageUrl}`}
-                className={cn(
-                  'max-w-full h-auto rounded-lg shadow-lg border border-neutral-200',
-                  activeDevice === 'mobile' && 'max-w-sm'
-                )}
+                fill
+                sizes="(max-width: 768px) 100vw, 80vw"
+                className="object-contain rounded-lg shadow-lg border border-neutral-200"
+                priority
               />
             </div>
           ) : (

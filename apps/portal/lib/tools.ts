@@ -1,4 +1,4 @@
-import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target } from 'lucide-react';
+import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target, Lightbulb } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -42,6 +42,15 @@ export const tools: Tool[] = [
     category: 'utility',
     requiredRole: 'admin',
     hasClientData: true,
+  },
+  {
+    id: 'ideation',
+    name: 'Ideation',
+    description: 'Transform ideas into structured PRDs through AI-guided discovery and research.',
+    icon: Lightbulb,
+    href: '/tools/ideation',
+    category: 'utility',
+    isNew: true,
   },
   // Add more tools here as they are built
 ];

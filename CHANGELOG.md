@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-02-11
+### Added
+- Ideation tool: 5-stage AI-guided wizard transforming ideas into structured PRDs
+- AI co-creator with proactive suggestions, multiple choice options, and adaptive conversation
+- Idea scoring with viability, uniqueness, and effort dimensions plus go/no-go recommendation
+- Team collaboration: comments, upvote/downvote voting, and collaborator access
+- Idea templates (New Tool, Process Improvement, Client Deliverable, Integration)
+- AI inspiration mode generating idea seeds from industry trends and agency pain points
+- Pipeline view with status filtering, vote counts, and score badges
+- PRD export as downloadable markdown
+- Multi-turn Claude conversation support (`sendClaudeConversation()`)
+- First tool without client scoping (`hasClientData: false`)
+
 ## [1.8.0] - 2026-02-10
 ### Added
 - Quick rescan option that skips screenshots for faster, cheaper rescans

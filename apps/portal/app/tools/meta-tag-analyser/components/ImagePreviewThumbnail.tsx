@@ -11,6 +11,7 @@ interface ImagePreviewThumbnailProps {
   thumbnailClassName?: string;  // e.g., "h-4 w-4" for favicon
   label?: string;  // e.g., "OG Image", "Favicon"
   validation?: ImageValidation;  // Optional: pass validation status to proactively show error state
+  fallbackSrc?: string;  // Optional: try this URL if primary src fails (e.g., Google Favicons API)
   onError?: () => void;  // Optional: callback when image fails to load (for parent status tracking)
 }
 
@@ -24,16 +25,24 @@ export function ImagePreviewThumbnail({
   thumbnailClassName = 'h-10 w-16',
   label,
   validation,
+  fallbackSrc,
   onError,
 }: ImagePreviewThumbnailProps) {
   const [open, setOpen] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
 
-  // Handle image load error - update internal state and notify parent
+  // Handle image load error - try fallback first, then show error state
   const handleError = () => {
-    setHasError(true);
-    onError?.();
+    if (fallbackSrc && !usingFallback) {
+      setUsingFallback(true);
+    } else {
+      setHasError(true);
+      onError?.();
+    }
   };
+
+  const activeSrc = usingFallback && fallbackSrc ? fallbackSrc : src;
 
   // If validation shows broken, display error state immediately (no need to try loading)
   if (validation?.exists === false) {
@@ -72,7 +81,7 @@ export function ImagePreviewThumbnail({
       {/* Thumbnail */}
       {/* eslint-disable-next-line @next/next/no-img-element -- External image URL from scanned site */}
       <img
-        src={src}
+        src={activeSrc}
         alt={alt}
         className={`${thumbnailClassName} object-cover rounded border flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity`}
         onClick={() => setOpen(true)}
@@ -88,7 +97,7 @@ export function ImagePreviewThumbnail({
             {/* Full-size image */}
             {/* eslint-disable-next-line @next/next/no-img-element -- External image URL from scanned site */}
             <img
-              src={src}
+              src={activeSrc}
               alt={alt}
               className="max-w-full max-h-[70vh] object-contain rounded"
               onError={() => {

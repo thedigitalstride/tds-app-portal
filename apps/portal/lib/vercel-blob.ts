@@ -1,6 +1,7 @@
 import { put, del } from '@vercel/blob';
 
 const BLOB_PREFIX = 'page-store';
+const IDEATION_PREFIX = 'ideation-assets';
 
 /**
  * Upload HTML content to Vercel Blob storage.
@@ -60,4 +61,36 @@ export async function uploadScreenshot(
   });
 
   return { url: blob.url };
+}
+
+/**
+ * Upload an ideation asset (image, PDF, spreadsheet) to Vercel Blob storage.
+ */
+export async function uploadIdeationAsset(
+  ideaId: string,
+  filename: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<{ url: string; size: number }> {
+  const sanitized = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const pathname = `${IDEATION_PREFIX}/${ideaId}/${Date.now()}-${sanitized}`;
+
+  const blob = await put(pathname, buffer, {
+    access: 'public',
+    contentType,
+  });
+
+  return { url: blob.url, size: buffer.length };
+}
+
+/**
+ * Fetch a blob URL and return as Buffer.
+ */
+export async function fetchBlobAsBuffer(blobUrl: string): Promise<Buffer> {
+  const response = await fetch(blobUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch blob: ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
