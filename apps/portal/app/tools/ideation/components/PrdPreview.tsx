@@ -163,7 +163,7 @@ export function PrdPreview({
                 </span>
               </div>
 
-              <h1 className="mb-3 text-2xl font-bold text-neutral-900 sm:text-3xl">
+              <h1 className="mb-3 text-3xl font-bold leading-tight text-neutral-900 sm:text-4xl">
                 {prdData.title || ideaTitle}
               </h1>
 
@@ -188,7 +188,7 @@ export function PrdPreview({
 
             {/* Sections or fallback */}
             {hasStructuredSections ? (
-              <div className="space-y-10">
+              <div className="space-y-14">
                 {sections.map((section, i) => (
                   <PrdSection
                     key={i}
@@ -202,7 +202,7 @@ export function PrdPreview({
             ) : (
               <div className="rounded-xl border border-neutral-200 bg-white p-6">
                 <div
-                  className="prose prose-sm max-w-none prose-headings:text-neutral-900 prose-p:text-neutral-700 prose-strong:text-neutral-800 prose-li:text-neutral-700"
+                  className="prose prose-base max-w-none prose-headings:text-neutral-900 prose-p:text-neutral-700 prose-strong:text-neutral-800 prose-li:text-neutral-700 prose-a:text-blue-600"
                   dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                 />
               </div>

@@ -21,7 +21,7 @@ export const PrdSection = forwardRef<HTMLElement, PrdSectionProps>(
       <section
         ref={ref}
         id={`prd-section-${index}`}
-        className="scroll-mt-24 print:break-inside-avoid"
+        className="scroll-mt-24 rounded-xl border border-neutral-200 bg-white p-8 print:break-inside-avoid"
       >
         <div className="mb-4 flex items-center gap-3 border-b border-neutral-200 pb-3">
           <div
@@ -39,7 +39,7 @@ export const PrdSection = forwardRef<HTMLElement, PrdSectionProps>(
         </div>
 
         <div
-          className="prose prose-sm max-w-none prose-headings:text-neutral-900 prose-p:text-neutral-700 prose-strong:text-neutral-800 prose-li:text-neutral-700 prose-a:text-blue-600"
+          className="prose prose-base max-w-none prose-headings:text-neutral-900 prose-p:text-neutral-700 prose-strong:text-neutral-800 prose-li:text-neutral-700 prose-a:text-blue-600"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </section>
