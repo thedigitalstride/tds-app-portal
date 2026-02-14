@@ -18,6 +18,8 @@ import {
   MessageSquare,
   Shield,
   CreditCard,
+  Sparkles,
+  DollarSign,
 } from 'lucide-react';
 import {
   cn,
@@ -53,6 +55,8 @@ const adminNavigation = [
   { name: 'Profiles', href: '/admin/profiles', icon: Shield },
   { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare },
   { name: 'ScrapingBee Usage', href: '/admin/scrapingbee-usage', icon: CreditCard },
+  { name: 'AI Costs', href: '/admin/ai-costs', icon: DollarSign },
+  { name: 'Ideation Prompts', href: '/admin/ideation-prompts', icon: Sparkles },
 ];
 
 export function Sidebar() {

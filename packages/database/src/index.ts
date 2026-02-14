@@ -27,4 +27,33 @@ export {
   type IAnalysisV2,
 } from './models/ppc-page-analysis';
 export { CookieDomainConfig, type ICookieDomainConfig, type CookieConsentProvider } from './models/cookie-domain-config';
+export {
+  Idea,
+  type IIdea,
+  type IdeaStage,
+  type IdeaStatus,
+  type ScoreRecommendation,
+  type IIdeaMessage,
+  type IMessageOption,
+  type IAttachment,
+  type AttachmentType,
+  type IStageData,
+  type IIdeaScoring,
+  type IScoreDimension,
+  type IIdeaComment,
+  type IIdeaVote,
+  type ISeedData,
+  type IShapeData,
+  type IResearchData,
+  type IRefineData,
+  type IPrdData,
+  type IPrdSection,
+} from './models/idea';
+export {
+  IdeationPromptOverride,
+  type IIdeationPromptOverride,
+  type IdeationPromptKey,
+  IDEATION_PROMPT_KEYS,
+} from './models/ideation-prompt-override';
+export { AiUsageLog, type IAiUsageLog } from './models/ai-usage-log';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

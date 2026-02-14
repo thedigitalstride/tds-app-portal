@@ -87,6 +87,7 @@ export interface AIAnalysisResult {
 export interface RawAIResponse {
   content: string;
   model: string;
+  stopReason?: string; // 'end_turn' | 'max_tokens' | 'stop_sequence'
   usage?: {
     inputTokens: number;
     outputTokens: number;

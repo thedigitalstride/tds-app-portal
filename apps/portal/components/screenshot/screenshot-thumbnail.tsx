@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { ImageIcon, AlertCircle } from 'lucide-react';
 import { cn } from '@tds/ui';
 
@@ -71,22 +72,18 @@ export function ScreenshotThumbnail({
       ) : desktopError ? (
         renderError('desktop')
       ) : (
-        <div className="relative">
+        <div className={cn('relative overflow-hidden rounded', sizeClasses.desktop)}>
           {!desktopLoaded && (
-            <div
-              className={cn(
-                'absolute inset-0 bg-neutral-100 animate-pulse rounded',
-                sizeClasses.desktop
-              )}
-            />
+            <div className="absolute inset-0 bg-neutral-100 animate-pulse rounded" />
           )}
-          <img
+          <Image
             src={desktopUrl}
             alt={`Desktop screenshot of ${alt}`}
+            fill
+            sizes="(max-width: 768px) 48px, 240px"
             className={cn(
               'object-cover object-top rounded border border-neutral-200',
               'group-hover:border-blue-400 group-hover:shadow-sm transition-all',
-              sizeClasses.desktop,
               !desktopLoaded && 'opacity-0'
             )}
             onLoad={() => setDesktopLoaded(true)}
@@ -101,22 +98,18 @@ export function ScreenshotThumbnail({
       ) : mobileError ? (
         renderError('mobile')
       ) : (
-        <div className="relative">
+        <div className={cn('relative overflow-hidden rounded', sizeClasses.mobile)}>
           {!mobileLoaded && (
-            <div
-              className={cn(
-                'absolute inset-0 bg-neutral-100 animate-pulse rounded',
-                sizeClasses.mobile
-              )}
-            />
+            <div className="absolute inset-0 bg-neutral-100 animate-pulse rounded" />
           )}
-          <img
+          <Image
             src={mobileUrl}
             alt={`Mobile screenshot of ${alt}`}
+            fill
+            sizes="(max-width: 768px) 24px, 112px"
             className={cn(
               'object-cover object-top rounded border border-neutral-200',
               'group-hover:border-blue-400 group-hover:shadow-sm transition-all',
-              sizeClasses.mobile,
               !mobileLoaded && 'opacity-0'
             )}
             onLoad={() => setMobileLoaded(true)}

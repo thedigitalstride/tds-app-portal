@@ -256,6 +256,74 @@ export function getAppleTouchIcons(html: string): AppleTouchIcon[] {
 }
 
 // =============================================================================
+// FAVICON DISCOVERY
+// =============================================================================
+
+/**
+ * Discover a favicon for a URL by:
+ * 1. Parsing explicit <link rel="icon"> tags from HTML
+ * 2. If found, resolving to absolute URL and validating
+ * 3. If not found in HTML, trying common fallback paths via HEAD requests
+ *
+ * Returns the first valid favicon found, or the last attempted result.
+ */
+export async function discoverFavicon(
+  html: string,
+  url: string
+): Promise<{ url: string; validation: ImageValidation }> {
+  // 1. Try to get favicon from HTML <link> tags
+  const htmlFavicon = getFavicon(html);
+
+  if (htmlFavicon) {
+    // Resolve to absolute URL
+    let absoluteUrl = htmlFavicon;
+    if (!htmlFavicon.startsWith('http')) {
+      try {
+        absoluteUrl = new URL(htmlFavicon, url).toString();
+      } catch {
+        // If URL resolution fails, use as-is
+      }
+    }
+
+    const validation = await validateImageUrl(absoluteUrl);
+    return { url: absoluteUrl, validation };
+  }
+
+  // 2. No favicon in HTML — try common fallback paths
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return {
+      url: '',
+      validation: { url: '', exists: false, error: 'Could not determine site origin' },
+    };
+  }
+
+  const fallbackPaths = [
+    '/favicon.ico',
+    '/favicon.png',
+    '/favicon.svg',
+    '/apple-touch-icon.png',
+  ];
+
+  for (const path of fallbackPaths) {
+    const candidateUrl = `${origin}${path}`;
+    const validation = await validateImageUrl(candidateUrl);
+
+    if (validation.exists) {
+      return { url: candidateUrl, validation };
+    }
+  }
+
+  // Nothing found — return empty result
+  return {
+    url: '',
+    validation: { url: '', exists: false, error: 'No favicon found in HTML or common paths' },
+  };
+}
+
+// =============================================================================
 // IMAGE VALIDATION
 // =============================================================================
 
@@ -321,10 +389,11 @@ export async function parseAllMetaTags(html: string, url: string): Promise<MetaT
   const twitterImage = getMetaContent(html, 'twitter:image');
   const hreflangEntries = getHreflang(html);
 
-  // Validate images in parallel
-  const [ogImageValidation, twitterImageValidation] = await Promise.all([
+  // Validate images and discover favicon in parallel
+  const [ogImageValidation, twitterImageValidation, faviconResult] = await Promise.all([
     ogImage ? validateImageUrl(ogImage) : Promise.resolve(undefined),
     twitterImage && twitterImage !== ogImage ? validateImageUrl(twitterImage) : Promise.resolve(undefined),
+    discoverFavicon(html, url),
   ]);
 
   // Build extended OG image details
@@ -433,7 +502,7 @@ export async function parseAllMetaTags(html: string, url: string): Promise<MetaT
     author: getMetaContent(html, 'author'),
     themeColor: getMetaContent(html, 'theme-color'),
     language: getLanguage(html),
-    favicon: getFavicon(html),
+    favicon: faviconResult.url || getFavicon(html),
     hreflang: hreflangEntries.length > 0 ? hreflangEntries : undefined,
     openGraph: {
       title: getMetaContent(html, 'og:title'),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   AlertCircle,
   CheckCircle,
@@ -417,13 +417,9 @@ function ThemeColorField({ value, diff }: { value?: string; diff?: FieldDiff }) 
   );
 }
 
-// Helper component for Favicon field with status (detects broken images)
+// Helper component for Favicon field with status (browser handles rendering)
 function FaviconField({ value, url, diff }: { value?: string; url: string; diff?: FieldDiff }) {
-  const [imageError, setImageError] = useState(false);
-
-  // Get base status, then override if image failed to load
-  const { status: baseStatus } = getFieldStatus('favicon', value, []);
-  const status = imageError ? 'error' : baseStatus;
+  const { status } = getFieldStatus('favicon', value, []);
 
   const statusStyles = {
     error: 'border-red-300 bg-red-50/50',
@@ -447,6 +443,16 @@ function FaviconField({ value, url, diff }: { value?: string; url: string; diff?
     }
   })();
 
+  // Google's public favicon service as fallback when direct URL fails (CORS, 403, etc.)
+  const faviconFallback = (() => {
+    try {
+      const domain = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    } catch {
+      return undefined;
+    }
+  })();
+
   return (
     <div className={`relative rounded-lg border-2 p-2 ${statusStyles[status]}`}>
       <div className="absolute -top-2 right-2">
@@ -464,7 +470,7 @@ function FaviconField({ value, url, diff }: { value?: string; url: string; diff?
               alt="Favicon"
               thumbnailClassName="h-4 w-4"
               label="Favicon"
-              onError={() => setImageError(true)}
+              fallbackSrc={faviconFallback}
             />
           )}
           <span className="font-mono text-[10px] truncate" title={value}>
