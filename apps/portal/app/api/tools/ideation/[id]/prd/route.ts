@@ -24,9 +24,16 @@ export async function POST(
       return NextResponse.json({ error: 'Idea not found' }, { status: 404 });
     }
 
-    const { response: aiResponse, raw } = await generatePRD({
+    const { response: aiResponse, raw, validation, retried, totalUsage } = await generatePRD({
       stages: idea.stages,
       title: idea.title,
+      tracking: {
+        toolId: 'ideation',
+        userId: session.user.id,
+        purpose: 'prd-generation',
+        resourceId: id,
+        resourceType: 'idea',
+      },
     });
 
     // Save PRD to the prd stage
@@ -40,16 +47,29 @@ export async function POST(
       idea.stages.prd.extractedData = {
         ...(idea.stages.prd.extractedData || {}),
         ...aiResponse.extractedData,
+        generatedAt: new Date(),
       };
     }
 
+    // Use totalUsage (aggregated across retries) when available
+    const usage = totalUsage || raw.usage;
     idea.totalTokensUsed +=
-      (raw.usage?.inputTokens || 0) + (raw.usage?.outputTokens || 0);
+      (usage?.inputTokens || 0) + (usage?.outputTokens || 0);
 
     idea.markModified('stages');
     await idea.save();
 
-    return NextResponse.json({ aiResponse });
+    return NextResponse.json({
+      aiResponse,
+      validation: validation ? {
+        valid: validation.valid,
+        issues: validation.issues,
+        sectionCount: validation.sectionCount,
+        expectedSectionCount: validation.expectedSectionCount,
+        missingSections: validation.missingSections,
+        retried: retried || false,
+      } : undefined,
+    });
   } catch (error) {
     console.error('Error generating PRD:', error);
     return NextResponse.json({ error: 'Failed to generate PRD' }, { status: 500 });

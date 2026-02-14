@@ -49,6 +49,7 @@ export interface ISeedData {
 
 export interface IShapeData {
   targetUsers?: string;
+  userStories?: string[];
   keyFeatures?: string[];
   constraints?: string[];
   platform?: string;

@@ -98,6 +98,21 @@ export interface AIResponse {
   suggestedTitle?: string | null;
 }
 
+export interface PrdValidationIssue {
+  code: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface PrdValidationInfo {
+  valid: boolean;
+  issues: PrdValidationIssue[];
+  sectionCount: number;
+  expectedSectionCount: number;
+  missingSections: string[];
+  retried: boolean;
+}
+
 export interface InspirationIdea {
   title: string;
   description: string;

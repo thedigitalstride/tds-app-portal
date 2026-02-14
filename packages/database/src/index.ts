@@ -49,4 +49,11 @@ export {
   type IPrdData,
   type IPrdSection,
 } from './models/idea';
+export {
+  IdeationPromptOverride,
+  type IIdeationPromptOverride,
+  type IdeationPromptKey,
+  IDEATION_PROMPT_KEYS,
+} from './models/ideation-prompt-override';
+export { AiUsageLog, type IAiUsageLog } from './models/ai-usage-log';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

@@ -5,6 +5,8 @@ import {
   DEFAULT_CLAUDE_MODEL,
   AIServiceError,
 } from './types';
+import type { AiTrackingContext } from './ai-tracking-types';
+import { logAiUsage } from './ai-usage-logger';
 
 let client: Anthropic | null = null;
 
@@ -35,7 +37,8 @@ export interface ClaudeRequestOptions {
  * Send a request to Claude and get a response.
  */
 export async function sendClaudeRequest(
-  options: ClaudeRequestOptions
+  options: ClaudeRequestOptions,
+  tracking?: AiTrackingContext
 ): Promise<RawAIResponse> {
   const {
     systemPrompt,
@@ -71,14 +74,27 @@ export async function sendClaudeRequest(
       );
     }
 
-    return {
+    const result: RawAIResponse = {
       content: textContent.text,
       model: response.model,
+      stopReason: response.stop_reason ?? undefined,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
       },
     };
+
+    if (tracking && result.usage) {
+      logAiUsage({
+        ...tracking,
+        provider: 'anthropic',
+        model: response.model,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      });
+    }
+
+    return result;
   } catch (error) {
     if (error instanceof AIServiceError) {
       throw error;
@@ -120,7 +136,8 @@ export interface ClaudeConversationOptions {
  * Send a multi-turn conversation to Claude and get a response.
  */
 export async function sendClaudeConversation(
-  options: ClaudeConversationOptions
+  options: ClaudeConversationOptions,
+  tracking?: AiTrackingContext
 ): Promise<RawAIResponse> {
   const {
     systemPrompt,
@@ -153,14 +170,27 @@ export async function sendClaudeConversation(
       );
     }
 
-    return {
+    const result: RawAIResponse = {
       content: textContent.text,
       model: response.model,
+      stopReason: response.stop_reason ?? undefined,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
       },
     };
+
+    if (tracking && result.usage) {
+      logAiUsage({
+        ...tracking,
+        provider: 'anthropic',
+        model: response.model,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      });
+    }
+
+    return result;
   } catch (error) {
     if (error instanceof AIServiceError) {
       throw error;

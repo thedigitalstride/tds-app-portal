@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@tds/ui', '@tds/database'],
+  transpilePackages: ['@tds/ui', '@tds/database', 'marked'],
   images: {
     remotePatterns: [
       {

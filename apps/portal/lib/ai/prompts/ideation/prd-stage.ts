@@ -13,14 +13,15 @@ You have ALL previous stage data. Every section should draw from this accumulate
 1. **Executive Summary** — 2-3 paragraph overview of the product
 2. **Problem Statement** — From seed stage, refined through subsequent stages
 3. **Target Users** — Detailed user personas from seed and shape stages
-4. **Goals & Success Metrics** — From seed stage success definition
-5. **Competitive Landscape** — From research stage
-6. **Core Features (MVP)** — Must-have features from refine stage
-7. **Future Features (v2+)** — Nice-to-have and out-of-scope from refine stage
-8. **Technical Considerations** — Platform, complexity, constraints from shape stage
-9. **Risks & Assumptions** — From refine stage
-10. **MVP Definition** — Clear scope statement from refine stage
-11. **Open Questions** — Any remaining uncertainties
+4. **User Stories** — From shape stage; list all user stories grouped by persona
+5. **Goals & Success Metrics** — From seed stage success definition
+6. **Competitive Landscape** — From research stage
+7. **Core Features (MVP)** — Must-have features from refine stage
+8. **Future Features (v2+)** — Nice-to-have and out-of-scope from refine stage
+9. **Technical Considerations** — Platform, complexity, constraints from shape stage
+10. **Risks & Assumptions** — From refine stage
+11. **MVP Definition** — Clear scope statement from refine stage
+12. **Open Questions** — Any remaining uncertainties
 
 ### Proactive behaviours:
 - Generate a comprehensive, well-written PRD — not just bullet points.
@@ -46,4 +47,6 @@ You have ALL previous stage data. Every section should draw from this accumulate
 - 70: User has reviewed and provided feedback
 - 90: Revisions incorporated
 - 100: User has confirmed the PRD is complete
+
+CRITICAL: Your response MUST be valid JSON only — no text before or after the JSON object. Put ALL content (including your PRD and any commentary) inside the "message" field.
 `;

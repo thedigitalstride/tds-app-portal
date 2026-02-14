@@ -1,7 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
+import { marked } from 'marked';
 import { Bot, User, FileText, Sheet } from 'lucide-react';
 import type { IIdeaMessage, IAttachment } from './types';
+
+marked.setOptions({ breaks: true, gfm: true });
 
 interface MessageBubbleProps {
   message: IIdeaMessage;
@@ -38,6 +42,10 @@ function AttachmentChip({ attachment }: { attachment: IAttachment }) {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isAssistant = message.role === 'assistant';
+  const html = useMemo(
+    () => (isAssistant && message.content ? (marked.parse(message.content) as string) : ''),
+    [isAssistant, message.content]
+  );
 
   return (
     <div className={`flex gap-3 ${isAssistant ? '' : 'flex-row-reverse'}`}>
@@ -66,33 +74,18 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Text content */}
         {message.content && (
-          <div
-            className={`text-sm leading-relaxed whitespace-pre-wrap ${
-              isAssistant ? 'prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5' : ''
-            }`}
-            dangerouslySetInnerHTML={
-              isAssistant
-                ? { __html: formatMarkdown(message.content) }
-                : undefined
-            }
-          >
-            {!isAssistant ? message.content : undefined}
-          </div>
+          isAssistant ? (
+            <div
+              className="text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          ) : (
+            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+              {message.content}
+            </div>
+          )
         )}
       </div>
     </div>
   );
-}
-
-function formatMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code class="bg-neutral-100 px-1 rounded text-sm">$1</code>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n- /g, '</p><ul><li>')
-    .replace(/\n/g, '<br>')
-    .replace(/<\/li><ul>/g, '</li>')
-    .replace(/^/, '<p>')
-    .replace(/$/, '</p>');
 }

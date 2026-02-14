@@ -20,6 +20,7 @@ import {
   type IdeaStatus,
   type IIdeaMessage,
   type IAttachment,
+  type PrdValidationInfo,
 } from './types';
 
 interface IdeaWorkspaceProps {
@@ -49,6 +50,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [scoring, setScoring] = useState(false);
+  const [prdValidation, setPrdValidation] = useState<PrdValidationInfo | null>(null);
 
   const currentStage = idea?.currentStage as IdeaStage | undefined;
   const currentStageIndex = currentStage ? STAGE_ORDER.indexOf(currentStage) : 0;
@@ -108,8 +110,11 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
   }, [nextStage, advanceStage, refreshIdea]);
 
   const handleGeneratePrd = useCallback(async () => {
-    const response = await generatePrd();
-    if (response) refreshIdea();
+    const result = await generatePrd();
+    if (result) {
+      setPrdValidation(result.validation ?? null);
+      refreshIdea();
+    }
   }, [generatePrd, refreshIdea]);
 
   const handleScore = useCallback(async () => {
@@ -139,6 +144,41 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
     return v ? (v.value as 1 | -1) : null;
   }, [idea?.votes, currentUserId]);
 
+  // Extract structured PRD data (hooks must be before early returns)
+  const prdExtracted = idea?.stages.prd?.extractedData as Record<string, unknown> | undefined;
+  const prdData = useMemo(() => {
+    if (!idea) return null;
+    if (!prdExtracted) {
+      const rawContent = idea.stages.prd?.messages?.find((m) => m.role === 'assistant')?.content;
+      if (!rawContent) return null;
+      return { fullMarkdown: rawContent } as import('./types').IPrdData;
+    }
+    return prdExtracted as unknown as import('./types').IPrdData;
+  }, [idea, prdExtracted]);
+
+  const hasPrdContent = !!prdData;
+
+  const handleExportPdf = useCallback(async () => {
+    if (!prdData || !idea) return;
+    const { pdf } = await import('@react-pdf/renderer');
+    const { PrdPdfDocument } = await import('./prd/PrdPdfDocument');
+    const blob = await pdf(
+      PrdPdfDocument({
+        prdData,
+        ideaTitle: idea.title,
+        ideaStatus: idea.status as import('./types').IdeaStatus,
+        scoring: idea.scoring,
+        updatedAt: idea.updatedAt,
+      })
+    ).toBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${idea.title || 'prd'}-prd.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [prdData, idea]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -157,9 +197,6 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
       </div>
     );
   }
-
-  // Check if PRD stage has content
-  const prdContent = idea.stages.prd?.messages?.find((m) => m.role === 'assistant')?.content;
 
   return (
     <div className="flex h-full flex-col">
@@ -235,7 +272,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
                 <DropdownMenuItem onClick={handleScore}>
                   {scoring ? 'Scoring...' : 'Score Idea'}
                 </DropdownMenuItem>
-                {prdContent && (
+                {hasPrdContent && (
                   <DropdownMenuItem onClick={exportPrd}>Export PRD</DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={handleDelete} className="text-red-600">
@@ -257,7 +294,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
             onAdvanceStage={handleAdvanceStage}
             onGeneratePrd={handleGeneratePrd}
             sending={sending}
-            hasPrdContent={!!prdContent}
+            hasPrdContent={hasPrdContent}
           />
         </div>
       </div>
@@ -266,13 +303,19 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
       <div className="flex flex-1 overflow-hidden">
         {/* Conversation */}
         <div className="flex-1">
-          {currentStage === 'prd' && prdContent ? (
-            <div className="h-full overflow-y-auto p-6">
+          {currentStage === 'prd' && prdData ? (
+            <div className="h-full overflow-hidden">
               <PrdPreview
-                content={prdContent}
+                prdData={prdData}
+                ideaTitle={idea.title}
+                ideaStatus={idea.status as import('./types').IdeaStatus}
+                updatedAt={idea.updatedAt}
+                scoring={idea.scoring}
                 onExport={exportPrd}
+                onExportPdf={handleExportPdf}
                 onRegenerate={handleGeneratePrd}
                 regenerating={sending}
+                validationInfo={prdValidation}
               />
             </div>
           ) : (

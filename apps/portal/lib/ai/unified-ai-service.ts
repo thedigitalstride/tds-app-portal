@@ -2,6 +2,7 @@ import { sendClaudeRequest, isClaudeConfigured } from './claude-client';
 import { sendOpenAIRequest, isOpenAIConfigured } from './openai-client';
 import { parseAIResponse } from './output-parser';
 import { SYSTEM_PROMPT, buildUserPrompt, getFocusAdditions } from './prompts';
+import type { AiTrackingContext } from './ai-tracking-types';
 import type {
   AnalyzeRequest,
   AIAnalysisResult,
@@ -75,7 +76,8 @@ function extractMetadata(html: string): { title?: string; metaDescription?: stri
  * Analyze a landing page against ad creative using AI.
  */
 export async function analyzeWithAI(
-  request: AnalyzeRequest
+  request: AnalyzeRequest,
+  tracking?: AiTrackingContext
 ): Promise<AnalysisResponse> {
   const { pageContent, adData, provider, model, focus } = request;
 
@@ -125,7 +127,7 @@ export async function analyzeWithAI(
       model: (model as ClaudeModel) || DEFAULT_CLAUDE_MODEL,
       maxTokens: 4096,
       temperature: 0.3,
-    });
+    }, tracking);
   } else {
     rawResponse = await sendOpenAIRequest({
       systemPrompt: SYSTEM_PROMPT + '\n\nRespond with valid JSON only.',
@@ -133,7 +135,7 @@ export async function analyzeWithAI(
       model: (model as OpenAIModel) || DEFAULT_OPENAI_MODEL,
       maxTokens: 4096,
       temperature: 0.3,
-    });
+    }, tracking);
   }
 
   // Parse the response

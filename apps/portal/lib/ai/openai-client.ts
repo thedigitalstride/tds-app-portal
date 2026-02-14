@@ -5,6 +5,8 @@ import {
   DEFAULT_OPENAI_MODEL,
   AIServiceError,
 } from './types';
+import type { AiTrackingContext } from './ai-tracking-types';
+import { logAiUsage } from './ai-usage-logger';
 
 let client: OpenAI | null = null;
 
@@ -35,7 +37,8 @@ export interface OpenAIRequestOptions {
  * Send a request to OpenAI and get a response.
  */
 export async function sendOpenAIRequest(
-  options: OpenAIRequestOptions
+  options: OpenAIRequestOptions,
+  tracking?: AiTrackingContext
 ): Promise<RawAIResponse> {
   const {
     systemPrompt,
@@ -74,16 +77,28 @@ export async function sendOpenAIRequest(
       );
     }
 
-    return {
+    const result: RawAIResponse = {
       content: choice.message.content,
       model: response.model,
       usage: response.usage
         ? {
             inputTokens: response.usage.prompt_tokens,
-            outputTokens: response.usage.completion_tokens,
+            outputTokens: response.usage.completion_tokens ?? 0,
           }
         : undefined,
     };
+
+    if (tracking && result.usage) {
+      logAiUsage({
+        ...tracking,
+        provider: 'openai',
+        model: response.model,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      });
+    }
+
+    return result;
   } catch (error) {
     if (error instanceof AIServiceError) {
       throw error;

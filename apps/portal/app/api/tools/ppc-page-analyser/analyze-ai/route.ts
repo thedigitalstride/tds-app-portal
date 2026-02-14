@@ -135,6 +135,12 @@ export async function POST(request: NextRequest) {
       provider: aiProvider,
       model: aiModel,
       focus: analysisFocus,
+    }, {
+      toolId: 'ppc-page-analyser',
+      userId: session.user.id,
+      clientId,
+      purpose: 'page-analysis',
+      resourceType: 'ppc-analysis',
     });
 
     const now = new Date();

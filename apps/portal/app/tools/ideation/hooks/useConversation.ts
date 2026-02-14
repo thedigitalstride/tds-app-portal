@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { IdeaStage, AIResponse, IAttachment } from '../components/types';
+import type { IdeaStage, AIResponse, IAttachment, PrdValidationInfo } from '../components/types';
 
 export function useConversation(ideaId: string) {
   const [sending, setSending] = useState(false);
@@ -83,7 +83,7 @@ export function useConversation(ideaId: string) {
     }
   }, [ideaId]);
 
-  const generatePrd = useCallback(async (): Promise<AIResponse | null> => {
+  const generatePrd = useCallback(async (): Promise<{ aiResponse: AIResponse; validation?: PrdValidationInfo } | null> => {
     setSending(true);
     try {
       const res = await fetch(`/api/tools/ideation/${ideaId}/prd`, {
@@ -91,7 +91,10 @@ export function useConversation(ideaId: string) {
       });
       if (!res.ok) throw new Error('Failed to generate PRD');
       const data = await res.json();
-      return data.aiResponse as AIResponse;
+      return {
+        aiResponse: data.aiResponse as AIResponse,
+        validation: data.validation as PrdValidationInfo | undefined,
+      };
     } catch (error) {
       console.error('Error generating PRD:', error);
       return null;

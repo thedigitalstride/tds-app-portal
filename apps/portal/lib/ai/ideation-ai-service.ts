@@ -5,8 +5,10 @@ import {
   type ClaudeConversationMessage,
 } from './claude-client';
 import { type RawAIResponse } from './types';
-import { buildSystemPrompt } from './prompts/ideation';
+import { buildSystemPrompt, getPrompt } from './prompts/ideation';
+import type { AiTrackingContext } from './ai-tracking-types';
 import { fetchBlobAsBuffer } from '@/lib/vercel-blob';
+import { validatePrdResponse, buildCorrectionPrompt, type PrdValidationResult } from './prd-validation';
 
 type ContentBlockParam = Anthropic.Messages.ContentBlockParam;
 
@@ -21,6 +23,9 @@ export interface IdeationAIResponse {
 export interface IdeationAIResult {
   response: IdeationAIResponse;
   raw: RawAIResponse;
+  validation?: PrdValidationResult;
+  retried?: boolean;
+  totalUsage?: { inputTokens: number; outputTokens: number };
 }
 
 const SPREADSHEET_TEXT_LIMIT = 50_000;
@@ -172,6 +177,23 @@ function parseAIResponse(content: string): IdeationAIResponse {
       suggestedTitle: parsed.suggestedTitle || null,
     };
   } catch {
+    // Try to find the response JSON by looking for the known structure at the end
+    const responseStart = jsonStr.lastIndexOf('{"message"');
+    if (responseStart !== -1) {
+      try {
+        const parsed = JSON.parse(jsonStr.substring(responseStart));
+        if (parsed.message) {
+          return {
+            message: parsed.message,
+            options: Array.isArray(parsed.options) ? parsed.options : undefined,
+            extractedData: parsed.extractedData || {},
+            stageReadiness: typeof parsed.stageReadiness === 'number' ? parsed.stageReadiness : 0,
+            suggestedTitle: parsed.suggestedTitle || null,
+          };
+        }
+      } catch { /* fall through to generic scan */ }
+    }
+
     // Scan forward through { characters to find an embedded JSON response object
     for (let i = jsonStr.indexOf('{'); i !== -1; i = jsonStr.indexOf('{', i + 1)) {
       try {
@@ -208,10 +230,11 @@ export async function sendIdeationMessage(params: {
   previousStagesData: Record<string, Record<string, unknown>>;
   templateContext?: string;
   currentMessageAttachments?: IAttachment[];
+  tracking?: AiTrackingContext;
 }): Promise<IdeationAIResult> {
   const { stage, stageMessages, previousStagesData, templateContext, currentMessageAttachments } = params;
 
-  const systemPrompt = buildSystemPrompt(stage, templateContext);
+  const systemPrompt = await buildSystemPrompt(stage, templateContext);
   const messages = buildConversationMessages(stageMessages, previousStagesData);
 
   // If no messages yet, this is the initial message — add a trigger
@@ -236,7 +259,7 @@ export async function sendIdeationMessage(params: {
     messages,
     maxTokens: 4096,
     temperature: stage === 'prd' ? 0.7 : 0.4,
-  });
+  }, params.tracking);
 
   const response = parseAIResponse(raw.content);
   return { response, raw };
@@ -244,10 +267,12 @@ export async function sendIdeationMessage(params: {
 
 /**
  * Generate a PRD from all stage data.
+ * Validates the output and retries once with corrective feedback if validation fails.
  */
 export async function generatePRD(params: {
   stages: Record<IdeaStage, IStageData>;
   title: string;
+  tracking?: AiTrackingContext;
 }): Promise<IdeationAIResult> {
   const { stages, title } = params;
 
@@ -258,23 +283,70 @@ export async function generatePRD(params: {
     }
   }
 
-  const systemPrompt = buildSystemPrompt('prd');
+  const systemPrompt = await buildSystemPrompt('prd');
+  const userMessage = `Generate a comprehensive PRD for the idea "${title}" based on all the data gathered:\n\n${JSON.stringify(allStageData, null, 2)}\n\nPlease generate the full PRD now.`;
   const messages: ClaudeConversationMessage[] = [
-    {
-      role: 'user',
-      content: `Generate a comprehensive PRD for the idea "${title}" based on all the data gathered:\n\n${JSON.stringify(allStageData, null, 2)}\n\nPlease generate the full PRD now.`,
-    },
+    { role: 'user', content: userMessage },
   ];
 
+  // Initial generation
   const raw = await sendClaudeConversation({
     systemPrompt,
     messages,
     maxTokens: 8192,
     temperature: 0.5,
-  });
+  }, params.tracking);
 
   const response = parseAIResponse(raw.content);
-  return { response, raw };
+  const validation = validatePrdResponse(response, raw.stopReason);
+
+  // If valid, return immediately
+  if (validation.valid) {
+    return {
+      response,
+      raw,
+      validation,
+      retried: false,
+      totalUsage: raw.usage,
+    };
+  }
+
+  // Invalid — retry once with corrective feedback
+  console.warn(
+    '[PRD Validation] First attempt failed:',
+    validation.issues.filter((i) => i.severity === 'error').map((i) => i.code)
+  );
+
+  const correctionPrompt = buildCorrectionPrompt(raw.content, validation);
+  const retryMessages: ClaudeConversationMessage[] = [
+    { role: 'user', content: userMessage },
+    { role: 'assistant', content: raw.content },
+    { role: 'user', content: correctionPrompt },
+  ];
+
+  const retryRaw = await sendClaudeConversation({
+    systemPrompt,
+    messages: retryMessages,
+    maxTokens: 12288,
+    temperature: 0.4,
+  }, params.tracking);
+
+  const retryResponse = parseAIResponse(retryRaw.content);
+  const retryValidation = validatePrdResponse(retryResponse, retryRaw.stopReason);
+
+  // Aggregate token usage from both calls
+  const totalUsage = {
+    inputTokens: (raw.usage?.inputTokens || 0) + (retryRaw.usage?.inputTokens || 0),
+    outputTokens: (raw.usage?.outputTokens || 0) + (retryRaw.usage?.outputTokens || 0),
+  };
+
+  return {
+    response: retryResponse,
+    raw: retryRaw,
+    validation: retryValidation,
+    retried: true,
+    totalUsage,
+  };
 }
 
 /**
@@ -283,6 +355,7 @@ export async function generatePRD(params: {
 export async function scoreIdea(params: {
   stages: Record<IdeaStage, IStageData>;
   title: string;
+  tracking?: AiTrackingContext;
 }): Promise<{
   scoring: {
     viability: { score: number; reasoning: string };
@@ -299,23 +372,7 @@ export async function scoreIdea(params: {
     allStageData[stage] = data.extractedData;
   }
 
-  const systemPrompt = `You are a product viability assessor. Analyze the idea data and score it on three dimensions.
-
-Respond with valid JSON only:
-{
-  "viability": { "score": 1-10, "reasoning": "Why this score for market viability" },
-  "uniqueness": { "score": 1-10, "reasoning": "Why this score for uniqueness/differentiation" },
-  "effort": { "score": 1-10, "reasoning": "Why this score (1=huge effort, 10=quick win)" },
-  "overall": { "score": 1-10, "recommendation": "strong-go|go|conditional|reconsider|no-go" }
-}
-
-Score guidelines:
-- **Viability**: Is there a real market need? Will people use/pay for this? (1=no market, 10=urgent need)
-- **Uniqueness**: How differentiated is this from existing solutions? (1=copycat, 10=truly novel)
-- **Effort**: How much effort to build? (1=massive multi-month project, 10=can build in days)
-- **Overall**: Weighted assessment. Recommendation thresholds: 8-10=strong-go, 6-7=go, 5=conditional, 3-4=reconsider, 1-2=no-go
-
-Be honest and specific in reasoning. Reference the actual data.`;
+  const systemPrompt = await getPrompt('scoring');
 
   const messages: ClaudeConversationMessage[] = [
     {
@@ -329,7 +386,7 @@ Be honest and specific in reasoning. Reference the actual data.`;
     messages,
     maxTokens: 2048,
     temperature: 0.3,
-  });
+  }, params.tracking);
 
   let jsonStr = raw.content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -344,30 +401,13 @@ Be honest and specific in reasoning. Reference the actual data.`;
 /**
  * Generate inspiration idea seeds.
  */
-export async function generateInspiration(): Promise<{
+export async function generateInspiration(params?: {
+  tracking?: AiTrackingContext;
+}): Promise<{
   ideas: Array<{ title: string; description: string; category: string }>;
   raw: RawAIResponse;
 }> {
-  const systemPrompt = `You are a creative product strategist for a digital marketing agency. Generate idea seeds for tools and products the agency could build.
-
-Respond with valid JSON only:
-{
-  "ideas": [
-    {
-      "title": "Short idea title",
-      "description": "2-3 sentence description of the idea, the problem it solves, and who it's for",
-      "category": "tool|process|deliverable|integration"
-    }
-  ]
-}
-
-Focus on:
-- Digital agency pain points (reporting, client management, content creation, SEO, analytics)
-- Gaps in existing tooling
-- Industry trends (AI automation, privacy, accessibility)
-- Things that would save the team time or make clients happier
-
-Generate 3-5 diverse ideas. Be specific and practical.`;
+  const systemPrompt = await getPrompt('inspiration');
 
   const messages: ClaudeConversationMessage[] = [
     {
@@ -381,7 +421,7 @@ Generate 3-5 diverse ideas. Be specific and practical.`;
     messages,
     maxTokens: 2048,
     temperature: 0.9,
-  });
+  }, params?.tracking);
 
   let jsonStr = raw.content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);

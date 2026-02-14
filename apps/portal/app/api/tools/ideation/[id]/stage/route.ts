@@ -55,6 +55,13 @@ export async function PATCH(
         stage: targetStage,
         stageMessages: [],
         previousStagesData,
+        tracking: {
+          toolId: 'ideation',
+          userId: session.user.id,
+          purpose: `stage-intro-${targetStage}`,
+          resourceId: id,
+          resourceType: 'idea',
+        },
       });
 
       targetStageData.messages.push({

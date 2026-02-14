@@ -135,6 +135,13 @@ export async function POST(
       previousStagesData,
       templateContext,
       currentMessageAttachments: attachments?.length ? attachments : undefined,
+      tracking: {
+        toolId: 'ideation',
+        userId,
+        purpose: `conversation-${currentStage}`,
+        resourceId: id,
+        resourceType: 'idea',
+      },
     });
 
     // Append AI response

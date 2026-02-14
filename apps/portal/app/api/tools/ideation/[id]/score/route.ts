@@ -27,6 +27,13 @@ export async function POST(
     const { scoring, raw } = await scoreIdea({
       stages: idea.stages,
       title: idea.title,
+      tracking: {
+        toolId: 'ideation',
+        userId: session.user.id,
+        purpose: 'scoring',
+        resourceId: id,
+        resourceType: 'idea',
+      },
     });
 
     idea.scoring = {
