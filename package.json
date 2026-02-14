@@ -11,7 +11,7 @@
     "db:generate": "turbo db:generate"
   },
   "devDependencies": {
-    "turbo": "^2.3.0",
+    "turbo": "^2.8.8",
     "typescript": "^5.7.0"
   },
   "engines": {
