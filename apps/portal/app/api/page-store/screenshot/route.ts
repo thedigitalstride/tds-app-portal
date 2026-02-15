@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getPage } from '@/lib/services/page-store-service';
+import { captureScreenshots } from '@/lib/services/page-store-service';
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -16,24 +16,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await getPage({
-      url,
-      clientId,
-      userId: session.user.id,
-      toolId: 'page-library',
-      forceRefresh: true,
-      skipScreenshots: true,
-    });
+    const result = await captureScreenshots(url, clientId, session.user.id);
 
     return NextResponse.json({
       success: true,
-      snapshotId: result.snapshot._id.toString(),
-      fetchedAt: result.snapshot.fetchedAt,
+      screenshotDesktopUrl: result.screenshotDesktopUrl,
+      screenshotMobileUrl: result.screenshotMobileUrl,
+      snapshotId: result.snapshotId,
     });
   } catch (error) {
-    console.error('Rescan error:', error);
+    console.error('Screenshot capture error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to rescan URL' },
+      { error: error instanceof Error ? error.message : 'Failed to capture screenshots' },
       { status: 500 }
     );
   }

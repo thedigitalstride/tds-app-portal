@@ -32,6 +32,7 @@ const processors: Record<string, UrlProcessor> = {
         clientId,
         userId,
         toolId: 'page-library',
+        skipScreenshots: true,
       });
       return {
         success: true,
@@ -55,6 +56,7 @@ const processors: Record<string, UrlProcessor> = {
         clientId,
         userId,
         toolId: 'ppc-page-analyser',
+        skipScreenshots: true,
       });
 
       // Analyze the page

@@ -38,8 +38,10 @@ import {
   Cookie,
   Globe,
   X,
+  Camera,
 } from 'lucide-react';
 import { useClient } from '@/components/client-context';
+import { useToast } from '@/components/toast-context';
 import { UrlBatchPanel } from '@/components/url-batch-panel';
 import { ScreenshotThumbnail, ScreenshotLightbox } from '@/components/screenshot';
 
@@ -80,6 +82,7 @@ interface Snapshot {
 
 export default function PageLibraryPage() {
   const { selectedClientId, selectedClient } = useClient();
+  const { addToast, updateToast } = useToast();
   const [urls, setUrls] = useState<PageStoreEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -110,6 +113,9 @@ export default function PageLibraryPage() {
 
   // Rescan state
   const [rescanning, setRescanning] = useState<string | null>(null);
+
+  // Screenshot capture state (tracks urlHash being captured)
+  const [capturingScreenshot, setCapturingScreenshot] = useState<string | null>(null);
 
   // Domain settings state
   const [showDomainSettings, setShowDomainSettings] = useState(false);
@@ -364,6 +370,12 @@ export default function PageLibraryPage() {
     if (rescanning) return;
 
     setRescanning(entry.urlHash);
+    const truncatedUrl = entry.url.replace(/^https?:\/\//, '').slice(0, 50);
+    const toastId = addToast({
+      type: 'progress',
+      message: `Rescanning ${truncatedUrl}...`,
+    });
+
     try {
       const response = await fetch('/api/page-store/rescan', {
         method: 'POST',
@@ -379,13 +391,57 @@ export default function PageLibraryPage() {
         throw new Error(data.error || 'Failed to rescan URL');
       }
 
-      // Refresh the URL list to show updated data
+      updateToast(toastId, { type: 'success', message: `Rescanned ${truncatedUrl}` });
       await fetchUrls();
     } catch (error) {
       console.error('Rescan error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to rescan URL. Please try again.');
+      updateToast(toastId, {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to rescan',
+      });
     } finally {
       setRescanning(null);
+    }
+  };
+
+  const handleCaptureScreenshot = async (entry: PageStoreEntry, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (capturingScreenshot) return;
+
+    setCapturingScreenshot(entry.urlHash);
+    const truncatedUrl = entry.url.replace(/^https?:\/\//, '').slice(0, 50);
+    const toastId = addToast({
+      type: 'progress',
+      message: `Capturing screenshots for ${truncatedUrl}...`,
+    });
+
+    try {
+      const response = await fetch('/api/page-store/screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: entry.url,
+          clientId: selectedClientId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to capture screenshots');
+      }
+
+      updateToast(toastId, { type: 'success', message: 'Screenshots captured' });
+
+      // Refresh the URL list to show updated screenshots
+      await fetchUrls();
+    } catch (error) {
+      console.error('Screenshot capture error:', error);
+      updateToast(toastId, {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to capture screenshots',
+      });
+    } finally {
+      setCapturingScreenshot(null);
     }
   };
 
@@ -597,6 +653,15 @@ export default function PageLibraryPage() {
                               title="Rescan URL"
                             >
                               <RefreshCw className={`h-4 w-4 text-neutral-400 hover:text-blue-500 ${rescanning === entry.urlHash ? 'animate-spin' : ''}`} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => handleCaptureScreenshot(entry, e)}
+                              disabled={capturingScreenshot === entry.urlHash}
+                              title="Capture Screenshots"
+                            >
+                              <Camera className={`h-4 w-4 text-neutral-400 hover:text-blue-500 ${capturingScreenshot === entry.urlHash ? 'animate-pulse' : ''}`} />
                             </Button>
                             <Button
                               variant="ghost"

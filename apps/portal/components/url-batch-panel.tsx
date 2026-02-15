@@ -17,6 +17,7 @@ import {
   Cookie,
 } from 'lucide-react';
 import { PageArchiveImporter } from '@/components/page-archive-importer';
+import { useToast } from '@/components/toast-context';
 import { Button, Input, Textarea } from '@tds/ui';
 
 interface BatchStatus {
@@ -91,6 +92,8 @@ export function UrlBatchPanel({
   toolName,
   enableCookieConfig = false,
 }: UrlBatchPanelProps) {
+  const { addToast, updateToast } = useToast();
+  const toastIdRef = useRef<string | null>(null);
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
 
   // Page Archive importer state
@@ -185,15 +188,6 @@ export function UrlBatchPanel({
     };
   }, []);
 
-  // Stop polling when panel closes
-  useEffect(() => {
-    if (!isOpen && pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-      setIsPolling(false);
-    }
-  }, [isOpen]);
-
   // Single URL processing
   const processSingleUrl = async () => {
     if (!url || !clientId) return;
@@ -201,6 +195,12 @@ export function UrlBatchPanel({
     setLoading(true);
     setError(null);
     setSuccess(null);
+
+    const truncatedUrl = url.replace(/^https?:\/\//, '').slice(0, 50);
+    const toastId = addToast({
+      type: 'progress',
+      message: `Adding ${truncatedUrl}...`,
+    });
 
     try {
       // Create a single-URL batch and process it
@@ -235,6 +235,7 @@ export function UrlBatchPanel({
             setSuccess('URL added successfully');
             setUrl('');
             onUrlsProcessed();
+            updateToast(toastId, { type: 'success', message: `Added ${truncatedUrl}` });
             setTimeout(() => setSuccess(null), 3000);
           } else if (statusData.results.failed.length > 0) {
             throw new Error(statusData.results.failed[0].error);
@@ -252,7 +253,9 @@ export function UrlBatchPanel({
         throw new Error('Processing timed out');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMsg);
+      updateToast(toastId, { type: 'error', message: errorMsg });
     } finally {
       setLoading(false);
     }
@@ -353,6 +356,12 @@ export function UrlBatchPanel({
         results: { succeeded: [], failed: [] },
       });
 
+      toastIdRef.current = addToast({
+        type: 'progress',
+        message: processingLabel,
+        progress: { current: 0, total: data.totalUrls },
+      });
+
       // Start polling for progress
       startPolling(data.batchId);
     } catch (err) {
@@ -375,12 +384,31 @@ export function UrlBatchPanel({
 
         setBatchStatus(data);
 
+        // Update toast with progress
+        if (toastIdRef.current) {
+          const currentUrl = data.currentUrl?.replace(/^https?:\/\//, '').slice(0, 50);
+          updateToast(toastIdRef.current, {
+            message: currentUrl ? `${processingLabel.replace('...', '')}: ${currentUrl}...` : processingLabel,
+            progress: { current: data.progress.completed, total: data.progress.total },
+          });
+        }
+
         // Check if batch is complete
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
           setIsPolling(false);
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
+          }
+
+          if (toastIdRef.current) {
+            const succeeded = data.results.succeeded.length;
+            const failed = data.results.failed.length;
+            updateToast(toastIdRef.current, {
+              type: failed > 0 ? 'info' : 'success',
+              message: `Processed ${succeeded + failed} URLs (${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''})`,
+            });
+            toastIdRef.current = null;
           }
 
           // Refresh library
@@ -410,6 +438,12 @@ export function UrlBatchPanel({
         pollingRef.current = null;
       }
       setIsPolling(false);
+
+      if (toastIdRef.current) {
+        updateToast(toastIdRef.current, { type: 'info', message: 'Batch processing cancelled' });
+        toastIdRef.current = null;
+      }
+
       setBatchStatus(null);
       setParsedUrls(null);
     } catch (err) {

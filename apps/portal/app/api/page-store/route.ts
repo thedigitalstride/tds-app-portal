@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
       toolId,
       forceRefresh,
+      skipScreenshots: true,
     });
 
     return NextResponse.json({

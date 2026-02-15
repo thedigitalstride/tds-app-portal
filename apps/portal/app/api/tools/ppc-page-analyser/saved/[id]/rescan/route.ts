@@ -41,6 +41,7 @@ export async function POST(
       userId: session.user.id,
       toolId: 'ppc-page-analyser',
       forceRefresh: true,
+      skipScreenshots: true,
     });
 
     // Analyze the page content

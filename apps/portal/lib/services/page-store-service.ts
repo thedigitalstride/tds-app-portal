@@ -79,7 +79,7 @@ export interface GetPageOptions {
   toolId: string;
   forceRefresh?: boolean;
   maxAgeOverride?: number; // Hours
-  /** Skip screenshot capture for faster/cheaper rescans. Default: false */
+  /** Skip screenshot capture. Default: true — use captureScreenshots() for explicit capture */
   skipScreenshots?: boolean;
 }
 
@@ -109,7 +109,7 @@ interface FetchResult {
 async function fetchFromWeb(
   url: string,
   cookieConsentProvider: CookieConsentProvider = 'none',
-  skipScreenshots: boolean = false
+  skipScreenshots: boolean = true
 ): Promise<FetchResult> {
   // Check if ScrapingBee API key is configured
   if (!process.env.SCRAPINGBEE_API_KEY) {
@@ -360,6 +360,108 @@ export async function getPage(options: GetPageOptions): Promise<PageResult> {
     html: fetchResult.html,
     snapshot,
     wasCached: false,
+  };
+}
+
+export interface CaptureScreenshotsResult {
+  screenshotDesktopUrl?: string;
+  screenshotMobileUrl?: string;
+  snapshotId: string;
+}
+
+/**
+ * Capture desktop + mobile screenshots for an existing Page Store URL.
+ * Updates the latest snapshot with the new screenshot URLs.
+ */
+export async function captureScreenshots(
+  url: string,
+  clientId: string,
+  userId: string
+): Promise<CaptureScreenshotsResult> {
+  await connectDB();
+
+  const normalisedUrl = normaliseUrl(url);
+  const urlHash = hashUrl(url);
+
+  // Verify the URL exists in Page Store and client has access
+  const pageStore = await PageStore.findOne({ urlHash });
+  if (!pageStore || !pageStore.clientsWithAccess.some(id => id.toString() === clientId)) {
+    throw new Error('URL not found in Page Store or client does not have access');
+  }
+
+  if (!pageStore.latestSnapshotId) {
+    throw new Error('No snapshot exists for this URL — add the URL first');
+  }
+
+  // Resolve cookie consent provider
+  const cookieConsentProvider = await resolveCookieProvider(normalisedUrl, clientId);
+
+  // Scroll through the page to trigger lazy-loaded content before capturing screenshots.
+  // scroll_y beyond page height simply scrolls to bottom — extra values are harmless.
+  // Runs after any cookie-consent instructions (ScrapingBee concatenates them).
+  const scrollScenario: import('./scrapingbee-service').JsScenarioInstruction[] = [
+    // 1. Scroll incrementally to trigger IntersectionObserver lazy-loading
+    { scroll_y: 500 },   { wait: 300 },
+    { scroll_y: 1500 },  { wait: 300 },
+    { scroll_y: 3000 },  { wait: 300 },
+    { scroll_y: 5000 },  { wait: 300 },
+    { scroll_y: 10000 }, { wait: 300 },
+    { scroll_y: 20000 }, { wait: 500 },
+
+    // 2. Force all content visible before scrolling back to top.
+    //    Kill transitions so IntersectionObserver can't revert hidden elements.
+    { evaluate: "var s=document.createElement('style');s.textContent='*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;transition-delay:0s!important;animation-delay:0s!important;}';document.head.appendChild(s);document.querySelectorAll('*').forEach(function(el){var cs=getComputedStyle(el);if(parseFloat(cs.opacity)<0.1)el.style.setProperty('opacity','1','important');if(cs.visibility==='hidden')el.style.setProperty('visibility','visible','important');});" },
+    { wait: 500 },
+
+    // 3. Scroll back to top for the screenshot
+    { scroll_y: 0 },
+    { wait: 1000 },
+  ];
+
+  // Fetch with dual screenshots (HTML is discarded)
+  const result = await fetchWithDualScreenshots(normalisedUrl, {
+    blockAds: true,
+    waitMs: 5000,
+    jsScenario: scrollScenario,
+    cookieConsentProvider: cookieConsentProvider as ScrapingBeeProvider,
+  });
+
+  const now = new Date();
+  let screenshotDesktopUrl: string | undefined;
+  let screenshotMobileUrl: string | undefined;
+
+  // Upload screenshots to Vercel Blob
+  if (result.screenshotDesktop) {
+    const blob = await uploadScreenshot(
+      `page-store/${urlHash}/${now.getTime()}-desktop.png`,
+      result.screenshotDesktop
+    );
+    screenshotDesktopUrl = blob.url;
+  }
+
+  if (result.screenshotMobile) {
+    const blob = await uploadScreenshot(
+      `page-store/${urlHash}/${now.getTime()}-mobile.png`,
+      result.screenshotMobile
+    );
+    screenshotMobileUrl = blob.url;
+  }
+
+  // Update the latest snapshot with new screenshot URLs
+  const snapshotId = pageStore.latestSnapshotId.toString();
+  await PageSnapshot.findByIdAndUpdate(snapshotId, {
+    $set: {
+      screenshotDesktopUrl,
+      screenshotMobileUrl,
+      screenshotDesktopSize: result.screenshotDesktop?.length,
+      screenshotMobileSize: result.screenshotMobile?.length,
+    },
+  });
+
+  return {
+    screenshotDesktopUrl,
+    screenshotMobileUrl,
+    snapshotId,
   };
 }
 

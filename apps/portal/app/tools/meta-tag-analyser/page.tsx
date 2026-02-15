@@ -16,7 +16,7 @@ type TabType = 'library' | 'history';
 export default function MetaTagAnalyserPage() {
   // Global client state from context
   const { clients, selectedClientId } = useClient();
-  const { addToast } = useToast();
+  const { addToast, updateToast } = useToast();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>('library');
@@ -115,29 +115,33 @@ export default function MetaTagAnalyserPage() {
   }, [selectedClientId, fetchSavedAnalyses]);
 
   // Handle rescan
-  const handleRescan = async (id: string, includeScreenshots: boolean) => {
+  const handleRescan = async (id: string) => {
+    const analysis = savedAnalyses.find(a => a._id === id);
+    const truncatedUrl = analysis?.url?.replace(/^https?:\/\//, '').slice(0, 50) || 'URL';
+    const toastId = addToast({
+      type: 'progress',
+      message: `Rescanning ${truncatedUrl}...`,
+    });
+
     try {
       const res = await fetch(`/api/tools/meta-tag-analyser/saved/${id}/rescan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ includeScreenshots }),
       });
       if (res.ok) {
         const data = await res.json();
-        // Update the analysis in the list
         setSavedAnalyses(prev =>
           prev.map(a => a._id === id ? { ...a, ...data.analysis } : a)
         );
-        // Show feedback if changes detected
-        if (data.changesDetected) {
-          addToast({
-            type: 'info',
-            message: 'Changes detected in meta tags',
-          });
-        }
+        updateToast(toastId, {
+          type: data.changesDetected ? 'info' : 'success',
+          message: data.changesDetected ? 'Changes detected in meta tags' : `Rescanned ${truncatedUrl}`,
+        });
+      } else {
+        updateToast(toastId, { type: 'error', message: 'Failed to rescan' });
       }
     } catch (error) {
       console.error('Failed to rescan:', error);
+      updateToast(toastId, { type: 'error', message: 'Failed to rescan' });
     }
   };
 
