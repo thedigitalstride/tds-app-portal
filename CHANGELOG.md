@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [1.11.0] - 2026-02-15
+### Added
+- Skip screenshots option for faster, cheaper rescans across all tools
+- Enhanced toast notifications for scan and rescan operations
+
 ### Changed
 - Updated styling and typography in PRD components
 
