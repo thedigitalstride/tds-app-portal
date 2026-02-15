@@ -8,7 +8,7 @@ export interface Tool {
   href: string;
   category: 'seo' | 'social' | 'analytics' | 'content' | 'utility';
   isNew?: boolean;
-  requiredRole?: 'admin' | 'user';
+  requiredRole?: 'super-admin' | 'admin' | 'user';
   hasClientData?: boolean;
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Idea, type IdeaStage } from '@tds/database';
 import { sendIdeationMessage } from '@/lib/ai/ideation-ai-service';
 import { getTemplate } from '@/app/tools/ideation/lib/templates';
@@ -31,7 +32,7 @@ export async function DELETE(
     const isCollaborator = idea.collaborators.some(
       (c) => c.toString() === userId
     );
-    if (!isOwner && !isCollaborator && session.user.role !== 'admin') {
+    if (!isOwner && !isCollaborator && !isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -94,7 +95,7 @@ export async function POST(
     const isCollaborator = idea.collaborators.some(
       (c) => c.toString() === userId
     );
-    if (!isOwner && !isCollaborator && session.user.role !== 'admin') {
+    if (!isOwner && !isCollaborator && !isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

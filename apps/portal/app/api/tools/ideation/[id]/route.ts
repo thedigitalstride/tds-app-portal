@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Idea } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export async function GET(
     const isCollaborator = idea.collaborators?.some(
       (c: { _id: { toString(): string } }) => c._id.toString() === userId
     );
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = isAtLeastAdmin(session.user.role);
 
     if (!isOwner && !isCollaborator && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

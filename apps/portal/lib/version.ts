@@ -12,7 +12,7 @@
 
 export const VERSION = {
   major: 1,
-  minor: 11,
+  minor: 12,
   patch: 0,
   /** ISO date of last version bump */
   buildDate: '2026-02-15',

@@ -51,23 +51,33 @@ const navigation = [
 ];
 
 const adminNavigation = [
-  { name: 'User Management', href: '/admin/users', icon: Settings },
-  { name: 'Profiles', href: '/admin/profiles', icon: Shield },
-  { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare },
-  { name: 'ScrapingBee Usage', href: '/admin/scrapingbee-usage', icon: CreditCard },
-  { name: 'AI Costs', href: '/admin/ai-costs', icon: DollarSign },
-  { name: 'Ideation Prompts', href: '/admin/ideation-prompts', icon: Sparkles },
+  { name: 'User Management', href: '/admin/users', icon: Settings, pageId: 'admin:users' },
+  { name: 'Profiles', href: '/admin/profiles', icon: Shield, pageId: 'admin:profiles' },
+  { name: 'Feedback', href: '/admin/feedback', icon: MessageSquare, pageId: 'admin:feedback' },
+  { name: 'ScrapingBee Usage', href: '/admin/scrapingbee-usage', icon: CreditCard, pageId: 'admin:scrapingbee-usage' },
+  { name: 'AI Costs', href: '/admin/ai-costs', icon: DollarSign, pageId: 'admin:ai-costs' },
+  { name: 'Ideation Prompts', href: '/admin/ideation-prompts', icon: Sparkles, pageId: 'admin:ideation-prompts' },
 ];
+
+function getRoleDisplay(role: string): string {
+  switch (role) {
+    case 'super-admin': return 'Super Admin';
+    case 'admin': return 'Admin';
+    default: return 'Member';
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === 'admin';
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'super-admin';
   const { clients, loadingClients, selectedClientId, setSelectedClientId, selectedClient } = useClient();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [newFeedbackCount, setNewFeedbackCount] = useState(0);
+  const [accessibleTools, setAccessibleTools] = useState<string[] | null>(null);
+  const [accessibleAdminPages, setAccessibleAdminPages] = useState<string[] | null>(null);
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -77,6 +87,26 @@ export function Sidebar() {
     }
     setMounted(true);
   }, []);
+
+  // Fetch user access data
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/me/access');
+        if (res.ok) {
+          const data = await res.json();
+          setAccessibleTools(data.tools);
+          setAccessibleAdminPages(data.adminPages);
+        }
+      } catch (error) {
+        console.error('Failed to fetch access data:', error);
+      }
+    };
+
+    fetchAccess();
+  }, [session?.user]);
 
   // Fetch new feedback count for admin badge
   useEffect(() => {
@@ -109,6 +139,16 @@ export function Sidebar() {
 
   // Prevent hydration mismatch by not rendering collapsed state until mounted
   const collapsed = mounted ? isCollapsed : false;
+
+  // Filter tools based on access data
+  const visibleTools = accessibleTools
+    ? tools.filter((tool) => accessibleTools.includes(tool.id))
+    : tools.filter((tool) => !tool.requiredRole || tool.requiredRole === 'user' || isAdmin);
+
+  // Filter admin navigation based on access data
+  const visibleAdminNav = accessibleAdminPages
+    ? adminNavigation.filter((item) => accessibleAdminPages.includes(item.pageId))
+    : adminNavigation;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -269,9 +309,7 @@ export function Sidebar() {
               </div>
             )}
             <div className="mt-1 space-y-1">
-              {tools
-                .filter((tool) => !tool.requiredRole || tool.requiredRole === 'user' || isAdmin)
-                .map((tool) => {
+              {visibleTools.map((tool) => {
                 const isActive = pathname.startsWith(tool.href);
                 const linkContent = (
                   <Link
@@ -323,7 +361,7 @@ export function Sidebar() {
           </div>
 
           {/* Admin Section */}
-          {isAdmin && (
+          {isAdmin && visibleAdminNav.length > 0 && (
             <div className="mt-6">
               {!collapsed && (
                 <div className="flex items-center space-x-2 px-3 py-2 text-xs font-semibold uppercase text-neutral-400">
@@ -337,7 +375,7 @@ export function Sidebar() {
                 </div>
               )}
               <div className="mt-1 space-y-1">
-                {adminNavigation.map((item) => {
+                {visibleAdminNav.map((item) => {
                   const isActive = pathname.startsWith(item.href);
                   const isFeedback = item.href === '/admin/feedback';
                   const showBadge = isFeedback && newFeedbackCount > 0;
@@ -437,7 +475,7 @@ export function Sidebar() {
                       {session?.user?.name}
                     </p>
                     <p className="truncate text-xs text-neutral-500">
-                      {session?.user?.role === 'admin' ? 'Admin' : 'Member'}
+                      {getRoleDisplay(session?.user?.role || 'user')}
                     </p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-neutral-400" />

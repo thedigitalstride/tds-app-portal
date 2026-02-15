@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Feedback } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export async function PATCH(
     }
 
     // Only admins can update feedback
-    if (session.user.role !== 'admin') {
+    if (!isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -89,7 +90,7 @@ export async function GET(
     }
 
     // Only admins can view individual feedback details
-    if (session.user.role !== 'admin') {
+    if (!isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

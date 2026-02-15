@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin, isSuperAdmin, canAccessAdminPage } from '@/lib/permissions';
 import { Sidebar } from '@/components/sidebar';
+
+const ADMIN_PAGE_ID = 'admin:scrapingbee-usage';
 
 export default async function ScrapingBeeUsageLayout({
   children,
@@ -13,9 +16,13 @@ export default async function ScrapingBeeUsageLayout({
     redirect('/login');
   }
 
-  // Only admins can access admin pages
-  if (session.user.role !== 'admin') {
+  if (!isAtLeastAdmin(session.user.role)) {
     redirect('/dashboard');
+  }
+
+  if (!isSuperAdmin(session.user.role)) {
+    const hasAccess = await canAccessAdminPage(session.user.id, ADMIN_PAGE_ID);
+    if (!hasAccess) redirect('/dashboard?error=no-access');
   }
 
   return (

@@ -49,18 +49,27 @@ export const authOptions: NextAuthOptions = {
         let dbUser = await User.findOne({ email: user.email?.toLowerCase() });
 
         if (!dbUser) {
-          // First user becomes admin, rest are regular users
+          // First user becomes super-admin, rest are regular users
           const userCount = await User.countDocuments();
           dbUser = await User.create({
             email: user.email?.toLowerCase(),
             name: user.name,
             image: user.image,
-            role: userCount === 0 ? 'admin' : 'user',
+            role: userCount === 0 ? 'super-admin' : 'user',
           });
         } else if (trigger === 'signIn') {
           // Update user info on sign in
           dbUser.name = user.name || dbUser.name;
           dbUser.image = user.image || dbUser.image;
+
+          // One-time migration: if this user is admin and no super-admins exist, promote
+          if (dbUser.role === 'admin') {
+            const superAdminCount = await User.countDocuments({ role: 'super-admin' });
+            if (superAdminCount === 0) {
+              dbUser.role = 'super-admin';
+            }
+          }
+
           await dbUser.save();
         }
 

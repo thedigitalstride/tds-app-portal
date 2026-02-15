@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDB, UserPermissions, Profile, User } from '@tds/database';
-import { requireAdmin, UnauthorizedError, ForbiddenError, getAccessibleTools } from '@/lib/permissions';
+import { requireAdmin, UnauthorizedError, ForbiddenError, getAccessibleTools, isSuperAdmin, isAtLeastAdmin } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +68,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
     }
 
-    // Prevent admin from modifying their own permissions
+    // Prevent modifying own permissions
     if (userId === session.user.id) {
       return NextResponse.json(
         { error: 'Cannot modify your own permissions' },
@@ -82,6 +82,14 @@ export async function PATCH(
     const userExists = await User.findById(userId);
     if (!userExists) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Non-super-admin cannot modify admin or super-admin permissions
+    if (isAtLeastAdmin(userExists.role) && !isSuperAdmin(session.user.role)) {
+      return NextResponse.json(
+        { error: 'Only super admins can modify admin permissions' },
+        { status: 403 }
+      );
     }
 
     const updateData: Record<string, unknown> = {};

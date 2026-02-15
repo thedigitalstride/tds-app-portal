@@ -2,16 +2,20 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Button, Card, Badge, Checkbox } from '@tds/ui';
 import { ArrowLeft, Plus, X, Check, Ban } from 'lucide-react';
 import { tools } from '@/lib/tools';
+import { adminPages } from '@/lib/admin-pages';
+
+type UserRole = 'super-admin' | 'admin' | 'user';
 
 interface User {
   _id: string;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;
 }
 
 interface Profile {
@@ -35,6 +39,7 @@ interface Client {
 export default function UserPermissionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
@@ -43,6 +48,9 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
   const [accessibleTools, setAccessibleTools] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const viewerRole = session?.user?.role as UserRole | undefined;
+  const viewerIsSuperAdmin = viewerRole === 'super-admin';
 
   const fetchData = useCallback(async () => {
     try {
@@ -123,6 +131,21 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
     savePermissions({ grantedTools: newGranted, revokedTools: newRevoked });
   };
 
+  // Toggle revocation for admin tool/page access (used by super admin managing admins)
+  const toggleAdminRevoke = (itemId: string) => {
+    if (!permissions) return;
+    const isRevoked = permissions.revokedTools.includes(itemId);
+    if (isRevoked) {
+      // Restore access
+      const newRevoked = permissions.revokedTools.filter((t) => t !== itemId);
+      savePermissions({ revokedTools: newRevoked });
+    } else {
+      // Revoke access
+      const newRevoked = [...permissions.revokedTools, itemId];
+      savePermissions({ revokedTools: newRevoked });
+    }
+  };
+
   const assignClient = async (clientId: string) => {
     try {
       const res = await fetch(`/api/admin/users/${id}/clients`, {
@@ -179,6 +202,10 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
     (c) => !assignedClients.some((ac) => ac._id === c._id)
   );
 
+  // Determine what UI to show based on target role and viewer role
+  const targetIsSuperAdmin = user.role === 'super-admin';
+  const targetIsAdmin = user.role === 'admin';
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <Button
@@ -193,17 +220,111 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ id: 
       <div className="mb-8">
         <h1 className="text-2xl font-bold">{user.name}</h1>
         <p className="text-muted-foreground">{user.email}</p>
-        <Badge className="mt-2">{user.role}</Badge>
+        <Badge className="mt-2">{user.role === 'super-admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'User'}</Badge>
       </div>
 
-      {user.role === 'admin' ? (
+      {/* Super Admin target: read-only message */}
+      {targetIsSuperAdmin && (
         <Card className="p-6 bg-muted">
           <p className="text-muted-foreground">
-            Admins have full access to all tools and clients. Permission settings
-            do not apply.
+            Super Admins have full access to all tools and clients. Permission settings
+            cannot be restricted.
           </p>
         </Card>
-      ) : (
+      )}
+
+      {/* Admin target: only visible to super admins — revoke tools and admin pages */}
+      {targetIsAdmin && viewerIsSuperAdmin && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-2">Tool Access</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Admins have access to all tools by default. Toggle off to restrict.
+            </p>
+            <div className="space-y-3">
+              {tools.map((tool) => {
+                const isRevoked = permissions.revokedTools.includes(tool.id);
+                return (
+                  <div
+                    key={tool.id}
+                    className="flex items-center justify-between py-2 border-b last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isRevoked ? (
+                        <Ban className="h-4 w-4 text-red-500" />
+                      ) : (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                      <span>{tool.name}</span>
+                      {isRevoked && (
+                        <Badge variant="outline" className="text-xs">restricted</Badge>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isRevoked ? 'outline' : 'ghost'}
+                      onClick={() => toggleAdminRevoke(tool.id)}
+                      disabled={saving}
+                    >
+                      {isRevoked ? 'Restore' : 'Restrict'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-2">Admin Page Access</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Admins have access to all admin pages by default. Toggle off to restrict.
+            </p>
+            <div className="space-y-3">
+              {adminPages.map((page) => {
+                const isRevoked = permissions.revokedTools.includes(page.id);
+                return (
+                  <div
+                    key={page.id}
+                    className="flex items-center justify-between py-2 border-b last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isRevoked ? (
+                        <Ban className="h-4 w-4 text-red-500" />
+                      ) : (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                      <span>{page.name}</span>
+                      {isRevoked && (
+                        <Badge variant="outline" className="text-xs">restricted</Badge>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isRevoked ? 'outline' : 'ghost'}
+                      onClick={() => toggleAdminRevoke(page.id)}
+                      disabled={saving}
+                    >
+                      {isRevoked ? 'Restore' : 'Restrict'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Admin target but viewer is not super admin: read-only */}
+      {targetIsAdmin && !viewerIsSuperAdmin && (
+        <Card className="p-6 bg-muted">
+          <p className="text-muted-foreground">
+            Admin permissions can only be managed by a Super Admin.
+          </p>
+        </Card>
+      )}
+
+      {/* Regular user target: existing behavior */}
+      {!targetIsSuperAdmin && !targetIsAdmin && (
         <div className="space-y-6">
           {/* Profiles Section */}
           <Card className="p-6">

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { Shield, User as UserIcon, Settings2 } from 'lucide-react';
+import { Shield, User as UserIcon, Settings2, Crown } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -22,21 +22,53 @@ import {
   TableRow,
   TableCell,
   Skeleton,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
 } from '@tds/ui';
+
+type UserRole = 'super-admin' | 'admin' | 'user';
 
 interface User {
   _id: string;
   email: string;
   name: string;
   image?: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   createdAt: string;
+}
+
+function getRoleBadge(role: UserRole) {
+  switch (role) {
+    case 'super-admin':
+      return (
+        <Badge className="bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100">
+          <Crown className="mr-1 h-3 w-3" /> Super Admin
+        </Badge>
+      );
+    case 'admin':
+      return (
+        <Badge variant="default">
+          <Shield className="mr-1 h-3 w-3" /> Admin
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="secondary">
+          <UserIcon className="mr-1 h-3 w-3" /> User
+        </Badge>
+      );
+  }
 }
 
 export default function UserManagementPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const viewerRole = session?.user?.role as UserRole | undefined;
+  const isSuperAdmin = viewerRole === 'super-admin';
 
   useEffect(() => {
     fetchUsers();
@@ -56,14 +88,11 @@ export default function UserManagementPage() {
     }
   };
 
-  const toggleRole = async (userId: string, currentRole: 'admin' | 'user') => {
-    // Prevent changing own role
+  const changeRole = async (userId: string, newRole: UserRole) => {
     if (userId === session?.user?.id) {
       alert('You cannot change your own role.');
       return;
     }
-
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -74,10 +103,44 @@ export default function UserManagementPage() {
 
       if (res.ok) {
         fetchUsers();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to update role');
       }
     } catch (error) {
       console.error('Failed to update user role:', error);
     }
+  };
+
+  const getAvailableRoles = (targetUser: User): { label: string; role: UserRole }[] => {
+    if (targetUser._id === session?.user?.id) return [];
+
+    const roles: { label: string; role: UserRole }[] = [];
+
+    if (isSuperAdmin) {
+      // Super admin can set any role
+      if (targetUser.role !== 'super-admin') roles.push({ label: 'Make Super Admin', role: 'super-admin' });
+      if (targetUser.role !== 'admin') roles.push({ label: 'Make Admin', role: 'admin' });
+      if (targetUser.role !== 'user') roles.push({ label: 'Make User', role: 'user' });
+    } else {
+      // Admin can only toggle regular users to admin and vice versa
+      // Cannot touch super-admins or other admins
+      if (targetUser.role === 'user') {
+        roles.push({ label: 'Make Admin', role: 'admin' });
+      }
+    }
+
+    return roles;
+  };
+
+  // Should we show the permissions button for this target user?
+  const canManagePermissions = (targetUser: User): boolean => {
+    if (targetUser._id === session?.user?.id) return false;
+    // Super admin can manage anyone's permissions
+    if (isSuperAdmin) return true;
+    // Admin can only manage regular user permissions
+    if (viewerRole === 'admin' && targetUser.role === 'user') return true;
+    return false;
   };
 
   return (
@@ -121,61 +184,76 @@ export default function UserManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user._id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <Avatar className="h-8 w-8">
-                          {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                          <AvatarFallback>
-                            {user.name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{user.name}</span>
-                        {user._id === session?.user?.id && (
-                          <Badge variant="outline" className="ml-2">You</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-neutral-500">{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                        {user.role === 'admin' ? (
-                          <><Shield className="mr-1 h-3 w-3" /> Admin</>
-                        ) : (
-                          <><UserIcon className="mr-1 h-3 w-3" /> User</>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-neutral-500">
-                      {new Date(user.createdAt).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/admin/users/${user._id}`}
-                          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 border border-neutral-200 bg-white hover:bg-neutral-100 hover:text-neutral-900 h-8 px-3"
-                        >
-                          <Settings2 className="mr-1 h-3 w-3" />
-                          Permissions
-                        </Link>
-                        {user._id !== session?.user?.id && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleRole(user._id, user.role)}
-                          >
-                            Make {user.role === 'admin' ? 'User' : 'Admin'}
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {users.map((user) => {
+                  const availableRoles = getAvailableRoles(user);
+                  return (
+                    <TableRow key={user._id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <Avatar className="h-8 w-8">
+                            {user.image && <AvatarImage src={user.image} alt={user.name} />}
+                            <AvatarFallback>
+                              {user.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{user.name}</span>
+                          {user._id === session?.user?.id && (
+                            <Badge variant="outline" className="ml-2">You</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-neutral-500">{user.email}</TableCell>
+                      <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell className="text-neutral-500">
+                        {new Date(user.createdAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {canManagePermissions(user) && (
+                            <Link
+                              href={`/admin/users/${user._id}`}
+                              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 border border-neutral-200 bg-white hover:bg-neutral-100 hover:text-neutral-900 h-8 px-3"
+                            >
+                              <Settings2 className="mr-1 h-3 w-3" />
+                              Permissions
+                            </Link>
+                          )}
+                          {availableRoles.length === 1 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => changeRole(user._id, availableRoles[0].role)}
+                            >
+                              {availableRoles[0].label}
+                            </Button>
+                          ) : availableRoles.length > 1 ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  Change Role
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {availableRoles.map((r) => (
+                                  <DropdownMenuItem
+                                    key={r.role}
+                                    onClick={() => changeRole(user._id, r.role)}
+                                  >
+                                    {r.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
