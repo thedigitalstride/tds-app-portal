@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       $or: [
         { createdBy: session.user.id },
         { collaborators: session.user.id },
+        { 'reviewers.userId': session.user.id },
       ],
     };
 
@@ -33,6 +34,8 @@ export async function GET(request: NextRequest) {
     const ideas = await Idea.find(filter)
       .populate('createdBy', 'name image')
       .populate('collaborators', 'name image')
+      .populate('reviewers.userId', 'name image')
+      .populate('reviewers.invitedBy', 'name')
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -49,6 +52,7 @@ export async function GET(request: NextRequest) {
       commentCount: idea.comments?.length || 0,
       createdBy: idea.createdBy,
       collaborators: idea.collaborators,
+      reviewers: idea.reviewers || [],
       createdAt: idea.createdAt,
       updatedAt: idea.updatedAt,
     }));

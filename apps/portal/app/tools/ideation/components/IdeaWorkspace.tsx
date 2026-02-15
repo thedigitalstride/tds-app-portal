@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Check, X, MoreVertical, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, MoreVertical, Loader2, Users } from 'lucide-react';
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@tds/ui';
 import { useIdea } from '../hooks/useIdea';
 import { useConversation } from '../hooks/useConversation';
@@ -13,6 +13,7 @@ import { IdeaScoreCard } from './IdeaScoreCard';
 import { CommentThread } from './CommentThread';
 import { VoteButton } from './VoteButton';
 import { StatusBadge } from './StatusBadge';
+import { InviteReviewersDialog } from './InviteReviewersDialog';
 import {
   STAGE_ORDER,
   STATUS_LABELS,
@@ -51,6 +52,16 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
   const [titleDraft, setTitleDraft] = useState('');
   const [scoring, setScoring] = useState(false);
   const [prdValidation, setPrdValidation] = useState<PrdValidationInfo | null>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+
+  // Derive role flags
+  const isOwner = idea?.createdBy?._id === currentUserId;
+  const isCollaborator = idea?.collaborators?.some((c) => c._id === currentUserId) ?? false;
+  const isReviewer =
+    !isOwner &&
+    !isCollaborator &&
+    (idea?.reviewers?.some((r) => r.userId._id === currentUserId) ?? false);
+  const readOnly = isReviewer;
 
   const currentStage = idea?.currentStage as IdeaStage | undefined;
   const currentStageIndex = currentStage ? STAGE_ORDER.indexOf(currentStage) : 0;
@@ -213,7 +224,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
           </Button>
 
           <div className="flex flex-1 items-center gap-2 overflow-hidden">
-            {editingTitle ? (
+            {!readOnly && editingTitle ? (
               <div className="flex items-center gap-1">
                 <input
                   autoFocus
@@ -229,6 +240,10 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
+            ) : readOnly ? (
+              <h1 className="truncate text-lg font-semibold text-neutral-900">
+                {idea.title}
+              </h1>
             ) : (
               <button
                 onClick={() => {
@@ -254,32 +269,46 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
               onVote={vote}
             />
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {(['draft', 'approved', 'in-progress', 'completed', 'archived'] as IdeaStatus[]).map(
-                  (s) =>
-                    s !== idea.status && (
-                      <DropdownMenuItem key={s} onClick={() => updateStatus(s)}>
-                        Move to {STATUS_LABELS[s]}
-                      </DropdownMenuItem>
-                    )
-                )}
-                <DropdownMenuItem onClick={handleScore}>
-                  {scoring ? 'Scoring...' : 'Score Idea'}
-                </DropdownMenuItem>
-                {hasPrdContent && (
-                  <DropdownMenuItem onClick={exportPrd}>Export PRD</DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={handleDelete} className="text-red-600">
-                  Delete Idea
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {isOwner && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInviteDialog(true)}
+                className="text-neutral-500 hover:text-neutral-900"
+              >
+                <Users className="mr-1 h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Invite</span>
+              </Button>
+            )}
+
+            {!readOnly && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {(['draft', 'approved', 'in-progress', 'completed', 'archived'] as IdeaStatus[]).map(
+                    (s) =>
+                      s !== idea.status && (
+                        <DropdownMenuItem key={s} onClick={() => updateStatus(s)}>
+                          Move to {STATUS_LABELS[s]}
+                        </DropdownMenuItem>
+                      )
+                  )}
+                  <DropdownMenuItem onClick={handleScore}>
+                    {scoring ? 'Scoring...' : 'Score Idea'}
+                  </DropdownMenuItem>
+                  {hasPrdContent && (
+                    <DropdownMenuItem onClick={exportPrd}>Export PRD</DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleDelete} className="text-red-600">
+                    Delete Idea
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
@@ -295,6 +324,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
             onGeneratePrd={handleGeneratePrd}
             sending={sending}
             hasPrdContent={hasPrdContent}
+            readOnly={readOnly}
           />
         </div>
       </div>
@@ -326,6 +356,7 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
               onUndoLastExchange={handleUndoLastExchange}
               sending={sending}
               lastOptions={lastOptions}
+              readOnly={readOnly}
             />
           )}
         </div>
@@ -333,11 +364,24 @@ export function IdeaWorkspace({ ideaId, currentUserId }: IdeaWorkspaceProps) {
         {/* Sidebar */}
         <div className="hidden w-80 shrink-0 overflow-y-auto border-l border-neutral-200 bg-neutral-50 p-4 lg:block">
           <div className="space-y-4">
-            <IdeaScoreCard scoring={idea.scoring} onScore={handleScore} loading={scoring} />
+            <IdeaScoreCard scoring={idea.scoring} onScore={readOnly ? undefined : handleScore} loading={scoring} />
             <CommentThread comments={idea.comments || []} onAddComment={addComment} />
           </div>
         </div>
       </div>
+
+      {/* Invite Reviewers Dialog */}
+      {isOwner && (
+        <InviteReviewersDialog
+          open={showInviteDialog}
+          onClose={() => setShowInviteDialog(false)}
+          ideaId={ideaId}
+          reviewers={idea.reviewers || []}
+          collaboratorIds={idea.collaborators?.map((c) => c._id) || []}
+          ownerId={currentUserId}
+          onReviewersChanged={() => refreshIdea()}
+        />
+      )}
     </div>
   );
 }

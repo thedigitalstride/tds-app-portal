@@ -1,9 +1,10 @@
 'use client';
 
-import { Check, ChevronRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react';
 import { StageProgressRing } from './StageProgressRing';
 import {
   STAGE_CONFIG,
+  STAGE_ORDER,
   STAGE_SHORT_LABELS,
   type IdeaStage,
   type StageConfig,
@@ -48,14 +49,16 @@ export function StageJourneyNode({
     const showPrdAction = isPrd && !hasPrdContent;
     const progressColor = stageReadiness >= 80 ? '#22c55e' : config.primary;
 
+    // Look up the next stage's config for the advance button colour
+    const stageIndex = STAGE_ORDER.indexOf(stage);
+    const nextStage = stageIndex < STAGE_ORDER.length - 1 ? STAGE_ORDER[stageIndex + 1] : null;
+    const nextConfig = nextStage ? STAGE_CONFIG[nextStage] : null;
+
     return (
       <div className="flex items-center gap-1.5">
-        <button
-          onClick={readyToAdvance ? onAdvance : showPrdAction ? onGeneratePrd : undefined}
-          disabled={sending || (!readyToAdvance && !showPrdAction)}
-          className={`animate-stage-breathe flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-white transition-all sm:gap-2.5 sm:py-2 sm:pl-2 sm:pr-4 ${
-            (readyToAdvance || showPrdAction) && !sending ? 'cursor-pointer hover:brightness-110' : ''
-          }`}
+        {/* Stage status pill — always a passive indicator */}
+        <div
+          className="animate-stage-breathe flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-white sm:gap-2.5 sm:py-2 sm:pl-2 sm:pr-4"
           style={{
             background: `linear-gradient(135deg, ${config.gradientFrom}, ${config.gradientTo})`,
             '--stage-shadow': `${config.primary}40`,
@@ -83,21 +86,37 @@ export function StageJourneyNode({
               {stageReadiness}% ready
             </span>
           </div>
+        </div>
 
-          {readyToAdvance && !sending && nextStageLabel && (
-            <span className="animate-fade-slide-in ml-0.5 flex items-center gap-0.5 text-[10px] font-medium opacity-90 sm:text-xs">
-              <ChevronRight className="h-3 w-3" />
-              <span className="hidden sm:inline">{nextStageLabel}</span>
-            </span>
-          )}
+        {/* Advance button — glowing CTA using next stage's colour */}
+        {readyToAdvance && !sending && nextStageLabel && nextConfig && (
+          <button
+            onClick={onAdvance}
+            className="animate-advance-enter -ml-1 flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-3.5 text-xs font-semibold text-white transition-all hover:scale-105 hover:brightness-110 sm:py-2 sm:pl-4 sm:pr-5 sm:text-sm"
+            style={{
+              background: `linear-gradient(135deg, ${nextConfig.gradientFrom}, ${nextConfig.gradientTo})`,
+              '--advance-glow': nextConfig.accent,
+            } as React.CSSProperties}
+          >
+            <span>{nextStageLabel}</span>
+            <ArrowRight className="h-3.5 w-3.5 animate-advance-arrow sm:h-4 sm:w-4" />
+          </button>
+        )}
 
-          {showPrdAction && !sending && (
-            <span className="animate-fade-slide-in ml-0.5 flex items-center gap-0.5 text-[10px] font-medium opacity-90 sm:text-xs">
-              <ChevronRight className="h-3 w-3" />
-              <span className="hidden sm:inline">Generate</span>
-            </span>
-          )}
-        </button>
+        {/* Generate PRD button — glowing CTA using PRD stage's colour */}
+        {showPrdAction && !sending && (
+          <button
+            onClick={onGeneratePrd}
+            className="animate-advance-enter -ml-1 flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-3.5 text-xs font-semibold text-white transition-all hover:scale-105 hover:brightness-110 sm:py-2 sm:pl-4 sm:pr-5 sm:text-sm"
+            style={{
+              background: `linear-gradient(135deg, ${config.gradientFrom}, ${config.gradientTo})`,
+              '--advance-glow': config.accent,
+            } as React.CSSProperties}
+          >
+            <span>Generate</span>
+            <Sparkles className="h-3.5 w-3.5 animate-advance-arrow sm:h-4 sm:w-4" />
+          </button>
+        )}
       </div>
     );
   }

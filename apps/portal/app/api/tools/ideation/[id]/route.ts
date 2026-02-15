@@ -22,6 +22,8 @@ export async function GET(
     const idea = await Idea.findById(id)
       .populate('createdBy', 'name image')
       .populate('collaborators', 'name image')
+      .populate('reviewers.userId', 'name image')
+      .populate('reviewers.invitedBy', 'name image')
       .populate('comments.userId', 'name image')
       .lean();
 
@@ -35,9 +37,12 @@ export async function GET(
     const isCollaborator = idea.collaborators?.some(
       (c: { _id: { toString(): string } }) => c._id.toString() === userId
     );
+    const isReviewer = idea.reviewers?.some(
+      (r: { userId: { _id: { toString(): string } } }) => r.userId._id.toString() === userId
+    );
     const isAdmin = isAtLeastAdmin(session.user.role);
 
-    if (!isOwner && !isCollaborator && !isAdmin) {
+    if (!isOwner && !isCollaborator && !isReviewer && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

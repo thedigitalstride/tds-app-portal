@@ -91,6 +91,34 @@ export function useIdea(id: string) {
     [id]
   );
 
+  const inviteReviewers = useCallback(
+    async (userIds: string[]) => {
+      const res = await fetch(`/api/tools/ideation/${id}/reviewers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds }),
+      });
+      if (!res.ok) throw new Error('Failed to invite reviewers');
+      const data = await res.json();
+      setIdea((prev) => (prev ? { ...prev, reviewers: data.reviewers } : null));
+    },
+    [id]
+  );
+
+  const removeReviewer = useCallback(
+    async (userId: string) => {
+      const res = await fetch(`/api/tools/ideation/${id}/reviewers`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error('Failed to remove reviewer');
+      const data = await res.json();
+      setIdea((prev) => (prev ? { ...prev, reviewers: data.reviewers } : null));
+    },
+    [id]
+  );
+
   const addComment = useCallback(
     async (content: string) => {
       const res = await fetch(`/api/tools/ideation/${id}/comment`, {
@@ -117,5 +145,7 @@ export function useIdea(id: string) {
     score,
     vote,
     addComment,
+    inviteReviewers,
+    removeReviewer,
   };
 }

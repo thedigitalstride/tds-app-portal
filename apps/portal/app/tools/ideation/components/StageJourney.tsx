@@ -19,6 +19,7 @@ interface StageJourneyProps {
   onGeneratePrd: () => void;
   sending: boolean;
   hasPrdContent: boolean;
+  readOnly?: boolean;
 }
 
 function StageConnector({
@@ -59,13 +60,14 @@ export function StageJourney({
   onGeneratePrd,
   sending,
   hasPrdContent,
+  readOnly,
 }: StageJourneyProps) {
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
   const currentConfig = STAGE_CONFIG[currentStage];
 
   return (
     <div
-      className="relative flex items-center gap-0.5 sm:gap-1 overflow-x-auto py-1"
+      className="relative flex items-center gap-0.5 sm:gap-1 overflow-x-auto py-2"
       style={{
         borderBottom: `2px solid ${currentConfig.primary}20`,
       }}
@@ -96,10 +98,10 @@ export function StageJourney({
               stage={stage}
               state={state}
               stageReadiness={isCurrent ? stageReadiness : 0}
-              canAdvance={isCurrent && nextStage !== null}
+              canAdvance={!readOnly && isCurrent && nextStage !== null}
               nextStageLabel={nextStage ? STAGE_SHORT_LABELS[nextStage] : null}
               isPrd={stage === 'prd'}
-              hasPrdContent={hasPrdContent}
+              hasPrdContent={readOnly || hasPrdContent}
               sending={sending}
               onClick={() => isAccessible && onStageClick(stage)}
               onAdvance={onAdvanceStage}

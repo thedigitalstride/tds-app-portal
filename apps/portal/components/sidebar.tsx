@@ -42,6 +42,7 @@ import {
 import { tools } from '@/lib/tools';
 import { getVersionDisplay } from '@/lib/version';
 import { useClient } from './client-context';
+import { NotificationBell } from './notification-bell';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 
@@ -167,7 +168,9 @@ export function Sidebar() {
             <TDSLogo variant="minimal" size="md" />
             {!collapsed && <span className="text-lg font-semibold">TDS Toolbox</span>}
           </Link>
-          <button
+          <div className="flex items-center gap-1">
+            <NotificationBell collapsed={collapsed} />
+            <button
             onClick={toggleCollapsed}
             className={cn(
               'flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition-colors',
@@ -177,6 +180,7 @@ export function Sidebar() {
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
+          </div>
         </div>
 
         {/* Client Selector */}

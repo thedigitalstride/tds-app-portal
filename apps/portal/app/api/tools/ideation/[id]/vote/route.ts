@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Idea } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export async function POST(
   try {
     const session = await getServerSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
     }
 
     const { id } = await params;
@@ -27,6 +28,17 @@ export async function POST(
     const idea = await Idea.findById(id);
     if (!idea) {
       return NextResponse.json({ error: 'Idea not found' }, { status: 404 });
+    }
+
+    // Check access — owner, collaborator, reviewer, or admin
+    const userId = session.user.id;
+    const isOwner = idea.createdBy.toString() === userId;
+    const isCollaborator = idea.collaborators?.some((c) => c.toString() === userId);
+    const isReviewer = idea.reviewers?.some((r) => r.userId.toString() === userId);
+    const isAdmin = isAtLeastAdmin(session.user.role);
+
+    if (!isOwner && !isCollaborator && !isReviewer && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Remove existing vote from this user
