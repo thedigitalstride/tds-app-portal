@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-02-15
+### Added
+- Super Admin role above Admin with unrestricted access to all tools, clients, and admin pages
+- Super Admins can restrict Admin access to specific tools and admin pages via revokedTools
+- Admin page registry (`admin-pages.ts`) with IDs for per-page access control
+- `/api/me/access` endpoint returning current user's accessible tools and admin pages
+- One-time auto-migration: first admin promoted to super-admin on sign-in if no super-admins exist
+- User management UI with 3-role badges (Super Admin, Admin, User) and role change dropdown
+- Permissions page shows tool/admin-page restriction toggles when super admin manages an admin
+
+### Changed
+- `requireAdmin()` middleware now accepts both `admin` and `super-admin` roles
+- All admin layouts check `canAccessAdminPage()` for non-super-admin admins
+- Sidebar fetches `/api/me/access` to filter tools and admin nav items based on actual permissions
+- All API routes with direct `role !== 'admin'` checks updated to use `isAtLeastAdmin()`
+- Role change API enforces authorization hierarchy (only super-admin can modify admin/super-admin roles)
+- First user auto-promoted to `super-admin` instead of `admin`
+
 ## [1.11.0] - 2026-02-15
 ### Added
 - Skip screenshots option for faster, cheaper rescans across all tools
