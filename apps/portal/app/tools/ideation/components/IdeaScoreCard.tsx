@@ -10,7 +10,7 @@ import {
 
 interface IdeaScoreCardProps {
   scoring?: IIdeaScoring;
-  onScore: () => void;
+  onScore?: () => void;
   loading?: boolean;
 }
 
@@ -20,16 +20,18 @@ export function IdeaScoreCard({ scoring, onScore, loading }: IdeaScoreCardProps)
       <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center">
         <Trophy className="mx-auto mb-3 h-8 w-8 text-neutral-300" />
         <p className="mb-3 text-sm text-neutral-500">
-          Score this idea to get a viability assessment
+          {onScore ? 'Score this idea to get a viability assessment' : 'No score yet'}
         </p>
-        <Button size="sm" onClick={onScore} disabled={loading}>
-          {loading ? (
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trophy className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Generate Score
-        </Button>
+        {onScore && (
+          <Button size="sm" onClick={onScore} disabled={loading}>
+            {loading ? (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trophy className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Generate Score
+          </Button>
+        )}
       </div>
     );
   }
@@ -46,9 +48,11 @@ export function IdeaScoreCard({ scoring, onScore, loading }: IdeaScoreCardProps)
           >
             {RECOMMENDATION_LABELS[recommendation]}
           </span>
-          <Button variant="ghost" size="sm" onClick={onScore} disabled={loading} className="h-7 w-7 p-0">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+          {onScore && (
+            <Button variant="ghost" size="sm" onClick={onScore} disabled={loading} className="h-7 w-7 p-0">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
         </div>
       </div>
 

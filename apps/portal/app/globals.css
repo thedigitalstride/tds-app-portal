@@ -92,3 +92,53 @@
 .animate-fade-slide-in {
   animation: fade-slide-in 300ms ease-out forwards;
 }
+
+/* Advance button glow */
+@keyframes advance-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 4px 1px color-mix(in srgb, var(--advance-glow) 35%, transparent),
+      0 0 10px 2px color-mix(in srgb, var(--advance-glow) 15%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 6px 2px color-mix(in srgb, var(--advance-glow) 50%, transparent),
+      0 0 14px 3px color-mix(in srgb, var(--advance-glow) 25%, transparent);
+  }
+}
+
+/* Entrance: emerge from behind the stage pill */
+@keyframes advance-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(-24px) scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(2px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Arrow / icon bounce right */
+@keyframes advance-arrow {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+.animate-advance-enter {
+  animation: advance-enter 400ms ease-out forwards, advance-glow 2s ease-in-out 400ms infinite;
+}
+
+.animate-advance-arrow {
+  animation: advance-arrow 1.5s ease-in-out infinite;
+}

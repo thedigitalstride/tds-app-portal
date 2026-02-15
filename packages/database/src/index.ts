@@ -40,6 +40,7 @@ export {
   type IStageData,
   type IIdeaScoring,
   type IScoreDimension,
+  type IIdeaReviewer,
   type IIdeaComment,
   type IIdeaVote,
   type ISeedData,

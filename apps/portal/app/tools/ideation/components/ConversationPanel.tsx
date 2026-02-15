@@ -15,6 +15,7 @@ interface ConversationPanelProps {
   onUndoLastExchange?: () => void;
   sending: boolean;
   lastOptions?: Array<{ id: string; label: string; value: string }>;
+  readOnly?: boolean;
 }
 
 export function ConversationPanel({
@@ -24,6 +25,7 @@ export function ConversationPanel({
   onUndoLastExchange,
   sending,
   lastOptions,
+  readOnly,
 }: ConversationPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const freeTextRef = useRef<FreeTextInputHandle>(null);
@@ -54,7 +56,7 @@ export function ConversationPanel({
           ))}
 
           {/* Undo last exchange button */}
-          {onUndoLastExchange && messages.length >= 1 && !sending && (
+          {!readOnly && onUndoLastExchange && messages.length >= 1 && !sending && (
             <div className="flex justify-start pl-11">
               <button
                 onClick={onUndoLastExchange}
@@ -67,7 +69,7 @@ export function ConversationPanel({
           )}
 
           {/* Show options from last assistant message */}
-          {lastOptions && lastOptions.length > 0 && !sending && (
+          {!readOnly && lastOptions && lastOptions.length > 0 && !sending && (
             <MultipleChoiceOptions
               options={lastOptions}
               onSelect={handleOptionSelect}
@@ -98,21 +100,23 @@ export function ConversationPanel({
       </div>
 
       {/* Input area */}
-      <div className="border-t border-neutral-200 bg-neutral-50 p-4">
-        <div className="mx-auto max-w-2xl">
-          <FreeTextInput
-            ref={freeTextRef}
-            onSubmit={(text, attachments) => {
-              setCustomInputActive(false);
-              onSendMessage(text, undefined, attachments);
-            }}
-            onUploadFiles={onUploadFiles}
-            disabled={sending}
-            placeholder={lastOptions?.length ? 'Or type your own answer...' : 'Type your answer...'}
-            highlighted={customInputActive || !lastOptions?.length}
-          />
+      {!readOnly && (
+        <div className="border-t border-neutral-200 bg-neutral-50 p-4">
+          <div className="mx-auto max-w-2xl">
+            <FreeTextInput
+              ref={freeTextRef}
+              onSubmit={(text, attachments) => {
+                setCustomInputActive(false);
+                onSendMessage(text, undefined, attachments);
+              }}
+              onUploadFiles={onUploadFiles}
+              disabled={sending}
+              placeholder={lastOptions?.length ? 'Or type your own answer...' : 'Type your answer...'}
+              highlighted={customInputActive || !lastOptions?.length}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

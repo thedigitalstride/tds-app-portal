@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, BookOpen, Lightbulb } from 'lucide-react';
 import { Button } from '@tds/ui';
 import { useIdeaList } from '../hooks/useIdeaList';
 import { IdeaCard } from './IdeaCard';
@@ -80,10 +80,16 @@ export function IdeaPipeline({ currentUserId }: IdeaPipelineProps) {
             Transform ideas into structured PRDs through AI-guided discovery
           </p>
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New Idea
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push('/tools/ideation/guide')}>
+            <BookOpen className="mr-1.5 h-4 w-4" />
+            Guide
+          </Button>
+          <Button onClick={() => setShowNewDialog(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New Idea
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -113,7 +119,14 @@ export function IdeaPipeline({ currentUserId }: IdeaPipelineProps) {
         </div>
       ) : ideas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-neutral-300 py-16 text-center">
-          <p className="text-neutral-500">No ideas yet. Start one above!</p>
+          <Lightbulb className="mx-auto mb-3 h-8 w-8 text-neutral-300" />
+          <p className="text-neutral-500 mb-2">No ideas yet. Start one above!</p>
+          <button
+            onClick={() => router.push('/tools/ideation/guide')}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Read the guide to get started &rarr;
+          </button>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

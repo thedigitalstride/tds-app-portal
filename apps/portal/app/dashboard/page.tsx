@@ -104,7 +104,7 @@ export default async function DashboardPage() {
               </div>
               <CardTitle className="mt-4 text-neutral-400">More Coming Soon</CardTitle>
               <CardDescription>
-                New tools are being developed to help streamline your workflow
+                New tools are being developed to help streamline your workflow.<br /><strong>If you have an idea, use the Ideation tool to create a PRD!</strong>
               </CardDescription>
             </CardHeader>
           </Card>

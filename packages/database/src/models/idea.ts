@@ -110,6 +110,14 @@ export interface IIdeaScoring {
   scoredAt: Date;
 }
 
+// Reviewer
+export interface IIdeaReviewer {
+  userId: mongoose.Types.ObjectId;
+  invitedBy: mongoose.Types.ObjectId;
+  invitedAt: Date;
+  seen: boolean;
+}
+
 // Comment
 export interface IIdeaComment {
   userId: mongoose.Types.ObjectId;
@@ -140,6 +148,7 @@ export interface IIdea extends Document {
   };
   scoring?: IIdeaScoring;
   collaborators: mongoose.Types.ObjectId[];
+  reviewers: IIdeaReviewer[];
   comments: IIdeaComment[];
   votes: IIdeaVote[];
   voteScore: number;
@@ -220,6 +229,16 @@ const scoringSchema = new Schema(
   { _id: false }
 );
 
+const reviewerSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    invitedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    invitedAt: { type: Date, default: Date.now },
+    seen: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const commentSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -276,6 +295,7 @@ const ideaSchema = new Schema<IIdea>(
       default: undefined,
     },
     collaborators: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    reviewers: [reviewerSchema],
     comments: [commentSchema],
     votes: [voteSchema],
     voteScore: {
@@ -305,6 +325,7 @@ const ideaSchema = new Schema<IIdea>(
 ideaSchema.index({ createdBy: 1, createdAt: -1 });
 ideaSchema.index({ status: 1, updatedAt: -1 });
 ideaSchema.index({ voteScore: -1 });
+ideaSchema.index({ 'reviewers.userId': 1, 'reviewers.seen': 1 });
 
 // Delete cached model in development to pick up schema changes
 if (process.env.NODE_ENV !== 'production' && mongoose.models.Idea) {

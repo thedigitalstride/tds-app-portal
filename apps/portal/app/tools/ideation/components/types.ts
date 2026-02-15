@@ -23,6 +23,7 @@ import type {
   IPrdSection,
   IIdeaScoring,
   IScoreDimension,
+  IIdeaReviewer,
   IIdeaComment,
   IIdeaVote,
 } from '@tds/database';
@@ -45,6 +46,7 @@ export type {
   IPrdSection,
   IIdeaScoring,
   IScoreDimension,
+  IIdeaReviewer,
   IIdeaComment,
   IIdeaVote,
 };
@@ -71,6 +73,12 @@ export interface IdeaSummary {
     image?: string;
   };
   collaborators: Array<{ _id: string; name: string; image?: string }>;
+  reviewers: Array<{
+    userId: { _id: string; name: string; image?: string };
+    invitedBy: { _id: string; name: string };
+    invitedAt: string;
+    seen: boolean;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +119,13 @@ export interface PrdValidationInfo {
   expectedSectionCount: number;
   missingSections: string[];
   retried: boolean;
+}
+
+export interface ReviewInvitation {
+  ideaId: string;
+  ideaTitle: string;
+  invitedBy: { _id: string; name: string; image?: string };
+  invitedAt: string;
 }
 
 export interface InspirationIdea {

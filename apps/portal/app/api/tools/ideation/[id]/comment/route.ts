@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Idea } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export async function POST(
   try {
     const session = await getServerSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
     }
 
     const { id } = await params;
@@ -23,6 +24,22 @@ export async function POST(
     }
 
     await connectDB();
+
+    // Check access — owner, collaborator, reviewer, or admin
+    const existing = await Idea.findById(id).select('createdBy collaborators reviewers').lean();
+    if (!existing) {
+      return NextResponse.json({ error: 'Idea not found' }, { status: 404 });
+    }
+
+    const userId = session.user.id;
+    const isOwner = existing.createdBy.toString() === userId;
+    const isCollaborator = existing.collaborators?.some((c) => c.toString() === userId);
+    const isReviewer = existing.reviewers?.some((r) => r.userId.toString() === userId);
+    const isAdmin = isAtLeastAdmin(session.user.role);
+
+    if (!isOwner && !isCollaborator && !isReviewer && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const idea = await Idea.findByIdAndUpdate(
       id,

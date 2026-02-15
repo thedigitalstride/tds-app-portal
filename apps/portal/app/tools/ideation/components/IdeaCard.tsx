@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Clock, MessageSquare, Trash2 } from 'lucide-react';
-import { Button } from '@tds/ui';
+import { Clock, Eye, MessageSquare, Trash2 } from 'lucide-react';
+import { Badge, Button } from '@tds/ui';
 import { StatusBadge } from './StatusBadge';
 import { VoteButton } from './VoteButton';
 import {
@@ -21,6 +21,7 @@ interface IdeaCardProps {
 
 export function IdeaCard({ idea, currentUserId, onDelete, onVote }: IdeaCardProps) {
   const router = useRouter();
+  const isReviewer = idea.reviewers?.some((r) => r.userId._id === currentUserId);
 
   return (
     <div
@@ -32,6 +33,12 @@ export function IdeaCard({ idea, currentUserId, onDelete, onVote }: IdeaCardProp
           <h3 className="text-sm font-semibold text-neutral-900">{idea.title}</h3>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge status={idea.status} />
+            {isReviewer && (
+              <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] gap-1 px-1.5 py-0">
+                <Eye className="h-2.5 w-2.5" />
+                Reviewing
+              </Badge>
+            )}
             <span className="text-xs text-neutral-400">
               Stage: {STAGE_SHORT_LABELS[idea.currentStage]}
             </span>
