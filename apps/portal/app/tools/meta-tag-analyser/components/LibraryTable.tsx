@@ -56,7 +56,7 @@ interface LibraryTableProps {
   isLoading: boolean;
   clientId: string | null;
   clientName: string;
-  onRescan: (id: string, includeScreenshots: boolean) => Promise<void>;
+  onRescan: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onBulkDelete?: (ids: string[]) => Promise<void>;
   onExport: (format: 'csv' | 'json') => void;
@@ -84,8 +84,7 @@ export function LibraryTable({
   const [bulkRescanning, setBulkRescanning] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  // Rescan confirmation dialog state
-  const [showRescanDialog, setShowRescanDialog] = useState(false);
+  // Rescan target IDs for bulk operations
   const [rescanTargetIds, setRescanTargetIds] = useState<string[]>([]);
 
   const getScoreColor = (score: number) => {
@@ -140,39 +139,41 @@ export function LibraryTable({
     });
   };
 
-  // Opens the rescan confirmation dialog for a single page
-  const handleRescan = (id: string) => {
-    setRescanTargetIds([id]);
-    setShowRescanDialog(true);
+  // Trigger rescan for a single page
+  const handleRescan = async (id: string) => {
+    setRescanning(new Set([id]));
+    await onRescan(id);
+    setRescanning(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
-  // Opens the rescan confirmation dialog for selected pages
-  const handleRescanSelected = () => {
+  // Rescan selected pages
+  const handleRescanSelected = async () => {
     if (selectedRows.size === 0) return;
-    setRescanTargetIds(Array.from(selectedRows));
-    setShowRescanDialog(true);
+    const ids = Array.from(selectedRows);
+    await executeRescan(ids);
   };
 
-  // Opens the rescan confirmation dialog for all filtered pages
-  const handleRescanAll = () => {
+  // Rescan all filtered pages
+  const handleRescanAll = async () => {
     if (filteredAnalyses.length === 0) return;
-    setRescanTargetIds(filteredAnalyses.map(a => a._id));
-    setShowRescanDialog(true);
+    const ids = filteredAnalyses.map(a => a._id);
+    await executeRescan(ids);
   };
 
-  // Execute the actual rescan after user confirms
-  const handleRescanConfirm = async (includeScreenshots: boolean) => {
-    setShowRescanDialog(false);
-    const ids = rescanTargetIds;
-
+  // Execute rescan for a list of IDs
+  const executeRescan = async (ids: string[]) => {
     if (ids.length === 0) return;
 
     setBulkRescanning(true);
     setRescanning(new Set(ids));
+    setRescanTargetIds(ids);
 
-    // Rescan sequentially to avoid overwhelming the server
     for (const id of ids) {
-      await onRescan(id, includeScreenshots);
+      await onRescan(id);
       setRescanning(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -717,44 +718,6 @@ export function LibraryTable({
         </DialogContent>
       </Dialog>
 
-      {/* Rescan Confirmation Modal */}
-      <Dialog open={showRescanDialog} onOpenChange={setShowRescanDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5" />
-              {rescanTargetIds.length > 1
-                ? `Rescan ${rescanTargetIds.length} Pages`
-                : 'Rescan Page'}
-            </DialogTitle>
-            <DialogDescription>
-              Include screenshots in the rescan?
-              <span className="text-muted-foreground block text-sm mt-1">
-                Skipping screenshots is faster and uses fewer credits
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowRescanDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleRescanConfirm(true)}
-            >
-              Full Rescan
-            </Button>
-            <Button
-              onClick={() => handleRescanConfirm(false)}
-            >
-              Quick Rescan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

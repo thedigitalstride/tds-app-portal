@@ -16,7 +16,7 @@ type TabType = 'library' | 'history' | 'new-analysis';
 
 export default function PpcPageAnalyserPage() {
   const { clients, selectedClientId } = useClient();
-  const { addToast } = useToast();
+  const { addToast, updateToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabType>('library');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -99,6 +99,13 @@ export default function PpcPageAnalyserPage() {
   }, [selectedClientId, fetchSavedAnalyses]);
 
   const handleRescan = async (id: string) => {
+    const analysis = savedAnalyses.find(a => a._id === id);
+    const truncatedUrl = analysis?.url?.replace(/^https?:\/\//, '').slice(0, 50) || 'URL';
+    const toastId = addToast({
+      type: 'progress',
+      message: `Rescanning ${truncatedUrl}...`,
+    });
+
     try {
       const res = await fetch(`/api/tools/ppc-page-analyser/saved/${id}/rescan`, {
         method: 'POST',
@@ -108,15 +115,16 @@ export default function PpcPageAnalyserPage() {
         setSavedAnalyses(prev =>
           prev.map(a => a._id === id ? { ...a, ...data.analysis } : a)
         );
-        if (data.changesDetected) {
-          addToast({
-            type: 'info',
-            message: 'Changes detected in landing page',
-          });
-        }
+        updateToast(toastId, {
+          type: data.changesDetected ? 'info' : 'success',
+          message: data.changesDetected ? 'Changes detected in landing page' : `Rescanned ${truncatedUrl}`,
+        });
+      } else {
+        updateToast(toastId, { type: 'error', message: 'Failed to rescan' });
       }
     } catch (error) {
       console.error('Failed to rescan:', error);
+      updateToast(toastId, { type: 'error', message: 'Failed to rescan' });
     }
   };
 

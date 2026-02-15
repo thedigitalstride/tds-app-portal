@@ -18,6 +18,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { PageArchiveImporter } from '@/components/page-archive-importer';
+import { useToast } from '@/components/toast-context';
 import { BatchReport } from './BatchReport';
 import {
   Button,
@@ -112,6 +113,8 @@ export function ScanPanel({
   clientName,
   onScanComplete,
 }: ScanPanelProps) {
+  const { addToast, updateToast } = useToast();
+  const toastIdRef = useRef<string | null>(null);
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
 
   // Single URL state
@@ -160,15 +163,6 @@ export function ScanPanel({
     };
   }, []);
 
-  // Stop polling when panel closes
-  useEffect(() => {
-    if (!isOpen && pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-      setIsPolling(false);
-    }
-  }, [isOpen]);
-
   // Check which URLs already exist in the library for this client
   const checkExistingUrls = useCallback(async (urls: string[]) => {
     if (!clientId) return { existing: [], new: urls };
@@ -203,6 +197,12 @@ export function ScanPanel({
     setError(null);
     setSuccess(null);
 
+    const truncatedUrl = url.replace(/^https?:\/\//, '').slice(0, 50);
+    const toastId = addToast({
+      type: 'progress',
+      message: `Scanning ${truncatedUrl}...`,
+    });
+
     try {
       const analyzeRes = await fetch('/api/tools/meta-tag-analyser', {
         method: 'POST',
@@ -232,10 +232,13 @@ export function ScanPanel({
         setSuccess(saveData.message || (saveData.isUpdate ? 'URL updated' : 'URL saved'));
         setUrl('');
         onScanComplete();
+        updateToast(toastId, { type: 'success', message: `Scanned ${truncatedUrl}` });
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMsg);
+      updateToast(toastId, { type: 'error', message: errorMsg });
     } finally {
       setLoading(false);
     }
@@ -336,6 +339,12 @@ export function ScanPanel({
         results: { succeeded: [], failed: [], skipped: [] },
       });
 
+      toastIdRef.current = addToast({
+        type: 'progress',
+        message: 'Scanning URLs...',
+        progress: { current: 0, total: data.totalUrls },
+      });
+
       // Start polling for progress
       startPolling(data.batchId);
     } catch (err) {
@@ -401,12 +410,31 @@ export function ScanPanel({
 
         setBatchStatus(data);
 
+        // Update toast with progress
+        if (toastIdRef.current) {
+          const currentUrl = data.currentUrl?.replace(/^https?:\/\//, '').slice(0, 50);
+          updateToast(toastIdRef.current, {
+            message: currentUrl ? `Scanning: ${currentUrl}...` : 'Scanning URLs...',
+            progress: { current: data.progress.completed, total: data.progress.total },
+          });
+        }
+
         // Check if batch is complete
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
           setIsPolling(false);
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
+          }
+
+          if (toastIdRef.current) {
+            const succeeded = data.results.succeeded.length;
+            const failed = data.results.failed.length;
+            updateToast(toastIdRef.current, {
+              type: failed > 0 ? 'info' : 'success',
+              message: `Scanned ${succeeded + failed} URLs (${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''})`,
+            });
+            toastIdRef.current = null;
           }
 
           // Show report
@@ -440,6 +468,12 @@ export function ScanPanel({
         pollingRef.current = null;
       }
       setIsPolling(false);
+
+      if (toastIdRef.current) {
+        updateToast(toastIdRef.current, { type: 'info', message: 'Batch scanning cancelled' });
+        toastIdRef.current = null;
+      }
+
       setBatchStatus(null);
       setParsedUrls(null);
     } catch (err) {

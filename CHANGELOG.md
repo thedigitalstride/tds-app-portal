@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-02-15
+### Changed
+- Updated styling and typography in PRD components
+
 ## [1.10.0] - 2026-02-14
 ### Added
 - AI Cost Tracking dashboard for admin users (`/admin/ai-costs`)

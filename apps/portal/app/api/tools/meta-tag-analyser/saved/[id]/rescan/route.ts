@@ -21,15 +21,6 @@ export async function POST(
 
     const { id } = await params;
 
-    // Parse request body for options
-    let includeScreenshots = false;
-    try {
-      const body = await request.json();
-      includeScreenshots = body.includeScreenshots ?? false;
-    } catch {
-      // No body or invalid JSON - use defaults (quick rescan, no screenshots)
-    }
-
     await connectDB();
 
     // Find the existing analysis
@@ -60,8 +51,8 @@ export async function POST(
         clientId: existingAnalysis.clientId.toString(),
         userId: session.user.id,
         toolId: 'meta-tag-analyser',
-        forceRefresh: true,  // Always get fresh content for rescan
-        skipScreenshots: !includeScreenshots,
+        forceRefresh: true,
+        skipScreenshots: true,
       });
       html = pageResult.html;
       snapshotId = pageResult.snapshot._id.toString();
