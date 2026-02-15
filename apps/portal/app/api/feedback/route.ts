@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Feedback } from '@tds/database';
 
 export const dynamic = 'force-dynamic';
@@ -208,7 +209,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Only admins can list all feedback
-    if (session.user.role !== 'admin') {
+    if (!isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

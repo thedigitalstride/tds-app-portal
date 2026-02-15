@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, AiUsageLog } from '@tds/database';
 import { getUsdToGbpRate } from '@/lib/ai/ai-usage-logger';
 import mongoose from 'mongoose';
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.user.role !== 'admin') {
+    if (!isAtLeastAdmin(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

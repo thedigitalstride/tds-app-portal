@@ -1,21 +1,28 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
+import { isAtLeastAdmin, isSuperAdmin, canAccessAdminPage } from '@/lib/permissions';
 import { Sidebar } from '@/components/sidebar';
+
+const ADMIN_PAGE_ID = 'admin:ideation-prompts';
 
 export default async function AdminIdeationPromptsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
 
   if (!session) {
     redirect('/login');
   }
 
-  if (session.user.role !== 'admin') {
+  if (!isAtLeastAdmin(session.user.role)) {
     redirect('/dashboard');
+  }
+
+  if (!isSuperAdmin(session.user.role)) {
+    const hasAccess = await canAccessAdminPage(session.user.id, ADMIN_PAGE_ID);
+    if (!hasAccess) redirect('/dashboard?error=no-access');
   }
 
   return (
