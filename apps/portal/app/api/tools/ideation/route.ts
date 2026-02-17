@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
+import { isSuperAdmin } from '@/lib/permissions';
 import { connectDB, Idea } from '@tds/database';
 import { sendIdeationMessage } from '@/lib/ai/ideation-ai-service';
 import { getTemplate } from '@/app/tools/ideation/lib/templates';
@@ -19,13 +20,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const filter: Record<string, unknown> = {
-      $or: [
+    const filter: Record<string, unknown> = {};
+
+    // Super-admins see all ideas; everyone else sees only their own
+    if (!isSuperAdmin(session.user.role)) {
+      filter.$or = [
         { createdBy: session.user.id },
         { collaborators: session.user.id },
         { 'reviewers.userId': session.user.id },
-      ],
-    };
+      ];
+    }
 
     if (status) {
       filter.status = status;

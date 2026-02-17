@@ -137,21 +137,31 @@ function buildConversationMessages(
 
   // Add all messages from this stage
   for (const msg of stageMessages) {
-    let content: string =
-      msg.role === 'user' && msg.selectedOptionId
+    if (msg.role === 'assistant') {
+      // Re-wrap in the JSON format the system prompt expects so the AI
+      // sees a consistent conversation history (all assistant turns as JSON)
+      messages.push({
+        role: 'assistant',
+        content: JSON.stringify({
+          message: msg.content,
+          options: msg.options || [],
+          extractedData: {},
+          stageReadiness: 0,
+        }),
+      });
+    } else {
+      let content: string = msg.selectedOptionId
         ? `Selected: "${msg.content}" (option ${msg.selectedOptionId})`
         : msg.content;
 
-    // For historical messages, append text summary of attachments
-    if (msg.attachments?.length) {
-      const summary = buildAttachmentSummary(msg.attachments);
-      content = content ? `${content}\n${summary}` : summary;
-    }
+      // For historical messages, append text summary of attachments
+      if (msg.attachments?.length) {
+        const summary = buildAttachmentSummary(msg.attachments);
+        content = content ? `${content}\n${summary}` : summary;
+      }
 
-    messages.push({
-      role: msg.role,
-      content,
-    });
+      messages.push({ role: 'user', content });
+    }
   }
 
   return messages;
@@ -210,6 +220,25 @@ function parseAIResponse(content: string): IdeationAIResponse {
       } catch {
         continue;
       }
+    }
+
+    // Fallback: prose text followed by JSON metadata (no "message" key)
+    // e.g., "Your idea is great!\n\n{"options":[...],"extractedData":{...}}"
+    const lastBrace = content.lastIndexOf('{');
+    if (lastBrace > 0) {
+      try {
+        const parsed = JSON.parse(content.substring(lastBrace));
+        if (parsed.options || parsed.extractedData || parsed.stageReadiness !== undefined) {
+          const proseText = content.substring(0, lastBrace).trim();
+          return {
+            message: proseText,
+            options: Array.isArray(parsed.options) ? parsed.options : undefined,
+            extractedData: parsed.extractedData || {},
+            stageReadiness: typeof parsed.stageReadiness === 'number' ? parsed.stageReadiness : 0,
+            suggestedTitle: parsed.suggestedTitle || null,
+          };
+        }
+      } catch { /* fall through to final fallback */ }
     }
 
     // Final fallback — treat entire content as the message

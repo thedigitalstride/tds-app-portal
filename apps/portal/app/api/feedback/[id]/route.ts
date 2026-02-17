@@ -39,6 +39,9 @@ export async function PATCH(
     const updateObj: Record<string, unknown> = {};
     if (status) {
       updateObj.status = status;
+      if (status === 'resolved') {
+        updateObj.resolvedNotificationSeen = false;
+      }
     }
 
     // If a note is provided, push it to the notes array

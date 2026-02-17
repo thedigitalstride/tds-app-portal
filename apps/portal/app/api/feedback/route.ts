@@ -214,7 +214,9 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
+    const statuses = searchParams.getAll('status').filter((s) =>
+      ['new', 'reviewed', 'resolved'].includes(s)
+    );
     const type = searchParams.get('type');
     const toolId = searchParams.get('toolId');
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -224,7 +226,7 @@ export async function GET(request: NextRequest) {
 
     // Build query
     const query: Record<string, unknown> = {};
-    if (status) query.status = status;
+    if (statuses.length > 0) query.status = { $in: statuses };
     if (type) query.type = type;
     if (toolId) query.toolId = toolId;
 

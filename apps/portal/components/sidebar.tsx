@@ -16,6 +16,7 @@ import {
   Building2,
   X,
   MessageSquare,
+  MessageSquareText,
   Shield,
   CreditCard,
   Sparkles,
@@ -49,6 +50,7 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Users },
+  { name: 'My Feedback', href: '/my-feedback', icon: MessageSquareText },
 ];
 
 const adminNavigation = [

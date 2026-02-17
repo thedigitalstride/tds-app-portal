@@ -33,6 +33,7 @@ export interface IFeedback extends Document {
   // Metadata
   submittedBy: mongoose.Types.ObjectId;
   status: FeedbackStatus;
+  resolvedNotificationSeen: boolean;
   notes?: IFeedbackNote[];
   createdAt: Date;
   updatedAt: Date;
@@ -108,6 +109,10 @@ const feedbackSchema = new Schema<IFeedback>(
       enum: ['new', 'reviewed', 'resolved'],
       default: 'new',
     },
+    resolvedNotificationSeen: {
+      type: Boolean,
+      default: false,
+    },
     notes: [{
       text: { type: String, required: true },
       author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -124,6 +129,7 @@ feedbackSchema.index({ status: 1 });
 feedbackSchema.index({ type: 1 });
 feedbackSchema.index({ toolId: 1 });
 feedbackSchema.index({ createdAt: -1 });
+feedbackSchema.index({ submittedBy: 1, status: 1, resolvedNotificationSeen: 1 });
 
 export const Feedback: Model<IFeedback> =
   mongoose.models.Feedback || mongoose.model<IFeedback>('Feedback', feedbackSchema);
