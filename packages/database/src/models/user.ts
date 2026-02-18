@@ -7,6 +7,7 @@ export interface IUser extends Document {
   email: string;
   name: string;
   image?: string;
+  slackUserId?: string;
   role: UserRole;
   createdAt: Date;
   updatedAt: Date;
@@ -27,6 +28,9 @@ const userSchema = new Schema<IUser>(
       trim: true,
     },
     image: {
+      type: String,
+    },
+    slackUserId: {
       type: String,
     },
     role: {
