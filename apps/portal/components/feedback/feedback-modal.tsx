@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import html2canvas from 'html2canvas-pro';
 import { Camera, X, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
@@ -74,13 +74,14 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isCapturingRef = useRef(false);
 
   // Get current tool info
   const currentTool = getToolFromPath(pathname);
 
-  // Reset form when modal closes
+  // Reset form when modal closes (but not during screenshot capture)
   useEffect(() => {
-    if (!open) {
+    if (!open && !isCapturingRef.current) {
       // Delay reset to allow animation to complete
       const timer = setTimeout(() => {
         setType('bug');
@@ -97,6 +98,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
   const captureScreenshot = useCallback(async () => {
     setIsCapturing(true);
+    isCapturingRef.current = true;
     // Hide the modal temporarily for clean screenshot
     onOpenChange(false);
 
@@ -118,11 +120,13 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
           setScreenshotPreview(URL.createObjectURL(blob));
         }
         setIsCapturing(false);
+        isCapturingRef.current = false;
         onOpenChange(true);
       }, 'image/png');
     } catch (error) {
       console.error('Failed to capture screenshot:', error);
       setIsCapturing(false);
+      isCapturingRef.current = false;
       onOpenChange(true);
     }
   }, [onOpenChange]);

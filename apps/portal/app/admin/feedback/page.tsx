@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
   Badge,
+  Checkbox,
   Select,
   Skeleton,
   Avatar,
@@ -97,7 +98,7 @@ export default function FeedbackDashboardPage() {
   });
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<string>('');
 
   // Detail modal
@@ -111,7 +112,7 @@ export default function FeedbackDashboardPage() {
       const params = new URLSearchParams();
       params.set('page', pagination.page.toString());
       params.set('limit', pagination.limit.toString());
-      if (statusFilter) params.set('status', statusFilter);
+      for (const s of statusFilter) params.append('status', s);
       if (typeFilter) params.set('type', typeFilter);
 
       const res = await fetch(`/api/feedback?${params}`);
@@ -190,6 +191,16 @@ export default function FeedbackDashboardPage() {
     }
   };
 
+  const toggleStatus = (status: string) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
+
   const goToPage = (page: number) => {
     setPagination((prev) => ({ ...prev, page }));
   };
@@ -222,21 +233,19 @@ export default function FeedbackDashboardPage() {
                 {pagination.total} total submissions
               </CardDescription>
             </div>
-            <div className="flex gap-3">
-              <Select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                }}
-                className="w-36"
-                options={[
-                  { value: '', label: 'All statuses' },
-                  { value: 'new', label: 'New' },
-                  { value: 'reviewed', label: 'Reviewed' },
-                  { value: 'resolved', label: 'Resolved' },
-                ]}
-              />
+            <div className="flex items-center gap-3">
+              {(['new', 'reviewed', 'resolved'] as const).map((status) => (
+                <div
+                  key={status}
+                  className="flex cursor-pointer items-center gap-1.5"
+                  onClick={() => toggleStatus(status)}
+                >
+                  <Checkbox checked={statusFilter.has(status)} />
+                  <Badge className={cn('text-xs', statusConfig[status].color)}>
+                    {statusConfig[status].label}
+                  </Badge>
+                </div>
+              ))}
               <Select
                 value={typeFilter}
                 onChange={(e) => {
