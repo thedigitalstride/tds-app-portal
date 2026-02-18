@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Feedback } from '@tds/database';
+import { sendStatusChangeNotification } from '@/lib/services/slack-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,23 @@ export async function PATCH(
     }
 
     await connectDB();
+
+    // Pre-read to capture old status and creator info for Slack notification
+    const existingFeedback = status
+      ? await Feedback.findById(id)
+          .populate<{ submittedBy: { name: string; email: string } }>(
+            'submittedBy',
+            'name email'
+          )
+          .lean()
+      : null;
+
+    if (status && !existingFeedback) {
+      return NextResponse.json(
+        { error: 'Feedback not found' },
+        { status: 404 }
+      );
+    }
 
     // Build update object
     const updateObj: Record<string, unknown> = {};
@@ -70,6 +88,21 @@ export async function PATCH(
         { error: 'Feedback not found' },
         { status: 404 }
       );
+    }
+
+    // Send Slack notification if status actually changed
+    if (status && existingFeedback && status !== existingFeedback.status) {
+      const creator = existingFeedback.submittedBy;
+      sendStatusChangeNotification({
+        feedbackId: id,
+        feedbackType: existingFeedback.type,
+        feedbackDescription: existingFeedback.description,
+        oldStatus: existingFeedback.status,
+        newStatus: status,
+        changedByName: session.user.name,
+        creatorEmail: creator.email,
+        creatorName: creator.name,
+      }).catch(console.error);
     }
 
     return NextResponse.json(feedback);

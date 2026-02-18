@@ -3,113 +3,9 @@ import { put } from '@vercel/blob';
 import { getServerSession } from '@/lib/auth';
 import { isAtLeastAdmin } from '@/lib/permissions';
 import { connectDB, Feedback } from '@tds/database';
+import { sendNewFeedbackNotification } from '@/lib/services/slack-service';
 
 export const dynamic = 'force-dynamic';
-
-// Slack webhook helper
-async function sendSlackNotification(feedback: {
-  type: string;
-  urgency: string;
-  description: string;
-  toolName: string | null;
-  pageUrl: string;
-  clientName: string | null;
-  submittedByName: string;
-  feedbackId: string;
-  screenshotUrl: string | null;
-}) {
-  const webhookUrl = process.env.SLACK_FEEDBACK_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.log('Slack webhook URL not configured, skipping notification');
-    return;
-  }
-
-  const typeEmoji = {
-    bug: ':bug:',
-    feature: ':bulb:',
-    question: ':question:',
-    other: ':speech_balloon:',
-  }[feedback.type] || ':speech_balloon:';
-
-  const typeLabel = {
-    bug: 'Bug Report',
-    feature: 'Feature Request',
-    question: 'Question',
-    other: 'Other',
-  }[feedback.type] || 'Feedback';
-
-  const urgencyLabel = {
-    low: 'Nice to have',
-    medium: 'Important',
-    high: 'Blocking',
-  }[feedback.urgency] || feedback.urgency;
-
-  const adminUrl = `${process.env.NEXTAUTH_URL}/admin/feedback`;
-
-  const blocks = [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `${typeEmoji} *New ${typeLabel}* (${urgencyLabel})\n\n"${feedback.description.slice(0, 200)}${feedback.description.length > 200 ? '...' : ''}"`,
-      },
-    },
-    {
-      type: 'divider',
-    },
-    {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: [
-            feedback.toolName ? `*Tool:* ${feedback.toolName}` : null,
-            `*Page:* ${feedback.pageUrl}`,
-            feedback.clientName ? `*Client:* ${feedback.clientName}` : null,
-            `*Submitted by:* ${feedback.submittedByName}`,
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        },
-      ],
-    },
-    {
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: 'View in Admin',
-          },
-          url: adminUrl,
-        },
-        ...(feedback.screenshotUrl
-          ? [
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: 'View Screenshot',
-                },
-                url: feedback.screenshotUrl,
-              },
-            ]
-          : []),
-      ],
-    },
-  ];
-
-  try {
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blocks }),
-    });
-  } catch (error) {
-    console.error('Failed to send Slack notification:', error);
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -179,7 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Send Slack notification (non-blocking)
-    sendSlackNotification({
+    sendNewFeedbackNotification({
       type,
       urgency,
       description,
