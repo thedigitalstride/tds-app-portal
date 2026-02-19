@@ -1,4 +1,4 @@
-import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target, Lightbulb } from 'lucide-react';
+import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target, Lightbulb, Workflow } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -49,6 +49,15 @@ export const tools: Tool[] = [
     description: 'Transform ideas into structured PRDs through AI-guided discovery and research.',
     icon: Lightbulb,
     href: '/tools/ideation',
+    category: 'utility',
+    isNew: true,
+  },
+  {
+    id: 'data-flow',
+    name: 'Data Flow',
+    description: 'Visualise data pipelines with an interactive flow graph and detailed data table.',
+    icon: Workflow,
+    href: '/tools/data-flow',
     category: 'utility',
     isNew: true,
   },
