@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react';
-import type { DataRow } from './types';
+import type { DataRow, TableNodeData, TableNodeType } from './types';
 
 export const sampleRows: DataRow[] = [
   {
@@ -143,3 +143,34 @@ export function buildNodesAndEdges(rows: DataRow[]): {
 
   return { nodes, edges };
 }
+
+// Table node sample data
+const noop = () => {};
+
+export const sampleTableNode: TableNodeType = {
+  id: 'table-1',
+  type: 'tableNode',
+  position: { x: 900, y: 180 },
+  data: {
+    label: 'Pipeline Overview',
+    layout: 'rows',
+    isActive: false,
+    onLayoutChange: noop,
+    onLabelChange: noop,
+  } satisfies TableNodeData,
+};
+
+export const sampleTableEdges: Edge[] = [
+  {
+    id: 'e-7-table-1',
+    source: '7',
+    target: 'table-1',
+    animated: true,
+  },
+  {
+    id: 'e-8-table-1',
+    source: '8',
+    target: 'table-1',
+    animated: true,
+  },
+];

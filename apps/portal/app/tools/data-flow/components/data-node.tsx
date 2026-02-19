@@ -46,13 +46,11 @@ function DataNodeComponent({ data, selected }: NodeProps) {
         selected ? config.selectedColor : config.color
       }`}
     >
-      {row.type !== 'source' && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="!w-3 !h-3 !bg-neutral-400 !border-2 !border-white"
-        />
-      )}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-3 !h-3 !bg-neutral-400 !border-2 !border-white"
+      />
 
       <div className="flex items-center gap-2">
         <Icon className={`w-4 h-4 ${config.iconColor}`} />
@@ -79,13 +77,11 @@ function DataNodeComponent({ data, selected }: NodeProps) {
         </div>
       )}
 
-      {row.type !== 'destination' && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          className="!w-3 !h-3 !bg-neutral-400 !border-2 !border-white"
-        />
-      )}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!w-3 !h-3 !bg-neutral-400 !border-2 !border-white"
+      />
     </div>
   );
 }

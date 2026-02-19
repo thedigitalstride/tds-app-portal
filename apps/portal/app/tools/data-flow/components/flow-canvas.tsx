@@ -6,58 +6,41 @@ import {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  addEdge,
   type NodeTypes,
   type OnSelectionChangeFunc,
+  type OnNodesChange,
+  type OnEdgesChange,
   type OnConnect,
-  type Node,
+  type NodeMouseHandler,
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { DataNode } from './data-node';
+import { TableNode } from './table-node';
+import type { AppNode } from './types';
 
 interface FlowCanvasProps {
-  initialNodes: Node[];
-  initialEdges: Edge[];
-  selectedIds: Set<string>;
+  nodes: AppNode[];
+  edges: Edge[];
+  onNodesChange: OnNodesChange<AppNode>;
+  onEdgesChange: OnEdgesChange;
+  onConnect: OnConnect;
   onSelectionChange: (ids: string[]) => void;
+  onNodeClick: NodeMouseHandler<AppNode>;
 }
 
 export function FlowCanvas({
-  initialNodes,
-  initialEdges,
-  selectedIds,
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  onConnect,
   onSelectionChange,
+  onNodeClick,
 }: FlowCanvasProps) {
-  const nodeTypes: NodeTypes = useMemo(() => ({ dataNode: DataNode }), []);
-
-  const nodesWithSelection = useMemo(
-    () =>
-      initialNodes.map((n) => ({
-        ...n,
-        selected: selectedIds.has(n.id),
-      })),
-    [initialNodes, selectedIds]
-  );
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(nodesWithSelection);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  // Sync external selection into nodes
-  useMemo(() => {
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        selected: selectedIds.has(n.id),
-      }))
-    );
-  }, [selectedIds, setNodes]);
-
-  const onConnect: OnConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+  const nodeTypes: NodeTypes = useMemo(
+    () => ({ dataNode: DataNode, tableNode: TableNode }),
+    []
   );
 
   const handleSelectionChange: OnSelectionChangeFunc = useCallback(
@@ -77,6 +60,7 @@ export function FlowCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onSelectionChange={handleSelectionChange}
+        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}
