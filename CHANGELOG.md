@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-02-19
+### Added
+- Data Flow tool: interactive React Flow graph with AG Grid data table
+- Custom flow nodes with type-specific styling (source, transform, destination)
+- Bidirectional selection sync between flow graph and data table
+- Sample data pipeline visualisation with status indicators and record counts
+
 ## [1.12.0] - 2026-02-15
 ### Added
 - Super Admin role above Admin with unrestricted access to all tools, clients, and admin pages
