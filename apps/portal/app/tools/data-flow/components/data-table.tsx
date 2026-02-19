@@ -197,7 +197,6 @@ export function DataTable({
         getRowId={(params) => params.data.id}
         animateRows
         pagination={false}
-        domLayout="autoHeight"
       />
     </div>
   );

@@ -8,8 +8,10 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  addEdge,
   type NodeTypes,
   type OnSelectionChangeFunc,
+  type OnConnect,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -41,7 +43,7 @@ export function FlowCanvas({
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(nodesWithSelection);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   // Sync external selection into nodes
   useMemo(() => {
@@ -52,6 +54,11 @@ export function FlowCanvas({
       }))
     );
   }, [selectedIds, setNodes]);
+
+  const onConnect: OnConnect = useCallback(
+    (params) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges],
+  );
 
   const handleSelectionChange: OnSelectionChangeFunc = useCallback(
     ({ nodes: selectedNodes }) => {
@@ -68,6 +75,7 @@ export function FlowCanvas({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onSelectionChange={handleSelectionChange}
         nodeTypes={nodeTypes}
         fitView
