@@ -57,4 +57,5 @@ export {
   IDEATION_PROMPT_KEYS,
 } from './models/ideation-prompt-override';
 export { AiUsageLog, type IAiUsageLog } from './models/ai-usage-log';
+export { DataFlow, type IDataFlow, type IFlowNode, type IFlowEdge } from './models/data-flow';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

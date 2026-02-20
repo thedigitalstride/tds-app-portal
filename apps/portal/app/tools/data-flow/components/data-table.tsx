@@ -6,13 +6,14 @@ import {
   AllCommunityModule,
   ModuleRegistry,
   type ColDef,
+  type ColumnState,
   type GridReadyEvent,
   type SelectionChangedEvent,
   type GridApi,
   themeQuartz,
 } from 'ag-grid-community';
 import { Table2 } from 'lucide-react';
-import type { DataRow, TableLayout } from './types';
+import type { GenericRow, TableLayout } from './types';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -26,14 +27,100 @@ const customTheme = themeQuartz.withParams({
   fontSize: 13,
 });
 
+export interface FieldDef {
+  key: string;
+  label: string;
+}
+
 interface DataTableProps {
-  rows: DataRow[];
+  rows: GenericRow[];
+  fieldDefs: FieldDef[];
   selectedIds: Set<string>;
   onSelectionChange: (ids: string[]) => void;
   layout: TableLayout;
   hiddenColumns?: string[];
   quickFilterText?: string;
+  columnState?: Record<string, unknown>[];
+  filterModel?: Record<string, Record<string, unknown>>;
+  onColumnStateChange?: (state: Record<string, unknown>[]) => void;
+  onFilterModelChange?: (model: Record<string, Record<string, unknown>>) => void;
 }
+
+// --- Dynamic field derivation utilities ---
+
+/** Convert snake_case / camelCase keys to Title Case labels */
+export function humaniseKey(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Derive field definitions from a set of GenericRows, excluding _-prefixed meta-fields and id */
+export function deriveFieldDefs(rows: GenericRow[]): FieldDef[] {
+  const seen = new Set<string>();
+  const defs: FieldDef[] = [];
+
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      if (key === 'id' || key.startsWith('_') || seen.has(key)) continue;
+      seen.add(key);
+      defs.push({ key, label: humaniseKey(key) });
+    }
+  }
+
+  return defs;
+}
+
+// --- Smart cell formatting ---
+
+const DATE_KEYS = new Set(['date_start', 'date_stop', 'date', 'start_date', 'end_date']);
+const CURRENCY_KEYS = new Set(['spend', 'cost', 'budget', 'revenue', 'amount']);
+
+function isISODateTime(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
+}
+
+export function formatCellValue(key: string, value: unknown): string {
+  if (value == null) return '-';
+
+  // Date-only fields (YYYY-MM-DD) → en-GB medium date
+  if (DATE_KEYS.has(key) && typeof value === 'string') {
+    const d = new Date(value + 'T00:00:00');
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-GB', { dateStyle: 'medium' });
+    }
+  }
+
+  // ISO datetime strings → en-GB date+time
+  if (isISODateTime(value)) {
+    const d = new Date(value as string);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+  }
+
+  // Currency/spend fields → £X.XX
+  if (CURRENCY_KEYS.has(key)) {
+    const num = Number(value);
+    if (!isNaN(num)) {
+      return `£${num.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+  }
+
+  // Numeric strings → locale-formatted
+  if (typeof value === 'number') {
+    return value.toLocaleString('en-GB');
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number(value).toLocaleString('en-GB');
+  }
+
+  return String(value);
+}
+
+// --- Badge cell renderers (used for known pipeline fields) ---
 
 function StatusCellRenderer(params: { value: string }) {
   const colors: Record<string, string> = {
@@ -41,9 +128,10 @@ function StatusCellRenderer(params: { value: string }) {
     inactive: 'bg-neutral-100 text-neutral-600',
     error: 'bg-red-100 text-red-700',
   };
+  if (!colors[params.value]) return <span>{params.value}</span>;
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[params.value] || ''}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[params.value]}`}
     >
       {params.value}
     </span>
@@ -56,60 +144,53 @@ function TypeCellRenderer(params: { value: string }) {
     transform: 'bg-amber-100 text-amber-700',
     destination: 'bg-emerald-100 text-emerald-700',
   };
+  if (!colors[params.value]) return <span>{params.value}</span>;
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[params.value] || ''}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[params.value]}`}
     >
       {params.value}
     </span>
   );
 }
 
-// Field definitions for columns (transposed) mode
-export const fieldDefs: { key: keyof DataRow; label: string }[] = [
-  { key: 'label', label: 'Name' },
-  { key: 'type', label: 'Type' },
-  { key: 'status', label: 'Status' },
-  { key: 'description', label: 'Description' },
-  { key: 'records', label: 'Records' },
-  { key: 'lastRun', label: 'Last Run' },
-];
-
-function formatFieldValue(key: keyof DataRow, value: unknown): string {
-  if (value == null) return '-';
-  if (key === 'records' && typeof value === 'number') {
-    return value.toLocaleString();
-  }
-  if (key === 'lastRun' && typeof value === 'string') {
-    return new Date(value).toLocaleString('en-GB', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  }
-  return String(value);
-}
+// Known cell renderer overrides for specific field keys
+const CELL_RENDERERS: Record<string, (params: { value: string }) => React.ReactNode> = {
+  status: StatusCellRenderer,
+  type: TypeCellRenderer,
+};
 
 // --- Rows mode grid ---
 
 function RowsGrid({
   rows,
+  fieldDefs,
   selectedIds,
   onSelectionChange,
   hiddenColumns,
   quickFilterText,
+  columnState,
+  filterModel,
+  onColumnStateChange,
+  onFilterModelChange,
 }: {
-  rows: DataRow[];
+  rows: GenericRow[];
+  fieldDefs: FieldDef[];
   selectedIds: Set<string>;
   onSelectionChange: (ids: string[]) => void;
   hiddenColumns?: string[];
   quickFilterText?: string;
+  columnState?: Record<string, unknown>[];
+  filterModel?: Record<string, Record<string, unknown>>;
+  onColumnStateChange?: (state: Record<string, unknown>[]) => void;
+  onFilterModelChange?: (model: Record<string, Record<string, unknown>>) => void;
 }) {
   const gridRef = useRef<AgGridReact>(null);
   const apiRef = useRef<GridApi | null>(null);
   const isExternalUpdate = useRef(false);
 
-  const allColumnDefs = useMemo<ColDef<DataRow>[]>(
-    () => [
+  const allColumnDefs = useMemo<ColDef<GenericRow>[]>(() => {
+    const cols: ColDef<GenericRow>[] = [
       {
         headerCheckboxSelection: true,
         checkboxSelection: true,
@@ -119,56 +200,36 @@ function RowsGrid({
         sortable: false,
         filter: false,
       },
-      {
-        field: 'label',
-        headerName: 'Name',
+    ];
+
+    for (const fd of fieldDefs) {
+      const col: ColDef<GenericRow> = {
+        field: fd.key,
+        headerName: fd.label,
         flex: 1,
-        minWidth: 150,
+        minWidth: 120,
         filter: true,
-      },
-      {
-        field: 'type',
-        headerName: 'Type',
-        width: 130,
-        cellRenderer: TypeCellRenderer,
-        filter: true,
-      },
-      {
-        field: 'status',
-        headerName: 'Status',
-        width: 120,
-        cellRenderer: StatusCellRenderer,
-        filter: true,
-      },
-      {
-        field: 'description',
-        headerName: 'Description',
-        flex: 2,
-        minWidth: 200,
-      },
-      {
-        field: 'records',
-        headerName: 'Records',
-        width: 120,
-        valueFormatter: (params) =>
-          params.value != null ? params.value.toLocaleString() : '-',
-        type: 'numericColumn',
-      },
-      {
-        field: 'lastRun',
-        headerName: 'Last Run',
-        width: 180,
-        valueFormatter: (params) =>
-          params.value
-            ? new Date(params.value).toLocaleString('en-GB', {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              })
-            : '-',
-      },
-    ],
-    []
-  );
+        valueFormatter: (params) => formatCellValue(fd.key, params.value),
+      };
+
+      // Apply known cell renderers
+      const renderer = CELL_RENDERERS[fd.key];
+      if (renderer) {
+        col.cellRenderer = renderer;
+        // Remove value formatter when using cell renderer — the renderer handles display
+        delete col.valueFormatter;
+      }
+
+      // Numeric columns
+      if (CURRENCY_KEYS.has(fd.key) || fd.key === 'records') {
+        col.type = 'numericColumn';
+      }
+
+      cols.push(col);
+    }
+
+    return cols;
+  }, [fieldDefs]);
 
   const columnDefs = useMemo(() => {
     if (!hiddenColumns?.length) return allColumnDefs;
@@ -190,20 +251,28 @@ function RowsGrid({
       if (selectedIds.size > 0) {
         isExternalUpdate.current = true;
         params.api.forEachNode((node) => {
-          if (node.data && selectedIds.has(node.data.id)) {
+          if (node.data && selectedIds.has((node.data as GenericRow).id)) {
             node.setSelected(true);
           }
         });
         isExternalUpdate.current = false;
       }
+      // Restore saved column state (order, width, sort, pinning)
+      if (columnState?.length) {
+        params.api.applyColumnState({ state: columnState as unknown as ColumnState[] });
+      }
+      // Restore saved filter model
+      if (filterModel && Object.keys(filterModel).length) {
+        params.api.setFilterModel(filterModel);
+      }
     },
-    [selectedIds]
+    [selectedIds, columnState, filterModel]
   );
 
   const onSelectionChanged = useCallback(
     (event: SelectionChangedEvent) => {
       if (isExternalUpdate.current) return;
-      const selectedRows = event.api.getSelectedRows() as DataRow[];
+      const selectedRows = event.api.getSelectedRows() as GenericRow[];
       onSelectionChange(selectedRows.map((r) => r.id));
     },
     [onSelectionChange]
@@ -216,7 +285,7 @@ function RowsGrid({
     isExternalUpdate.current = true;
     api.forEachNode((node) => {
       if (!node.data) return;
-      const shouldBeSelected = selectedIds.has(node.data.id);
+      const shouldBeSelected = selectedIds.has((node.data as GenericRow).id);
       if (node.isSelected() !== shouldBeSelected) {
         node.setSelected(shouldBeSelected);
       }
@@ -224,8 +293,20 @@ function RowsGrid({
     isExternalUpdate.current = false;
   }, [selectedIds]);
 
+  const handleColumnStateChanged = useCallback(() => {
+    if (!apiRef.current || !onColumnStateChange) return;
+    const state = apiRef.current.getColumnState();
+    onColumnStateChange(state as unknown as Record<string, unknown>[]);
+  }, [onColumnStateChange]);
+
+  const handleFilterChanged = useCallback(() => {
+    if (!apiRef.current || !onFilterModelChange) return;
+    const model = apiRef.current.getFilterModel();
+    onFilterModelChange(model as Record<string, Record<string, unknown>>);
+  }, [onFilterModelChange]);
+
   return (
-    <AgGridReact<DataRow>
+    <AgGridReact<GenericRow>
       ref={gridRef}
       key="rows-grid"
       rowData={rows}
@@ -236,6 +317,11 @@ function RowsGrid({
       suppressRowClickSelection={false}
       onGridReady={onGridReady}
       onSelectionChanged={onSelectionChanged}
+      maintainColumnOrder
+      onDragStopped={handleColumnStateChanged}
+      onColumnResized={(e) => { if (e.finished) handleColumnStateChanged(); }}
+      onSortChanged={handleColumnStateChanged}
+      onFilterChanged={handleFilterChanged}
       getRowId={(params) => params.data.id}
       animateRows
       pagination={false}
@@ -252,7 +338,28 @@ interface TransposedRow {
   [nodeId: string]: string;
 }
 
-function ColumnsGrid({ rows, hiddenColumns }: { rows: DataRow[]; hiddenColumns?: string[] }) {
+function ColumnsGrid({
+  rows,
+  fieldDefs,
+  hiddenColumns,
+}: {
+  rows: GenericRow[];
+  fieldDefs: FieldDef[];
+  hiddenColumns?: string[];
+}) {
+  // Group rows by _nodeId for multi-row sources
+  const groupedSources = useMemo(() => {
+    const map = new Map<string, { label: string; rows: GenericRow[] }>();
+    for (const row of rows) {
+      const nodeId = row._nodeId;
+      if (!map.has(nodeId)) {
+        map.set(nodeId, { label: row._nodeLabel as string, rows: [] });
+      }
+      map.get(nodeId)!.rows.push(row);
+    }
+    return map;
+  }, [rows]);
+
   const columnDefs = useMemo<ColDef<TransposedRow>[]>(() => {
     const cols: ColDef<TransposedRow>[] = [
       {
@@ -262,21 +369,25 @@ function ColumnsGrid({ rows, hiddenColumns }: { rows: DataRow[]; hiddenColumns?:
         width: 140,
         cellStyle: { fontWeight: 500 },
       },
-      ...rows.map((row) => ({
-        field: row.id,
-        headerName: row.label,
+    ];
+
+    for (const [nodeId, group] of groupedSources) {
+      cols.push({
+        field: nodeId,
+        headerName: group.label,
         flex: 1,
         minWidth: 150,
-      })),
-    ];
+      });
+    }
+
     return cols;
-  }, [rows]);
+  }, [groupedSources]);
 
   const visibleFieldDefs = useMemo(() => {
     if (!hiddenColumns?.length) return fieldDefs;
     const hiddenSet = new Set(hiddenColumns);
     return fieldDefs.filter((f) => !hiddenSet.has(f.key));
-  }, [hiddenColumns]);
+  }, [fieldDefs, hiddenColumns]);
 
   const rowData = useMemo<TransposedRow[]>(() => {
     return visibleFieldDefs.map(({ key, label }) => {
@@ -284,12 +395,31 @@ function ColumnsGrid({ rows, hiddenColumns }: { rows: DataRow[]; hiddenColumns?:
         field: label,
         fieldKey: key,
       };
-      for (const dataRow of rows) {
-        row[dataRow.id] = formatFieldValue(key, dataRow[key]);
+
+      for (const [nodeId, group] of groupedSources) {
+        if (group.rows.length === 1) {
+          // Single-row source — show the value directly
+          row[nodeId] = formatCellValue(key, group.rows[0][key]);
+        } else {
+          // Multi-row source — summarise
+          const values = group.rows.map((r) => r[key]).filter((v) => v != null);
+          if (values.length === 0) {
+            row[nodeId] = '-';
+          } else if (values.every((v) => !isNaN(Number(v)))) {
+            // Numeric: show sum
+            const sum = values.reduce<number>((acc, v) => acc + Number(v), 0);
+            row[nodeId] = `Σ ${formatCellValue(key, sum)}`;
+          } else {
+            // Non-numeric: show count of unique values
+            const unique = new Set(values.map(String));
+            row[nodeId] = `${unique.size} unique`;
+          }
+        }
       }
+
       return row;
     });
-  }, [rows, visibleFieldDefs]);
+  }, [groupedSources, visibleFieldDefs]);
 
   const defaultColDef = useMemo<ColDef>(
     () => ({
@@ -316,11 +446,16 @@ function ColumnsGrid({ rows, hiddenColumns }: { rows: DataRow[]; hiddenColumns?:
 
 export function DataTable({
   rows,
+  fieldDefs,
   selectedIds,
   onSelectionChange,
   layout,
   hiddenColumns,
   quickFilterText,
+  columnState,
+  filterModel,
+  onColumnStateChange,
+  onFilterModelChange,
 }: DataTableProps) {
   if (rows.length === 0) {
     return (
@@ -340,13 +475,18 @@ export function DataTable({
       {layout === 'rows' ? (
         <RowsGrid
           rows={rows}
+          fieldDefs={fieldDefs}
           selectedIds={selectedIds}
           onSelectionChange={onSelectionChange}
           hiddenColumns={hiddenColumns}
           quickFilterText={quickFilterText}
+          columnState={columnState}
+          filterModel={filterModel}
+          onColumnStateChange={onColumnStateChange}
+          onFilterModelChange={onFilterModelChange}
         />
       ) : (
-        <ColumnsGrid rows={rows} hiddenColumns={hiddenColumns} />
+        <ColumnsGrid rows={rows} fieldDefs={fieldDefs} hiddenColumns={hiddenColumns} />
       )}
     </div>
   );
