@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react';
-import type { DataRow } from './types';
+import type { DataRow, MathOperation } from './types';
 
 export const sampleRows: DataRow[] = [
   {
@@ -48,6 +48,17 @@ export const sampleRows: DataRow[] = [
     records: 130720,
   },
   {
+    id: 'm1',
+    label: 'Sample Rate',
+    type: 'math',
+    status: 'active',
+    description: 'Sample 10% of enriched records',
+    lastRun: '2026-02-19T10:41:00Z',
+    records: 130720,
+    operation: '*' as MathOperation,
+    operand: 0.1,
+  },
+  {
     id: '6',
     label: 'Validate',
     type: 'transform',
@@ -55,6 +66,17 @@ export const sampleRows: DataRow[] = [
     description: 'Schema validation and type checks',
     lastRun: '2026-02-19T10:42:00Z',
     records: 130720,
+  },
+  {
+    id: 'm2',
+    label: 'Revenue Calc',
+    type: 'math',
+    status: 'active',
+    description: 'Multiply records by unit price',
+    lastRun: '2026-02-19T10:43:00Z',
+    records: 130720,
+    operation: '*' as MathOperation,
+    operand: 24.99,
   },
   {
     id: '7',
@@ -82,12 +104,41 @@ export function buildNodesAndEdges(rows: DataRow[]): {
 } {
   const sources = rows.filter((r) => r.type === 'source');
   const transforms = rows.filter((r) => r.type === 'transform');
+  const mathNodes = rows.filter((r) => r.type === 'math');
   const destinations = rows.filter((r) => r.type === 'destination');
 
-  const colX = { source: 0, transform: 300, destination: 600 };
-  const yGap = 120;
+  // Pipeline order: source → transform → math (interleaved) → destination
+  // Build the processing chain in the order they appear in the array
+  const pipeline = rows.filter(
+    (r) => r.type === 'transform' || r.type === 'math'
+  );
 
-  const makeNodes = (items: DataRow[], x: number): Node[] =>
+  const colX = { source: 0, pipeline: 300, destination: 650 };
+  const yGap = 140;
+
+  const makeSourceNodes = (items: DataRow[], x: number): Node[] =>
+    items.map((item, i) => ({
+      id: item.id,
+      type: 'dataNode',
+      position: {
+        x,
+        y: i * yGap + (items.length === 1 ? yGap : 0),
+      },
+      data: { row: item },
+    }));
+
+  const makePipelineNodes = (items: DataRow[], x: number): Node[] =>
+    items.map((item, i) => ({
+      id: item.id,
+      type: item.type === 'math' ? 'mathNode' : 'dataNode',
+      position: {
+        x,
+        y: i * yGap + (items.length === 1 ? yGap : 0),
+      },
+      data: { row: item },
+    }));
+
+  const makeDestNodes = (items: DataRow[], x: number): Node[] =>
     items.map((item, i) => ({
       id: item.id,
       type: 'dataNode',
@@ -99,44 +150,44 @@ export function buildNodesAndEdges(rows: DataRow[]): {
     }));
 
   const nodes: Node[] = [
-    ...makeNodes(sources, colX.source),
-    ...makeNodes(transforms, colX.transform),
-    ...makeNodes(destinations, colX.destination),
+    ...makeSourceNodes(sources, colX.source),
+    ...makePipelineNodes(pipeline, colX.pipeline),
+    ...makeDestNodes(destinations, colX.destination),
   ];
 
   const edges: Edge[] = [];
 
-  // Sources -> first transform
-  if (transforms.length > 0) {
+  // Sources -> first pipeline node
+  if (pipeline.length > 0) {
     for (const src of sources) {
       edges.push({
-        id: `e-${src.id}-${transforms[0].id}`,
+        id: `e-${src.id}-${pipeline[0].id}`,
         source: src.id,
-        target: transforms[0].id,
+        target: pipeline[0].id,
         animated: src.status === 'active',
       });
     }
   }
 
-  // Chain transforms
-  for (let i = 0; i < transforms.length - 1; i++) {
+  // Chain pipeline nodes (transforms + math interleaved)
+  for (let i = 0; i < pipeline.length - 1; i++) {
     edges.push({
-      id: `e-${transforms[i].id}-${transforms[i + 1].id}`,
-      source: transforms[i].id,
-      target: transforms[i + 1].id,
-      animated: transforms[i].status === 'active',
+      id: `e-${pipeline[i].id}-${pipeline[i + 1].id}`,
+      source: pipeline[i].id,
+      target: pipeline[i + 1].id,
+      animated: pipeline[i].status === 'active',
     });
   }
 
-  // Last transform -> destinations
-  if (transforms.length > 0) {
-    const lastTransform = transforms[transforms.length - 1];
+  // Last pipeline node -> destinations
+  if (pipeline.length > 0) {
+    const lastPipeline = pipeline[pipeline.length - 1];
     for (const dest of destinations) {
       edges.push({
-        id: `e-${lastTransform.id}-${dest.id}`,
-        source: lastTransform.id,
+        id: `e-${lastPipeline.id}-${dest.id}`,
+        source: lastPipeline.id,
         target: dest.id,
-        animated: lastTransform.status === 'active',
+        animated: lastPipeline.status === 'active',
       });
     }
   }

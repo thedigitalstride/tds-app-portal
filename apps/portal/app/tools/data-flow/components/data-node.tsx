@@ -5,7 +5,16 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Database, ArrowRightLeft, HardDrive, AlertCircle } from 'lucide-react';
 import type { DataRow } from './types';
 
-const typeConfig = {
+const typeConfig: Record<
+  DataRow['type'],
+  {
+    icon: typeof Database;
+    color: string;
+    selectedColor: string;
+    iconColor: string;
+    label: string;
+  }
+> = {
   source: {
     icon: Database,
     color: 'border-blue-300 bg-blue-50',
@@ -19,6 +28,13 @@ const typeConfig = {
     selectedColor: 'border-amber-500 bg-amber-100 ring-2 ring-amber-300',
     iconColor: 'text-amber-600',
     label: 'Transform',
+  },
+  math: {
+    icon: ArrowRightLeft,
+    color: 'border-violet-300 bg-violet-50',
+    selectedColor: 'border-violet-500 bg-violet-100 ring-2 ring-violet-300',
+    iconColor: 'text-violet-600',
+    label: 'Math',
   },
   destination: {
     icon: HardDrive,

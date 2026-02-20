@@ -50,6 +50,7 @@ function TypeCellRenderer(params: { value: string }) {
   const colors: Record<string, string> = {
     source: 'bg-blue-100 text-blue-700',
     transform: 'bg-amber-100 text-amber-700',
+    math: 'bg-violet-100 text-violet-700',
     destination: 'bg-emerald-100 text-emerald-700',
   };
   return (
@@ -115,6 +116,28 @@ export function DataTable({
         valueFormatter: (params) =>
           params.value != null ? params.value.toLocaleString() : '-',
         type: 'numericColumn',
+      },
+      {
+        headerName: 'Math Op',
+        width: 110,
+        valueGetter: (params) => {
+          const row = params.data as DataRow | undefined;
+          if (!row || row.type !== 'math') return null;
+          const symbols: Record<string, string> = {
+            '+': '+', '-': '\u2212', '*': '\u00d7', '/': '\u00f7', '^': '^', '%': '%',
+          };
+          return row.formula
+            ? `fx: ${row.formula}`
+            : `${symbols[row.operation || '*'] || row.operation} ${row.operand ?? ''}`;
+        },
+        cellRenderer: (params: { value: string | null }) =>
+          params.value ? (
+            <span className="font-mono text-xs text-violet-600">
+              {params.value}
+            </span>
+          ) : (
+            <span className="text-neutral-300">\u2014</span>
+          ),
       },
       {
         field: 'lastRun',

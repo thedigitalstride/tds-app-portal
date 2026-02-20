@@ -17,6 +17,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { DataNode } from './data-node';
+import { MathNode } from './math-node';
 
 interface FlowCanvasProps {
   initialNodes: Node[];
@@ -31,7 +32,10 @@ export function FlowCanvas({
   selectedIds,
   onSelectionChange,
 }: FlowCanvasProps) {
-  const nodeTypes: NodeTypes = useMemo(() => ({ dataNode: DataNode }), []);
+  const nodeTypes: NodeTypes = useMemo(
+    () => ({ dataNode: DataNode, mathNode: MathNode }),
+    []
+  );
 
   const nodesWithSelection = useMemo(
     () =>

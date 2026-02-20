@@ -1,4 +1,4 @@
-import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target, Lightbulb, Workflow, Calculator } from 'lucide-react';
+import { LucideIcon, Search, Users, Settings, FolderOpen, Archive, Target, Lightbulb, Workflow } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -58,15 +58,6 @@ export const tools: Tool[] = [
     description: 'Visualise data pipelines with an interactive flow graph and detailed data table.',
     icon: Workflow,
     href: '/tools/data-flow',
-    category: 'utility',
-    isNew: true,
-  },
-  {
-    id: 'math-flow',
-    name: 'Math Flow',
-    description: 'Build formulas visually with a node-based canvas. Connect numbers, operations, and Excel-like functions.',
-    icon: Calculator,
-    href: '/tools/math-flow',
     category: 'utility',
     isNew: true,
   },
