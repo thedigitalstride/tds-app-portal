@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-02-20
+### Added
+- Math Flow tool: visual node-based formula builder with React Flow canvas
+- Four node types: Number Input, Operation (+,-,*,/,^,%), Formula (free-text Excel-like), and Result
+- Safe recursive-descent expression evaluator supporting arithmetic, functions (ABS, ROUND, SQRT, MIN, MAX, POW, SIN, COS, LOG), and variable references
+- Real-time graph evaluation with topological sort propagation through connected nodes
+- Toolbar for adding nodes, export/import flow as JSON, and reset to default
+- Default sample flow demonstrating multiplication and custom formula (A^2+B)
+
 ## [1.13.0] - 2026-02-19
 ### Added
 - Data Flow tool: interactive React Flow graph with AG Grid data table
