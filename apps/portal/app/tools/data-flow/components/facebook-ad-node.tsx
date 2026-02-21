@@ -2,7 +2,8 @@
 
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import type { FacebookAdNodeType } from './types';
+import { Loader2, AlertCircle, Settings } from 'lucide-react';
+import type { FacebookAdNodeType, FacebookAdNodeData } from './types';
 
 function FacebookLogoMark({ className }: { className?: string }) {
   return (
@@ -17,14 +18,59 @@ function FacebookLogoMark({ className }: { className?: string }) {
   );
 }
 
+/** Pick the top 3 numeric summary fields, prioritising well-known metrics. */
+const PRIORITY_FIELDS = ['spend', 'clicks', 'impressions', 'reach', 'ctr', 'cpc', 'cpm'];
+
+function pickSummaryMetrics(data: FacebookAdNodeData): { label: string; value: string }[] {
+  const rows = data.rows ?? [];
+  if (rows.length === 0) return [];
+
+  // Gather all numeric field keys
+  const numericKeys: string[] = [];
+  for (const key of data.fields) {
+    const sample = rows[0][key];
+    if (sample !== undefined && !isNaN(Number(sample))) {
+      numericKeys.push(key);
+    }
+  }
+
+  // Sort: priority fields first, then alphabetical
+  numericKeys.sort((a, b) => {
+    const aIdx = PRIORITY_FIELDS.indexOf(a);
+    const bIdx = PRIORITY_FIELDS.indexOf(b);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const top = numericKeys.slice(0, 3);
+
+  return top.map((key) => {
+    const total = rows.reduce((sum, r) => sum + Number(r[key] ?? 0), 0);
+    const isCurrency = key === 'spend';
+    const isRate = key === 'ctr' || key === 'cpc' || key === 'cpm';
+
+    let formatted: string;
+    if (isCurrency) {
+      formatted = `£${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (isRate) {
+      // Rates should be averaged, not summed
+      const avg = rows.length > 0 ? total / rows.length : 0;
+      formatted = avg.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+      formatted = total.toLocaleString('en-GB');
+    }
+
+    return { label: key.replace(/_/g, ' '), value: formatted };
+  });
+}
+
 function FacebookAdNodeComponent({
   data,
   selected,
 }: NodeProps<FacebookAdNodeType>) {
-  const { label, rows, accountName, campaignCount } = data;
-
-  const totalClicks = rows.reduce((sum, r) => sum + Number(r.clicks), 0);
-  const totalSpend = rows.reduce((sum, r) => sum + Number(r.spend), 0);
+  const { label, status } = data as FacebookAdNodeData;
 
   return (
     <div
@@ -45,33 +91,69 @@ function FacebookAdNodeComponent({
         <span className="font-semibold text-sm text-neutral-800">{label}</span>
       </div>
 
-      <p className="text-xs text-neutral-500 mt-1">{accountName}</p>
+      {/* Status-based content */}
+      {status === 'unconfigured' && (
+        <div className="flex items-center gap-2 mt-2 text-neutral-400">
+          <Settings className="w-3.5 h-3.5" />
+          <span className="text-xs">Configure in drawer</span>
+        </div>
+      )}
 
-      {/* Metrics summary */}
-      <div className="grid grid-cols-3 gap-2 mt-2">
-        <div className="text-center">
-          <div className="text-xs font-semibold text-neutral-800">
-            {totalClicks.toLocaleString('en-GB')}
-          </div>
-          <div className="text-[10px] text-neutral-400">Clicks</div>
+      {status === 'loading' && (
+        <div className="flex items-center gap-2 mt-2 text-blue-500">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span className="text-xs">Fetching data…</span>
         </div>
-        <div className="text-center">
-          <div className="text-xs font-semibold text-neutral-800">
-            £{totalSpend.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-[10px] text-neutral-400">Spend</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xs font-semibold text-neutral-800">
-            {campaignCount}
-          </div>
-          <div className="text-[10px] text-neutral-400">Campaigns</div>
-        </div>
-      </div>
+      )}
 
-      <div className="text-[10px] text-neutral-400 mt-2">
-        {rows.length} daily rows
-      </div>
+      {status === 'error' && (
+        <div className="mt-2">
+          <div className="flex items-center gap-1.5 text-red-500">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-xs font-medium">Error</span>
+          </div>
+          {(data as FacebookAdNodeData).error && (
+            <p className="text-[10px] text-red-400 mt-0.5 line-clamp-2">
+              {(data as FacebookAdNodeData).error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {status === 'ready' && (
+        <>
+          {(data as FacebookAdNodeData).accountName && (
+            <p className="text-xs text-neutral-500 mt-1">
+              {(data as FacebookAdNodeData).accountName}
+            </p>
+          )}
+
+          {/* Dynamic summary metrics */}
+          {(() => {
+            const metrics = pickSummaryMetrics(data as FacebookAdNodeData);
+            if (metrics.length === 0) return null;
+            return (
+              <div className={`grid grid-cols-${metrics.length} gap-2 mt-2`}>
+                {metrics.map((m) => (
+                  <div key={m.label} className="text-center">
+                    <div className="text-xs font-semibold text-neutral-800">{m.value}</div>
+                    <div className="text-[10px] text-neutral-400 capitalize">{m.label}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <div className="text-[10px] text-neutral-400 mt-2">
+            {(data as FacebookAdNodeData).rowCount ?? (data as FacebookAdNodeData).rows.length} rows
+            {(data as FacebookAdNodeData).lastFetchedAt && (
+              <span className="ml-1">
+                · {new Date((data as FacebookAdNodeData).lastFetchedAt!).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}
+              </span>
+            )}
+          </div>
+        </>
+      )}
 
       <Handle
         type="source"

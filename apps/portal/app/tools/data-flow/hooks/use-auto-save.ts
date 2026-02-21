@@ -11,6 +11,7 @@ export interface FlowSavePayload {
   tableCounter: number;
   schemaCounter: number;
   joinCounter: number;
+  facebookAdCounter: number;
 }
 
 const DEBOUNCE_MS = 1500;
@@ -43,6 +44,7 @@ export function useAutoSave(flowId: string | null, payload: FlowSavePayload) {
           tableCounter: payloadRef.current.tableCounter,
           schemaCounter: payloadRef.current.schemaCounter,
           joinCounter: payloadRef.current.joinCounter,
+          facebookAdCounter: payloadRef.current.facebookAdCounter,
         }),
       });
       if (!res.ok) throw new Error(`Save failed: ${res.status}`);
@@ -75,7 +77,6 @@ export function useAutoSave(flowId: string | null, payload: FlowSavePayload) {
     // the full payload. Node count + edge count + counters + activeTableNodeId covers
     // all meaningful structural changes. Position drags are captured because React Flow's
     // applyNodeChanges creates new array references, which trigger setNodes → new payload ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     flowId,
     payload.nodes,
@@ -84,6 +85,7 @@ export function useAutoSave(flowId: string | null, payload: FlowSavePayload) {
     payload.tableCounter,
     payload.schemaCounter,
     payload.joinCounter,
+    payload.facebookAdCounter,
     save,
   ]);
 

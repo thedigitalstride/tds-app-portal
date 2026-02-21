@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     const tableCount = nodes.filter((n) => n.type === 'tableNode').length;
     const schemaCount = nodes.filter((n) => n.type === 'schemaNode').length;
+    const facebookAdCount = nodes.filter((n) => n.type === 'facebookAdNode').length;
 
     const flow = await DataFlow.create({
       clientId,
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
       activeTableNodeId: tableNode.id,
       tableCounter: tableCount,
       schemaCounter: schemaCount,
+      facebookAdCounter: facebookAdCount,
       createdBy: session.user.id,
       lastModifiedBy: session.user.id,
     });

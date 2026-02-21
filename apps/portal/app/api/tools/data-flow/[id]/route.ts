@@ -59,6 +59,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (body.tableCounter !== undefined) updateFields.tableCounter = body.tableCounter;
     if (body.schemaCounter !== undefined) updateFields.schemaCounter = body.schemaCounter;
     if (body.joinCounter !== undefined) updateFields.joinCounter = body.joinCounter;
+    if (body.facebookAdCounter !== undefined) updateFields.facebookAdCounter = body.facebookAdCounter;
     if (body.name !== undefined) updateFields.name = body.name.trim();
     if (body.description !== undefined) updateFields.description = body.description;
 

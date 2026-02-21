@@ -37,6 +37,8 @@ import type {
   TableLayout,
   TableNodeData,
   TableNodeType,
+  FacebookAdNodeType,
+  FacebookAdNodeData,
   SchemaNodeType,
   JoinNodeType,
   JoinNodeData,
@@ -168,6 +170,19 @@ export default function DataFlowPage() {
     []
   );
 
+  const handleFacebookAdNodeUpdate = useCallback(
+    (nodeId: string, updates: Partial<FacebookAdNodeData>) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId && n.type === 'facebookAdNode'
+            ? { ...n, data: { ...n.data, ...updates } }
+            : n
+        )
+      );
+    },
+    []
+  );
+
   // --- Flow state ---
 
   const [nodes, setNodes] = useState<AppNode[]>([]);
@@ -179,6 +194,7 @@ export default function DataFlowPage() {
   const tableCounterRef = useRef(0);
   const schemaCounterRef = useRef(0);
   const joinCounterRef = useRef(0);
+  const facebookAdCounterRef = useRef(0);
 
   // Keep a ref to selectedNodeId for use in onNodesChange (deletion safety)
   const selectedNodeIdRef = useRef(selectedNodeId);
@@ -194,6 +210,7 @@ export default function DataFlowPage() {
       tableCounter: tableCounterRef.current,
       schemaCounter: schemaCounterRef.current,
       joinCounter: joinCounterRef.current,
+      facebookAdCounter: facebookAdCounterRef.current,
     }),
     [nodes, edges, activeTableNodeId]
   );
@@ -229,12 +246,27 @@ export default function DataFlowPage() {
       if (!res.ok) throw new Error('Failed to load flow');
       const flow = await res.json();
 
-      setNodes(flow.nodes as AppNode[]);
+      const loadedNodes = flow.nodes as AppNode[];
+      setNodes(loadedNodes);
       setEdges(flow.edges as Edge[]);
       setActiveTableNodeId(flow.activeTableNodeId ?? null);
-      tableCounterRef.current = flow.tableCounter ?? 0;
-      schemaCounterRef.current = flow.schemaCounter ?? 0;
-      joinCounterRef.current = flow.joinCounter ?? 0;
+
+      // Derive counters from existing node IDs to prevent duplicates,
+      // falling back to saved counters if no matching nodes exist
+      const maxIdCounter = (prefix: string) => {
+        let max = 0;
+        for (const n of loadedNodes) {
+          if (n.id.startsWith(prefix)) {
+            const num = parseInt(n.id.slice(prefix.length), 10);
+            if (!isNaN(num) && num > max) max = num;
+          }
+        }
+        return max;
+      };
+      tableCounterRef.current = Math.max(maxIdCounter('table-'), flow.tableCounter ?? 0);
+      schemaCounterRef.current = Math.max(maxIdCounter('schema-'), flow.schemaCounter ?? 0);
+      joinCounterRef.current = Math.max(maxIdCounter('join-'), flow.joinCounter ?? 0);
+      facebookAdCounterRef.current = Math.max(maxIdCounter('fb-ads-'), flow.facebookAdCounter ?? 0);
       setActiveFlowId(flowId);
       setSelectedIds(new Set());
     } catch (err) {
@@ -384,7 +416,26 @@ export default function DataFlowPage() {
 
   const handleNodeDrop = useCallback(
     (type: string, position: { x: number; y: number }) => {
-      if (type === 'tableNode') {
+      if (type === 'facebookAdNode') {
+        facebookAdCounterRef.current += 1;
+        const counter = facebookAdCounterRef.current;
+        const id = `fb-ads-${counter}`;
+
+        const newNode: FacebookAdNodeType = {
+          id,
+          type: 'facebookAdNode',
+          position,
+          data: {
+            label: `Facebook Ads ${counter}`,
+            rows: [],
+            fields: [],
+            status: 'unconfigured',
+          },
+        };
+
+        setNodes((nds) => [...nds, newNode]);
+        setSelectedNodeId(id);
+      } else if (type === 'tableNode') {
         tableCounterRef.current += 1;
         const counter = tableCounterRef.current;
         const id = `table-${counter}`;
@@ -835,6 +886,8 @@ export default function DataFlowPage() {
                   onJoinLabelChange={handleJoinLabelChange}
                   onJoinKeyChange={handleJoinKeyChange}
                   onJoinTypeChange={handleJoinTypeChange}
+                  onFacebookAdNodeUpdate={handleFacebookAdNodeUpdate}
+                  clientId={selectedClientId}
                 />
               </div>
             </ReactFlowProvider>
@@ -1000,6 +1053,7 @@ export default function DataFlowPage() {
                 selectedIds={selectedIds}
                 onSelectionChange={handleTableSelectionChange}
                 layout={activeLayout}
+                tableNodeId={activeTableNodeId ?? undefined}
                 hiddenColumns={activeHiddenColumns}
                 quickFilterText={quickFilter}
                 columnState={activeColumnState}

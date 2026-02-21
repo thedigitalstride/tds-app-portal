@@ -30,6 +30,7 @@ export interface IDataFlow extends Document {
   tableCounter: number;
   schemaCounter: number;
   joinCounter: number;
+  facebookAdCounter: number;
 
   // User tracking
   createdBy: mongoose.Types.ObjectId;
@@ -86,6 +87,7 @@ const dataFlowSchema = new Schema<IDataFlow>(
     tableCounter: { type: Number, default: 0 },
     schemaCounter: { type: Number, default: 0 },
     joinCounter: { type: Number, default: 0 },
+    facebookAdCounter: { type: Number, default: 0 },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

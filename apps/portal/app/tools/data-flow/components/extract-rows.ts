@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react';
-import type { AppNode, GenericRow, DataRow, FacebookAdRow, SchemaNodeData, JoinNodeData } from './types';
+import type { AppNode, GenericRow, DataRow, FacebookAdNodeData, SchemaNodeData, JoinNodeData } from './types';
 import { SCHEMA_HANDLE_FILTERED, JOIN_HANDLE_A, JOIN_HANDLE_B } from './types';
 
 /**
@@ -26,20 +26,19 @@ export function extractGenericRows(nodes: AppNode[]): GenericRow[] {
         lastRun: dr.lastRun,
       });
     } else if (node.type === 'facebookAdNode') {
-      const adRows = node.data.rows as FacebookAdRow[];
-      const label = node.data.label as string;
+      const nodeData = node.data as FacebookAdNodeData;
+      const adRows = nodeData.rows ?? [];
+      const label = nodeData.label;
       for (let i = 0; i < adRows.length; i++) {
-        const ar = adRows[i];
-        rows.push({
+        const row: GenericRow = {
           id: `${node.id}-${i}`,
           _nodeId: node.id,
           _nodeLabel: label,
-          clicks: ar.clicks,
-          reach: ar.reach,
-          spend: ar.spend,
-          date_start: ar.date_start,
-          date_stop: ar.date_stop,
-        });
+        };
+        for (const [key, value] of Object.entries(adRows[i])) {
+          row[key] = value;
+        }
+        rows.push(row);
       }
     }
     // tableNode, schemaNode, joinNode → no rows

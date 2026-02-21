@@ -91,6 +91,8 @@ export function FlowCanvas({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         nodeTypes={nodeTypes}
+        snapToGrid
+        snapGrid={[16, 16]}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         proOptions={{ hideAttribution: true }}

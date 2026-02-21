@@ -58,4 +58,12 @@ export {
 } from './models/ideation-prompt-override';
 export { AiUsageLog, type IAiUsageLog } from './models/ai-usage-log';
 export { DataFlow, type IDataFlow, type IFlowNode, type IFlowEdge } from './models/data-flow';
+export {
+  ApiDataRow,
+  type IApiDataRow,
+  ApiFetchLog,
+  type IApiFetchLog,
+  type ApiFetchStatus,
+  buildMetaCompositeKey,
+} from './models/api-data-store';
 export { normaliseUrl, hashUrl } from './utils/url-utils';

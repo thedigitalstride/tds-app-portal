@@ -38,6 +38,7 @@ interface DataTableProps {
   selectedIds: Set<string>;
   onSelectionChange: (ids: string[]) => void;
   layout: TableLayout;
+  tableNodeId?: string;
   hiddenColumns?: string[];
   quickFilterText?: string;
   columnState?: Record<string, unknown>[];
@@ -189,18 +190,18 @@ function RowsGrid({
   const apiRef = useRef<GridApi | null>(null);
   const isExternalUpdate = useRef(false);
 
+  const rowSelection = useMemo(() => ({
+    mode: 'multiRow' as const,
+  }), []);
+
+  const selectionColumnDef = useMemo<ColDef>(() => ({
+    pinned: 'left',
+    width: 50,
+    suppressHeaderMenuButton: true,
+  }), []);
+
   const allColumnDefs = useMemo<ColDef<GenericRow>[]>(() => {
-    const cols: ColDef<GenericRow>[] = [
-      {
-        headerCheckboxSelection: true,
-        checkboxSelection: true,
-        width: 50,
-        pinned: 'left',
-        suppressHeaderMenuButton: true,
-        sortable: false,
-        filter: false,
-      },
-    ];
+    const cols: ColDef<GenericRow>[] = [];
 
     for (const fd of fieldDefs) {
       const col: ColDef<GenericRow> = {
@@ -258,8 +259,17 @@ function RowsGrid({
         isExternalUpdate.current = false;
       }
       // Restore saved column state (order, width, sort, pinning)
+      // Filter out stale column IDs from old saved states to prevent issues
       if (columnState?.length) {
-        params.api.applyColumnState({ state: columnState as unknown as ColumnState[] });
+        const currentColIds = new Set(
+          params.api.getColumns()?.map((c) => c.getColId()) ?? []
+        );
+        const validState = columnState.filter(
+          (cs) => currentColIds.has((cs as { colId?: string }).colId ?? '')
+        );
+        if (validState.length) {
+          params.api.applyColumnState({ state: validState as unknown as ColumnState[], applyOrder: true });
+        }
       }
       // Restore saved filter model
       if (filterModel && Object.keys(filterModel).length) {
@@ -308,13 +318,12 @@ function RowsGrid({
   return (
     <AgGridReact<GenericRow>
       ref={gridRef}
-      key="rows-grid"
       rowData={rows}
       columnDefs={columnDefs}
       defaultColDef={defaultColDef}
       theme={customTheme}
-      rowSelection="multiple"
-      suppressRowClickSelection={false}
+      rowSelection={rowSelection}
+      selectionColumnDef={selectionColumnDef}
       onGridReady={onGridReady}
       onSelectionChanged={onSelectionChanged}
       maintainColumnOrder
@@ -323,7 +332,6 @@ function RowsGrid({
       onSortChanged={handleColumnStateChanged}
       onFilterChanged={handleFilterChanged}
       getRowId={(params) => params.data.id}
-      animateRows
       pagination={false}
       quickFilterText={quickFilterText || undefined}
     />
@@ -450,6 +458,7 @@ export function DataTable({
   selectedIds,
   onSelectionChange,
   layout,
+  tableNodeId,
   hiddenColumns,
   quickFilterText,
   columnState,
@@ -474,6 +483,7 @@ export function DataTable({
     <div className="w-full h-full">
       {layout === 'rows' ? (
         <RowsGrid
+          key={tableNodeId || 'rows-grid'}
           rows={rows}
           fieldDefs={fieldDefs}
           selectedIds={selectedIds}

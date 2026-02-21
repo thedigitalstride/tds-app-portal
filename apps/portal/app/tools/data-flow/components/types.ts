@@ -16,19 +16,30 @@ export interface GenericRow {
   [key: string]: unknown;
 }
 
-export interface FacebookAdRow {
-  clicks: string;
-  reach: string;
-  spend: string;
-  date_start: string;
-  date_stop: string;
-}
+export type FacebookAdNodeStatus = 'unconfigured' | 'loading' | 'ready' | 'error';
 
 export type FacebookAdNodeData = {
   label: string;
-  rows: FacebookAdRow[];
-  accountName: string;
-  campaignCount: number;
+  rows: Record<string, unknown>[];
+  fields: string[];
+
+  // Configuration (persisted with auto-save)
+  accountId?: string;
+  accountName?: string;
+  preset?: string;
+  datePreset?: string;
+  customDateRange?: { since: string; until: string };
+  level?: 'account' | 'campaign' | 'adset' | 'ad';
+  customFields?: string[];
+  customBreakdowns?: string[];
+  timeIncrement?: number | 'monthly';
+
+  // State
+  status: FacebookAdNodeStatus;
+  lastFetchedAt?: string;
+  fetchId?: string;
+  error?: string;
+  rowCount?: number;
 };
 
 export interface FlowEdgeData {

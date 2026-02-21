@@ -3,8 +3,8 @@ import type {
   DataRow,
   TableNodeData,
   TableNodeType,
-  FacebookAdRow,
   FacebookAdNodeType,
+  FacebookAdNodeData,
   SchemaNodeData,
   SchemaNodeType,
 } from './types';
@@ -182,7 +182,7 @@ export const sampleTableEdges: Edge[] = [
 
 // --- Facebook Ads sample data ---
 
-export const facebookAdSampleRows: FacebookAdRow[] = [
+export const facebookAdSampleRows: Record<string, unknown>[] = [
   { clicks: '145', reach: '12450', spend: '21.74', date_start: '2026-01-20', date_stop: '2026-01-20' },
   { clicks: '132', reach: '11230', spend: '19.85', date_start: '2026-01-21', date_stop: '2026-01-21' },
   { clicks: '158', reach: '13780', spend: '24.12', date_start: '2026-01-22', date_stop: '2026-01-22' },
@@ -217,9 +217,11 @@ export const sampleFacebookAdNode: FacebookAdNodeType = {
   data: {
     label: 'Facebook Ads',
     rows: facebookAdSampleRows,
+    fields: ['clicks', 'reach', 'spend', 'date_start', 'date_stop'],
     accountName: 'TDS Marketing',
-    campaignCount: 3,
-  },
+    status: 'ready',
+    rowCount: 25,
+  } satisfies FacebookAdNodeData,
 };
 
 export const sampleFacebookTableNode: TableNodeType = {

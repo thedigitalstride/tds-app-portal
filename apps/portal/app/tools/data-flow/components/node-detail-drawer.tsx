@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useState, useEffect, useMemo } from 'react';
-import { X, Table2, Filter, Database, ArrowRightLeft, HardDrive, Merge } from 'lucide-react';
-import { Checkbox, Input } from '@tds/ui';
+import { X, Table2, Filter, Database, ArrowRightLeft, HardDrive, Merge, Loader2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Checkbox, Input, Button } from '@tds/ui';
 import type { AppNode, TableNodeData, SchemaNodeData, JoinNodeData, DataRow, FacebookAdNodeData, TableLayout } from './types';
 
 interface NodeDetailDrawerProps {
@@ -16,6 +16,8 @@ interface NodeDetailDrawerProps {
   onJoinLabelChange: (nodeId: string, label: string) => void;
   onJoinKeyChange: (nodeId: string, joinKey: string) => void;
   onJoinTypeChange: (nodeId: string, joinType: 'inner' | 'full') => void;
+  onFacebookAdNodeUpdate: (nodeId: string, updates: Partial<FacebookAdNodeData>) => void;
+  clientId: string | null;
 }
 
 export function NodeDetailDrawer({
@@ -29,6 +31,8 @@ export function NodeDetailDrawer({
   onJoinLabelChange,
   onJoinKeyChange,
   onJoinTypeChange,
+  onFacebookAdNodeUpdate,
+  clientId,
 }: NodeDetailDrawerProps) {
   const isOpen = selectedNode !== null;
 
@@ -52,6 +56,8 @@ export function NodeDetailDrawer({
               onJoinLabelChange={onJoinLabelChange}
               onJoinKeyChange={onJoinKeyChange}
               onJoinTypeChange={onJoinTypeChange}
+              onFacebookAdNodeUpdate={onFacebookAdNodeUpdate}
+              clientId={clientId}
             />
           </div>
         </>
@@ -129,6 +135,8 @@ function DrawerContent({
   onJoinLabelChange,
   onJoinKeyChange,
   onJoinTypeChange,
+  onFacebookAdNodeUpdate,
+  clientId,
 }: {
   node: AppNode;
   onTableLabelChange: (nodeId: string, label: string) => void;
@@ -139,6 +147,8 @@ function DrawerContent({
   onJoinLabelChange: (nodeId: string, label: string) => void;
   onJoinKeyChange: (nodeId: string, joinKey: string) => void;
   onJoinTypeChange: (nodeId: string, joinType: 'inner' | 'full') => void;
+  onFacebookAdNodeUpdate: (nodeId: string, updates: Partial<FacebookAdNodeData>) => void;
+  clientId: string | null;
 }) {
   switch (node.type) {
     case 'tableNode':
@@ -150,7 +160,7 @@ function DrawerContent({
     case 'dataNode':
       return <DataDrawerContent row={(node.data as { row: DataRow }).row} />;
     case 'facebookAdNode':
-      return <FacebookAdDrawerContent data={node.data as FacebookAdNodeData} />;
+      return <FacebookAdDrawerContent node={node} onUpdate={onFacebookAdNodeUpdate} clientId={clientId} />;
     default:
       return null;
   }
@@ -265,7 +275,7 @@ function SchemaDrawerContent({
   const selectedSet = new Set(data.selectedFields);
   const allSelected = data.availableFields.length > 0 && data.selectedFields.length === data.availableFields.length;
 
-  // Build conflict map: output name → source fields that produce it
+  // Build conflict map: output name -> source fields that produce it
   const conflicts = useMemo(() => {
     const outputMap = new Map<string, string[]>();
     for (const field of data.selectedFields) {
@@ -589,75 +599,466 @@ function PropertyRow({ label, children }: { label: string; children: React.React
   );
 }
 
-/* ---------- Facebook Ad drawer (read-only) ---------- */
+/* ---------- Facebook Ad drawer (full configuration) ---------- */
 
-function FacebookAdDrawerContent({ data }: { data: FacebookAdNodeData }) {
-  const { accountName, campaignCount, rows } = data;
+interface MetaAdAccount {
+  id: string;
+  name: string;
+  currency: string;
+  timezone: string;
+  accountStatus: number;
+}
 
-  const totalClicks = rows.reduce((sum, r) => sum + Number(r.clicks), 0);
-  const totalSpend = rows.reduce((sum, r) => sum + Number(r.spend), 0);
-  const totalReach = rows.reduce((sum, r) => sum + Number(r.reach), 0);
+const DATE_PRESETS = [
+  { value: 'last_7d', label: 'Last 7 days' },
+  { value: 'last_14d', label: 'Last 14 days' },
+  { value: 'last_30d', label: 'Last 30 days' },
+  { value: 'last_90d', label: 'Last 90 days' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
+  { value: 'this_quarter', label: 'This quarter' },
+  { value: 'custom', label: 'Custom range' },
+];
+
+const PRESETS = [
+  { id: 'performance-overview', label: 'Performance Overview', description: 'Spend, impressions, reach, clicks, and cost metrics' },
+  { id: 'demographics', label: 'Demographics', description: 'Performance by age and gender' },
+  { id: 'platform-breakdown', label: 'Platform Breakdown', description: 'Performance by platform and placement' },
+  { id: 'conversions-roas', label: 'Conversions & ROAS', description: 'Conversion actions, values, and return on ad spend' },
+  { id: 'video-performance', label: 'Video Performance', description: 'Video view milestones and completion rates' },
+  { id: 'daily-trend', label: 'Daily Trend', description: 'Daily performance metrics over time' },
+];
+
+const FIELD_GROUPS: { label: string; fields: string[] }[] = [
+  { label: 'Performance', fields: ['spend', 'impressions', 'reach', 'frequency', 'clicks', 'unique_clicks'] },
+  { label: 'Cost', fields: ['ctr', 'cpc', 'cpm', 'cpp', 'cost_per_unique_click'] },
+  { label: 'Engagement', fields: ['actions', 'inline_link_clicks', 'inline_link_click_ctr', 'outbound_clicks', 'social_clicks'] },
+  { label: 'Video', fields: ['video_play_actions', 'video_p25_watched_actions', 'video_p50_watched_actions', 'video_p75_watched_actions', 'video_p100_watched_actions'] },
+  { label: 'Conversion', fields: ['action_values', 'cost_per_action_type', 'purchase_roas', 'conversions', 'conversion_values'] },
+];
+
+const BREAKDOWNS = [
+  { value: 'age', label: 'Age' },
+  { value: 'gender', label: 'Gender' },
+  { value: 'publisher_platform', label: 'Platform' },
+  { value: 'platform_position', label: 'Placement' },
+  { value: 'device_platform', label: 'Device' },
+  { value: 'country', label: 'Country' },
+];
+
+function FacebookAdDrawerContent({
+  node,
+  onUpdate,
+  clientId,
+}: {
+  node: AppNode;
+  onUpdate: (nodeId: string, updates: Partial<FacebookAdNodeData>) => void;
+  clientId: string | null;
+}) {
+  const data = node.data as FacebookAdNodeData;
+  const [labelValue, setLabelValue] = useState(data.label);
+  const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => {
+    setLabelValue(data.label);
+  }, [data.label]);
+
+  // Fetch ad accounts on mount
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingAccounts(true);
+    setAccountError(null);
+
+    fetch('/api/tools/data-flow/meta/accounts')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load accounts');
+        return res.json();
+      })
+      .then((accs: MetaAdAccount[]) => {
+        if (!cancelled) setAccounts(accs);
+      })
+      .catch((err) => {
+        if (!cancelled) setAccountError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAccounts(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const commitLabel = useCallback(() => {
+    const trimmed = labelValue.trim();
+    if (trimmed && trimmed !== data.label) {
+      onUpdate(node.id, { label: trimmed });
+    } else {
+      setLabelValue(data.label);
+    }
+  }, [labelValue, data.label, node.id, onUpdate]);
+
+  const handleAccountChange = useCallback(
+    (accountId: string) => {
+      const acc = accounts.find((a) => a.id === accountId);
+      onUpdate(node.id, {
+        accountId,
+        accountName: acc?.name ?? '',
+      });
+    },
+    [accounts, node.id, onUpdate]
+  );
+
+  const handlePresetChange = useCallback(
+    (preset: string) => {
+      onUpdate(node.id, { preset });
+    },
+    [node.id, onUpdate]
+  );
+
+  const handleDatePresetChange = useCallback(
+    (datePreset: string) => {
+      if (datePreset === 'custom') {
+        onUpdate(node.id, {
+          datePreset: undefined,
+          customDateRange: data.customDateRange ?? { since: '', until: '' },
+        });
+      } else {
+        onUpdate(node.id, {
+          datePreset,
+          customDateRange: undefined,
+        });
+      }
+    },
+    [node.id, data.customDateRange, onUpdate]
+  );
+
+  const handleFetch = useCallback(async () => {
+    if (!clientId || !data.accountId) return;
+
+    setFetching(true);
+    onUpdate(node.id, { status: 'loading', error: undefined });
+
+    try {
+      const effectivePreset = data.preset ?? 'performance-overview';
+      const payload: Record<string, unknown> = {
+        clientId,
+        accountId: data.accountId,
+        accountName: data.accountName ?? '',
+        preset: effectivePreset,
+        datePreset: data.datePreset ?? 'last_30d',
+        customDateRange: data.customDateRange,
+      };
+
+      // Include custom query params when using advanced options
+      if (effectivePreset === 'custom') {
+        payload.customFields = data.customFields;
+        payload.customBreakdowns = data.customBreakdowns;
+        payload.level = data.level;
+        payload.timeIncrement = data.timeIncrement;
+      }
+
+      const res = await fetch('/api/tools/data-flow/meta/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        onUpdate(node.id, {
+          status: 'ready',
+          rows: result.rows,
+          fields: result.fields,
+          fetchId: result.fetchId,
+          rowCount: result.rowCount,
+          lastFetchedAt: new Date().toISOString(),
+          error: undefined,
+        });
+      } else {
+        onUpdate(node.id, {
+          status: 'error',
+          error: result.error ?? 'Unknown error',
+        });
+      }
+    } catch (err) {
+      onUpdate(node.id, {
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Network error',
+      });
+    } finally {
+      setFetching(false);
+    }
+  }, [clientId, data.accountId, data.accountName, data.preset, data.datePreset, data.customDateRange, data.customFields, data.customBreakdowns, data.level, data.timeIncrement, node.id, onUpdate]);
+
+  const isCustomDate = !data.datePreset && data.customDateRange;
+  const canFetch = !!data.accountId && !fetching;
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3">
-        <PropertyRow label="Account">
-          <span className="text-xs text-neutral-700">{accountName}</span>
-        </PropertyRow>
-        <PropertyRow label="Campaigns">
-          <span className="text-xs text-neutral-700">{campaignCount}</span>
-        </PropertyRow>
-      </div>
-
-      {/* Summary metrics */}
-      <div className="grid grid-cols-3 gap-3">
-        <MetricCard label="Clicks" value={totalClicks.toLocaleString('en-GB')} />
-        <MetricCard
-          label="Spend"
-          value={`£${totalSpend.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        />
-        <MetricCard label="Reach" value={totalReach.toLocaleString('en-GB')} />
-      </div>
-
-      {/* Daily rows */}
+      {/* Label */}
       <div>
-        <p className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">
-          Daily breakdown ({rows.length} days)
-        </p>
-        <div className="max-h-[300px] overflow-y-auto border border-neutral-200 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-neutral-50 sticky top-0">
-              <tr>
-                <th className="text-left px-2 py-1.5 font-medium text-neutral-500">Date</th>
-                <th className="text-right px-2 py-1.5 font-medium text-neutral-500">Clicks</th>
-                <th className="text-right px-2 py-1.5 font-medium text-neutral-500">Spend</th>
-                <th className="text-right px-2 py-1.5 font-medium text-neutral-500">Reach</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.date_start} className="border-t border-neutral-100">
-                  <td className="px-2 py-1 text-neutral-700">{r.date_start}</td>
-                  <td className="px-2 py-1 text-right text-neutral-700">{Number(r.clicks).toLocaleString('en-GB')}</td>
-                  <td className="px-2 py-1 text-right text-neutral-700">
-                    £{Number(r.spend).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-2 py-1 text-right text-neutral-700">{Number(r.reach).toLocaleString('en-GB')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <label className="text-xs font-medium text-neutral-500 mb-1 block">Label</label>
+        <Input
+          value={labelValue}
+          onChange={(e) => setLabelValue(e.target.value)}
+          onBlur={commitLabel}
+          onKeyDown={(e) => { if (e.key === 'Enter') commitLabel(); }}
+          className="h-8 text-sm"
+        />
+      </div>
+
+      {/* Account selector */}
+      <div>
+        <label className="text-xs font-medium text-neutral-500 mb-1.5 block">Ad account</label>
+        {loadingAccounts ? (
+          <div className="flex items-center gap-2 text-neutral-400 text-xs py-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Loading accounts…
+          </div>
+        ) : accountError ? (
+          <p className="text-xs text-red-500">{accountError}</p>
+        ) : (
+          <select
+            value={data.accountId ?? ''}
+            onChange={(e) => handleAccountChange(e.target.value)}
+            className="nodrag w-full h-8 text-sm rounded-md border border-neutral-200 bg-white px-2 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <option value="">Select an account…</option>
+            {accounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name} ({acc.id})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {/* Preset selector */}
+      <div>
+        <label className="text-xs font-medium text-neutral-500 mb-1.5 block">Report preset</label>
+        <div className="space-y-1">
+          {PRESETS.map((p) => (
+            <label
+              key={p.id}
+              className={`flex items-start gap-2 px-2.5 py-2 rounded-md border cursor-pointer transition-colors ${
+                data.preset === p.id
+                  ? 'border-blue-400 bg-blue-50'
+                  : 'border-neutral-200 hover:border-neutral-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name={`preset-${node.id}`}
+                checked={data.preset === p.id}
+                onChange={() => handlePresetChange(p.id)}
+                className="mt-0.5 accent-blue-600"
+              />
+              <div>
+                <p className="text-xs font-medium text-neutral-800">{p.label}</p>
+                <p className="text-[10px] text-neutral-400 leading-tight">{p.description}</p>
+              </div>
+            </label>
+          ))}
         </div>
       </div>
-    </div>
-  );
-}
 
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-neutral-50 rounded-lg p-2 text-center">
-      <div className="text-sm font-semibold text-neutral-800">{value}</div>
-      <div className="text-[10px] text-neutral-400">{label}</div>
+      {/* Date range */}
+      <div>
+        <label className="text-xs font-medium text-neutral-500 mb-1.5 block">Date range</label>
+        <select
+          value={isCustomDate ? 'custom' : (data.datePreset ?? 'last_30d')}
+          onChange={(e) => handleDatePresetChange(e.target.value)}
+          className="nodrag w-full h-8 text-sm rounded-md border border-neutral-200 bg-white px-2 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        >
+          {DATE_PRESETS.map((dp) => (
+            <option key={dp.value} value={dp.value}>{dp.label}</option>
+          ))}
+        </select>
+
+        {isCustomDate && (
+          <div className="flex gap-2 mt-2">
+            <input
+              type="date"
+              value={data.customDateRange?.since ?? ''}
+              onChange={(e) =>
+                onUpdate(node.id, {
+                  customDateRange: { since: e.target.value, until: data.customDateRange?.until ?? '' },
+                })
+              }
+              className="flex-1 h-8 text-xs rounded-md border border-neutral-200 bg-white px-2 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            <input
+              type="date"
+              value={data.customDateRange?.until ?? ''}
+              onChange={(e) =>
+                onUpdate(node.id, {
+                  customDateRange: { since: data.customDateRange?.since ?? '', until: e.target.value },
+                })
+              }
+              className="flex-1 h-8 text-xs rounded-md border border-neutral-200 bg-white px-2 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Advanced toggle */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors"
+        >
+          {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          Advanced options
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-3 space-y-3 pl-1">
+            {/* Level selector */}
+            <div>
+              <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1 block">Level</label>
+              <div className="flex gap-1">
+                {(['account', 'campaign', 'adset', 'ad'] as const).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => onUpdate(node.id, { level, preset: 'custom' })}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      data.level === level
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                    }`}
+                  >
+                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time increment */}
+            <div>
+              <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1 block">Time increment</label>
+              <div className="flex gap-1">
+                {([
+                  { value: undefined, label: 'None' },
+                  { value: 1, label: 'Daily' },
+                  { value: 'monthly' as const, label: 'Monthly' },
+                ] as const).map((opt) => (
+                  <button
+                    key={String(opt.value ?? 'none')}
+                    type="button"
+                    onClick={() => onUpdate(node.id, { timeIncrement: opt.value, preset: 'custom' })}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      data.timeIncrement === opt.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-neutral-400 mt-1">Split results by day or month</p>
+            </div>
+
+            {/* Fields multi-select */}
+            <div>
+              <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1 block">Fields</label>
+              <div className="max-h-[200px] overflow-y-auto space-y-2">
+                {FIELD_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <p className="text-[10px] font-medium text-neutral-500 mb-0.5">{group.label}</p>
+                    <div className="space-y-0.5">
+                      {group.fields.map((field) => {
+                        const isSelected = (data.customFields ?? []).includes(field);
+                        return (
+                          <label key={field} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-blue-50 cursor-pointer">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => {
+                                const current = data.customFields ?? [];
+                                const next = isSelected
+                                  ? current.filter((f) => f !== field)
+                                  : [...current, field];
+                                onUpdate(node.id, { customFields: next, preset: 'custom' });
+                              }}
+                            />
+                            <span className="text-[11px] text-neutral-700">{field}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Breakdowns multi-select */}
+            <div>
+              <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1 block">Breakdowns</label>
+              <div className="space-y-0.5">
+                {BREAKDOWNS.map((bd) => {
+                  const isSelected = (data.customBreakdowns ?? []).includes(bd.value);
+                  return (
+                    <label key={bd.value} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-blue-50 cursor-pointer">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => {
+                          const current = data.customBreakdowns ?? [];
+                          const next = isSelected
+                            ? current.filter((b) => b !== bd.value)
+                            : [...current, bd.value];
+                          onUpdate(node.id, { customBreakdowns: next, preset: 'custom' });
+                        }}
+                      />
+                      <span className="text-[11px] text-neutral-700">{bd.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-neutral-400 mt-1">Maximum 3 breakdowns per query</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Fetch button + status */}
+      <div className="border-t border-neutral-100 pt-4">
+        <Button
+          onClick={handleFetch}
+          disabled={!canFetch}
+          className="w-full"
+          variant={data.status === 'error' ? 'destructive' : 'default'}
+        >
+          {fetching ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+              Fetching…
+            </>
+          ) : data.status === 'error' ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-1.5" />
+              Retry
+            </>
+          ) : (
+            'Fetch Data'
+          )}
+        </Button>
+
+        {data.status === 'ready' && data.lastFetchedAt && (
+          <p className="text-[10px] text-neutral-400 mt-2 text-center">
+            {data.rowCount ?? data.rows.length} rows fetched · {new Date(data.lastFetchedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}
+          </p>
+        )}
+
+        {data.status === 'error' && data.error && (
+          <p className="text-[10px] text-red-500 mt-2 text-center">{data.error}</p>
+        )}
+      </div>
     </div>
   );
 }

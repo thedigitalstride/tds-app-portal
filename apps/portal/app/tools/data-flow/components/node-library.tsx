@@ -1,8 +1,16 @@
 'use client';
 
-import { Table2, Filter, Merge, GripVertical } from 'lucide-react';
+import { Table2, Filter, Merge, GripVertical, BarChart3 } from 'lucide-react';
 
 const nodeTypes = [
+  {
+    type: 'facebookAdNode',
+    label: 'Facebook Ads',
+    description: 'Meta Ads API data source',
+    icon: BarChart3,
+    iconBg: 'bg-blue-100',
+    iconColor: 'text-blue-600',
+  },
   {
     type: 'tableNode',
     label: 'Table',
