@@ -30,6 +30,14 @@ export const sampleRows: DataRow[] = [
     records: 2100,
   },
   {
+    id: '9',
+    label: 'Tracket',
+    type: 'source',
+    status: 'active',
+    description: 'Time entries from Tracket (monday.com)',
+    sourceType: 'tracket',
+  },
+  {
     id: '4',
     label: 'Deduplicate',
     type: 'transform',

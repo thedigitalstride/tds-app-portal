@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { Database, ArrowRightLeft, HardDrive, AlertCircle } from 'lucide-react';
+import { Database, ArrowRightLeft, HardDrive, AlertCircle, Clock } from 'lucide-react';
 import type { DataRow } from './types';
 
 const typeConfig = {
@@ -29,6 +29,17 @@ const typeConfig = {
   },
 };
 
+/** Override config for specific source integrations */
+const sourceTypeConfig: Record<string, typeof typeConfig.source> = {
+  tracket: {
+    icon: Clock,
+    color: 'border-violet-300 bg-violet-50',
+    selectedColor: 'border-violet-500 bg-violet-100 ring-2 ring-violet-300',
+    iconColor: 'text-violet-600',
+    label: 'Tracket',
+  },
+};
+
 const statusDot: Record<DataRow['status'], string> = {
   active: 'bg-emerald-500',
   inactive: 'bg-neutral-400',
@@ -37,7 +48,10 @@ const statusDot: Record<DataRow['status'], string> = {
 
 function DataNodeComponent({ data, selected }: NodeProps) {
   const row = data.row as DataRow;
-  const config = typeConfig[row.type];
+  const config =
+    row.sourceType && sourceTypeConfig[row.sourceType]
+      ? sourceTypeConfig[row.sourceType]
+      : typeConfig[row.type];
   const Icon = config.icon;
 
   return (

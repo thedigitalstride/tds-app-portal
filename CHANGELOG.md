@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-02-21
+### Added
+- Tracket time entries node in Data Flow tool for extracting time, notes, and date from monday.com
+- Tracket API service with OAuth2 client_credentials authentication
+- API route `/api/tools/data-flow/tracket` for proxying time entry requests
+- Tracket time entries table with date range filtering, duration formatting, and summary stats
+- Violet-themed Tracket source node in the flow graph with Clock icon
+
 ## [1.13.0] - 2026-02-19
 ### Added
 - Data Flow tool: interactive React Flow graph with AG Grid data table
